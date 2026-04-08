@@ -1,0 +1,52 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@hono/hono@4": "4.12.12",
+    "jsr:@hono/hono@^4.8.3": "4.12.12",
+    "jsr:@hono/swagger-ui@0.6": "0.6.1",
+    "jsr:@std/assert@1": "1.0.13",
+    "jsr:@std/encoding@1": "1.0.10",
+    "jsr:@std/internal@^1.0.6": "1.0.9",
+    "npm:zod@^3.24.0": "3.24.2"
+  },
+  "jsr": {
+    "@hono/hono@4.12.12": {
+      "integrity": "dc765178d38b5c4619b358062f6aa5514f7205bb0530b2823ff6265bec69c535"
+    },
+    "@hono/swagger-ui@0.6.1": {
+      "integrity": "0480ae125a8a7d2ca9e52e345881efc74265075c8eb2c613299e5f68ec98c68b",
+      "dependencies": [
+        "jsr:@hono/hono@^4.8.3"
+      ]
+    },
+    "@std/assert@1.0.13": {
+      "integrity": "ae0d31e41919b12c656c742b22522c32fb26ed0cba32975cb0de2a273cb68b29",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/encoding@1.0.10": {
+      "integrity": "8783c6384a2d13abd5e9e87a7ae0520a30e9f56aeeaa3bdf910a3eaaf5c811a1"
+    },
+    "@std/internal@1.0.9": {
+      "integrity": "bdfb97f83e4db7a13e8faab26fb1958d1b80cc64366501af78a0aee151696eb8"
+    }
+  },
+  "npm": {
+    "zod@3.24.2": {
+      "integrity": "sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@hono/hono@4",
+      "jsr:@hono/swagger-ui@0.6",
+      "jsr:@hono/zod-openapi@1",
+      "jsr:@std/assert@1",
+      "jsr:@std/crypto@1",
+      "jsr:@std/encoding@1",
+      "jsr:@std/testing@1",
+      "npm:zod@^3.24.0"
+    ]
+  }
+}

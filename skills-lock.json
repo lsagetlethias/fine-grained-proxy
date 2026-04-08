@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "architecture-decision": {
+      "source": "jwynia/agent-skills",
+      "sourceType": "github",
+      "computedHash": "fe6d3963ba9ac3ed64713c37e31813fba46e6db9fb9486c4f0693fbf1fbee3e8"
+    },
+    "code-review": {
+      "source": "coderabbitai/skills",
+      "sourceType": "github",
+      "computedHash": "7f793b91a34e2222e54572de0f8c52abdda222d4e06c1cd4ae959117c1c976e2"
+    },
+    "deno-expert": {
+      "source": "denoland/skills",
+      "sourceType": "github",
+      "computedHash": "076e8159d319521cbe8cf6181c9ce969545fc5f77ee05caee4517b3010583343"
+    },
+    "deno-guidance": {
+      "source": "denoland/skills",
+      "sourceType": "github",
+      "computedHash": "e392e0bca86d57f4798b4c1d54b9e1405a5d9cc3d6b04fcc6fdc7a119d14e652"
+    },
+    "typescript-e2e-testing": {
+      "source": "bmad-labs/skills",
+      "sourceType": "github",
+      "computedHash": "7077a0a19bd5625dc3033db4cfa8260a13d882949ce04ca78b10610a6e4f3548"
+    }
+  }
+}
