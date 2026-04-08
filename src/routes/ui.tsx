@@ -1,10 +1,22 @@
-import { Hono } from "hono";
+import { Context, Hono } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
 import { z } from "zod";
 
 import { encryptBlob } from "../crypto/blob.ts";
 import { exchangeToken } from "../auth/client.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
+
+function getRequestOrigin(c: Context): string {
+  const forwardedProto = c.req.header("X-Forwarded-Proto");
+  const forwardedHost = c.req.header("X-Forwarded-Host");
+
+  if (forwardedHost) {
+    const proto = forwardedProto ?? "https";
+    return `${proto}://${forwardedHost}`;
+  }
+
+  return new URL(c.req.url).origin;
+}
 
 const DEFAULT_API_URL = "https://api.osc-fr1.scalingo.com";
 
@@ -285,7 +297,7 @@ uiRoutes.post("/api/generate", async (c) => {
   };
 
   const blob = await encryptBlob(config, clientKey, serverSalt);
-  const origin = new URL(c.req.url).origin;
+  const origin = getRequestOrigin(c);
   return c.json({ url: `${origin}/${blob}/`, key: clientKey });
 });
 

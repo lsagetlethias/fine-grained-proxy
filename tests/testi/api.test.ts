@@ -270,6 +270,69 @@ Deno.test({
   sanitizeResources: false,
 });
 
+// --- X-Forwarded-* headers ---
+
+Deno.test({
+  name: "POST /api/generate respects X-Forwarded-Host and X-Forwarded-Proto",
+  fn: async () => {
+    setup();
+
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-Host": "ducmaxv2.ts.sagetlethias.tech",
+        "X-Forwarded-Proto": "http",
+      },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: ["GET:/v1/apps/*"],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+
+    assertEquals(res.status, 200);
+    assertEquals(body.url.startsWith("http://ducmaxv2.ts.sagetlethias.tech/"), true);
+
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "POST /api/generate defaults proto to https when only X-Forwarded-Host is set",
+  fn: async () => {
+    setup();
+
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-Host": "fgp.example.com",
+      },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: ["GET:/v1/apps/*"],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+
+    assertEquals(res.status, 200);
+    assertEquals(body.url.startsWith("https://fgp.example.com/"), true);
+
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
 // --- Zod validation ---
 
 Deno.test({
