@@ -6,7 +6,8 @@ export type ObjectValue =
   | { type: "any"; value: JsonValue }
   | { type: "wildcard" }
   | { type: "stringwildcard"; value: string }
-  | { type: "and"; value: ObjectValue[] };
+  | { type: "and"; value: ObjectValue[] }
+  | { type: "not"; value: ObjectValue };
 
 export interface BodyFilter {
   objectPath: string;
@@ -102,6 +103,8 @@ function matchObjectValue(ov: ObjectValue, bodyValue: unknown): boolean {
       return typeof bodyValue === "string" && matchPath(ov.value, bodyValue);
     case "and":
       return ov.value.every((sub) => matchObjectValue(sub, bodyValue));
+    case "not":
+      return !matchObjectValue(ov.value, bodyValue);
     default:
       return false;
   }

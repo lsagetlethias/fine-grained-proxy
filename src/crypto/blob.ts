@@ -88,6 +88,8 @@ function isValidObjectValue(ov: unknown, depth = 0): boolean {
     case "and":
       return Array.isArray(o.value) &&
         o.value.every((sub: unknown) => isValidObjectValue(sub, depth + 1));
+    case "not":
+      return isValidObjectValue(o.value, depth + 1);
     default:
       return false;
   }

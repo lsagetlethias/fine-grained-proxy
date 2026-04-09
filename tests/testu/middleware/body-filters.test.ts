@@ -671,3 +671,70 @@ Deno.test("matchBodyFilter: empty objectValue array → false (no OR candidate)"
   };
   assertEquals(matchBodyFilter(filter, { ref: "anything" }), false);
 });
+
+// --- not ---
+
+Deno.test("matchBodyFilter: not with any — rejects exact value, accepts others", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "not", value: { type: "any", value: "develop" } }],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "develop" }), false);
+  assertEquals(matchBodyFilter(filter, { ref: "main" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), true);
+});
+
+Deno.test("matchBodyFilter: not with stringwildcard — rejects matching patterns", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "not", value: { type: "stringwildcard", value: "feature/*" } }],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "feature/login" }), false);
+  assertEquals(matchBodyFilter(filter, { ref: "feature/signup" }), false);
+  assertEquals(matchBodyFilter(filter, { ref: "main" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), true);
+});
+
+Deno.test("matchBodyFilter: not with wildcard — rejects everything (edge case)", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "not", value: { type: "wildcard" } }],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "anything" }), false);
+  assertEquals(matchBodyFilter(filter, { ref: "" }), false);
+  assertEquals(matchBodyFilter(filter, { ref: null }), false);
+  assertEquals(matchBodyFilter(filter, { ref: 42 }), false);
+});
+
+Deno.test("matchBodyFilter: not composed in and — accept release/* but reject release/broken", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [
+      {
+        type: "and",
+        value: [
+          { type: "stringwildcard", value: "release/*" },
+          { type: "not", value: { type: "any", value: "release/broken" } },
+        ],
+      },
+    ],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "release/stable" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "release/broken" }), false);
+  assertEquals(matchBodyFilter(filter, { ref: "main" }), false);
+});
+
+Deno.test("matchBodyFilter: not in OR implicite — not(develop) OR any(main)", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [
+      { type: "not", value: { type: "any", value: "develop" } },
+      { type: "any", value: "main" },
+    ],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "main" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "anything" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "develop" }), false);
+});
