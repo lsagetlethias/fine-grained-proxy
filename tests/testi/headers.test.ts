@@ -49,7 +49,7 @@ async function makeBlob(scopes: string[]): Promise<string> {
 }
 
 Deno.test({
-  name: "X-FGP-Key header is not forwarded to target",
+  name: "AC-9.1: X-FGP-Key header is not forwarded to target",
   fn: async () => {
     setup();
     let capturedHeaders: Headers | null = null;
@@ -92,7 +92,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "upstream 429 without Retry-After propagated without Retry-After",
+  name: "AC-10.4: upstream 429 without Retry-After propagated without Retry-After",
   fn: async () => {
     setup();
 
@@ -130,7 +130,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "non-JSON response from target propagated with original Content-Type",
+  name: "AC-9.6: non-JSON response from target propagated with original Content-Type",
   fn: async () => {
     setup();
 
@@ -173,7 +173,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "Host header is stripped before forwarding",
+  name: "AC-9.2: Host header is stripped before forwarding",
   fn: async () => {
     setup();
     let capturedHeaders: Headers | null = null;
@@ -215,7 +215,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "Set-Cookie header from target is filtered",
+  name: "AC-9.4+AC-9.5: Set-Cookie header from target is filtered, X-Request-Id propagated",
   fn: async () => {
     setup();
 

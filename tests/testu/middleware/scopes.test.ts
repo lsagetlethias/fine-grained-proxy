@@ -44,9 +44,9 @@ Deno.test("matchPath: exact match", () => {
   assertEquals(matchPath("/v1/apps/my-app", "/v1/apps/other"), false);
 });
 
-Deno.test("matchPath: prefix wildcard matches sub-paths", () => {
+Deno.test("AC-3.3: matchPath: prefix wildcard matches sub-paths", () => {
   assertEquals(matchPath("/v1/apps/*", "/v1/apps/my-app"), true);
-  assertEquals(matchPath("/v1/apps/*", "/v1/apps/my-app/scale"), true);
+  assertEquals(matchPath("/v1/apps/*", "/v1/apps/my-app/containers"), true);
   assertEquals(matchPath("/v1/apps/*", "/v1/apps/"), false);
   assertEquals(matchPath("/v1/apps/*", "/v1/users/me"), false);
 });
@@ -97,36 +97,36 @@ Deno.test("matchPath: multiple wildcards in sequence", () => {
 
 // --- checkAccess ---
 
-Deno.test("checkAccess: single scope allows matching request", () => {
+Deno.test("AC-3.1: checkAccess: single scope allows matching request", () => {
   assertEquals(checkAccess(["GET:/v1/apps/*"], "GET", "/v1/apps/my-app"), true);
 });
 
-Deno.test("checkAccess: denies non-matching method", () => {
-  assertEquals(checkAccess(["GET:/v1/apps/*"], "POST", "/v1/apps/my-app"), false);
-});
-
-Deno.test("checkAccess: denies non-matching path", () => {
+Deno.test("AC-3.2: checkAccess: denies non-matching path", () => {
   assertEquals(checkAccess(["GET:/v1/apps/*"], "GET", "/v1/users/me"), false);
 });
 
-Deno.test("checkAccess: wildcard method matches any method", () => {
+Deno.test("AC-3.11: checkAccess: denies non-matching method", () => {
+  assertEquals(checkAccess(["GET:/v1/apps/*"], "POST", "/v1/apps/my-app"), false);
+});
+
+Deno.test("AC-3.4: checkAccess: wildcard method matches any method", () => {
   assertEquals(checkAccess(["*:/v1/apps/*"], "GET", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(["*:/v1/apps/*"], "POST", "/v1/apps/my-app/scale"), true);
   assertEquals(checkAccess(["*:/v1/apps/*"], "DELETE", "/v1/apps/my-app"), true);
 });
 
-Deno.test("checkAccess: full wildcard allows everything", () => {
+Deno.test("AC-3.7: checkAccess: full wildcard allows everything", () => {
   assertEquals(checkAccess(["*:*"], "GET", "/anything"), true);
   assertEquals(checkAccess(["*:*"], "POST", "/v1/apps/deploy"), true);
 });
 
-Deno.test("checkAccess: multi-method scope", () => {
+Deno.test("AC-3.5: checkAccess: multi-method scope", () => {
   assertEquals(checkAccess(["GET|POST:/v1/apps/*"], "GET", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(["GET|POST:/v1/apps/*"], "POST", "/v1/apps/my-app/scale"), true);
   assertEquals(checkAccess(["GET|POST:/v1/apps/*"], "PUT", "/v1/apps/my-app"), false);
 });
 
-Deno.test("checkAccess: multiple scopes — any match allows", () => {
+Deno.test("AC-3.10: checkAccess: multiple scopes — any match allows", () => {
   const scopes = ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"];
   assertEquals(checkAccess(scopes, "GET", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(scopes, "POST", "/v1/apps/my-app/scale"), true);
@@ -134,19 +134,29 @@ Deno.test("checkAccess: multiple scopes — any match allows", () => {
   assertEquals(checkAccess(scopes, "DELETE", "/v1/apps/my-app"), false);
 });
 
-Deno.test("checkAccess: empty scopes denies everything", () => {
+Deno.test("AC-3.11: checkAccess: empty scopes denies everything (deny-all)", () => {
   assertEquals(checkAccess([], "GET", "/v1/apps"), false);
 });
 
-Deno.test("checkAccess: case-insensitive method matching", () => {
+Deno.test("AC-3.8: checkAccess: case-insensitive method matching", () => {
   assertEquals(checkAccess(["GET:/v1/apps/*"], "get", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(["GET:/v1/apps/*"], "Get", "/v1/apps/my-app"), true);
 });
 
-Deno.test("checkAccess: exact path scope", () => {
+Deno.test("AC-3.2: checkAccess: exact path scope mismatch", () => {
   assertEquals(checkAccess(["POST:/v1/apps/my-app/scale"], "POST", "/v1/apps/my-app/scale"), true);
   assertEquals(
     checkAccess(["POST:/v1/apps/my-app/scale"], "POST", "/v1/apps/my-app/restart"),
     false,
   );
+});
+
+Deno.test("AC-3.6: checkAccess: multi-method scope denies unlisted method", () => {
+  assertEquals(checkAccess(["GET|POST:/v1/apps/*"], "DELETE", "/v1/apps/my-app"), false);
+});
+
+Deno.test("AC-3.9: checkAccess: scope without colon defaults to wildcard method", () => {
+  assertEquals(checkAccess(["/v1/apps/*"], "POST", "/v1/apps/my-app"), true);
+  assertEquals(checkAccess(["/v1/apps/*"], "GET", "/v1/apps/my-app"), true);
+  assertEquals(checkAccess(["/v1/apps/*"], "DELETE", "/v1/apps/my-app"), true);
 });

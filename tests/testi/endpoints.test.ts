@@ -2,7 +2,7 @@ import { assertEquals } from "@std/assert";
 import { app } from "../../src/main.ts";
 
 Deno.test({
-  name: "AC-10.1: GET /healthz returns 200 ok",
+  name: "AC-12.1: GET /healthz returns 200 ok",
   fn: async () => {
     const res = await app.request("/healthz");
     const body = await res.json();
@@ -15,7 +15,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.2: GET /api/salt returns salt from env",
+  name: "AC-12.2: GET /api/salt returns salt from env",
   fn: async () => {
     Deno.env.set("FGP_SALT", "test-salt-value");
     const res = await app.request("/api/salt");
@@ -31,7 +31,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.3: GET / returns HTML page",
+  name: "AC-12.3: GET / returns HTML page",
   fn: async () => {
     const res = await app.request("/");
 
@@ -88,7 +88,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.4: POST /api/generate with no body returns 400",
+  name: "AC-13.2: POST /api/generate with no body returns 400",
   fn: async () => {
     const res = await app.request("/api/generate", { method: "POST" });
     assertEquals(res.status, 400);
@@ -98,7 +98,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.4: POST /api/list-apps with no body returns 400",
+  name: "AC-13.2: POST /api/list-apps with no body returns 400",
   fn: async () => {
     const res = await app.request("/api/list-apps", { method: "POST" });
     assertEquals(res.status, 400);
@@ -108,7 +108,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.4: GET /api/unknown returns 404",
+  name: "AC-12.6: GET /api/unknown returns 404",
   fn: async () => {
     const res = await app.request("/api/anything");
     assertEquals(res.status, 404);
@@ -120,7 +120,7 @@ Deno.test({
 // --- OpenAPI spec & Swagger UI ---
 
 Deno.test({
-  name: "GET /api/openapi.json returns valid OpenAPI spec",
+  name: "AC-12.4: GET /api/openapi.json returns valid OpenAPI spec",
   fn: async () => {
     const res = await app.request("/api/openapi.json");
     const body = await res.json();
@@ -139,7 +139,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "GET /api/docs returns HTML (Swagger UI)",
+  name: "AC-12.5: GET /api/docs returns HTML (Swagger UI)",
   fn: async () => {
     const res = await app.request("/api/docs");
 

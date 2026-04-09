@@ -134,7 +134,7 @@ Deno.test({
 // --- v3 ScopeEntry with bodyFilters ---
 
 Deno.test({
-  name: "integration body-filters: POST with matching body filter returns 200",
+  name: "AC-5.1: integration body-filters: POST with matching body filter returns 200",
   fn: async () => {
     setup();
     mockFetch();
@@ -172,7 +172,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration body-filters: POST with non-matching body filter returns 403",
+  name: "AC-5.2: integration body-filters: POST with non-matching body filter returns 403",
   fn: async () => {
     setup();
     mockFetch();
@@ -212,7 +212,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration body-filters: non-JSON body with bodyFilter scope returns 403",
+  name: "AC-5.15: integration body-filters: non-JSON body with bodyFilter scope returns 403",
   fn: async () => {
     setup();
     mockFetch();
@@ -249,7 +249,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration body-filters: stringwildcard filter with glob pattern",
+  name: "AC-5.5+AC-5.6: integration body-filters: stringwildcard filter with glob pattern",
   fn: async () => {
     setup();
     mockFetch();
@@ -297,7 +297,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration body-filters: mixed string + ScopeEntry scopes in same blob",
+  name: "AC-4.4: integration body-filters: mixed string + ScopeEntry scopes in same blob",
   fn: async () => {
     setup();
     mockFetch();
@@ -341,7 +341,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration body-filters: ScopeEntry without bodyFilters allows any body",
+  name: "AC-4.1: integration body-filters: ScopeEntry without bodyFilters allows any body",
   fn: async () => {
     setup();
     mockFetch();
@@ -761,7 +761,7 @@ Deno.test({
 
 Deno.test({
   name:
-    "integration body-filters: string scope matches same route → body filter on ScopeEntry is irrelevant",
+    "AC-4.4: integration body-filters: string scope matches same route → body filter on ScopeEntry is irrelevant",
   fn: async () => {
     setup();
     mockFetch();
@@ -790,6 +790,112 @@ Deno.test({
     });
 
     assertEquals(res.status, 200);
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-5.16: invalid JSON body with body filters returns 400 ---
+
+Deno.test({
+  name: "AC-5.16: integration body-filters: invalid JSON body with body filters returns 400",
+  fn: async () => {
+    setup();
+    mockFetch();
+    const app = createApp();
+    const blob = await makeBlob([
+      {
+        methods: ["POST"],
+        pattern: "/v1/apps/my-app/deployments",
+        bodyFilters: [
+          {
+            objectPath: "deployment.git_ref",
+            objectValue: [{ type: "wildcard" }],
+          },
+        ],
+      },
+    ]);
+
+    const res = await app.request(`/${blob}/v1/apps/my-app/deployments`, {
+      method: "POST",
+      headers: {
+        "X-FGP-Key": CLIENT_KEY,
+        "Content-Type": "application/json",
+      },
+      body: "{not valid json",
+    });
+    const body = await res.json();
+
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "invalid_body");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-5.20: GET with ScopeEntry POST + body filters ---
+
+Deno.test({
+  name:
+    "AC-5.20: integration body-filters: GET request matches string scope, POST ScopeEntry irrelevant",
+  fn: async () => {
+    setup();
+    mockFetch();
+    const app = createApp();
+    const blob = await makeBlob([
+      "GET:/v1/apps/my-app/deployments",
+      {
+        methods: ["POST"],
+        pattern: "/v1/apps/my-app/deployments",
+        bodyFilters: [
+          {
+            objectPath: "deployment.git_ref",
+            objectValue: [{ type: "any", value: "main" }],
+          },
+        ],
+      },
+    ]);
+
+    const res = await app.request(`/${blob}/v1/apps/my-app/deployments`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+
+    assertEquals(res.status, 200);
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-5.21: POST without body with body filters returns 403 ---
+
+Deno.test({
+  name: "AC-5.21: integration body-filters: POST without body and body filters returns 403",
+  fn: async () => {
+    setup();
+    mockFetch();
+    const app = createApp();
+    const blob = await makeBlob([
+      {
+        methods: ["POST"],
+        pattern: "/v1/apps/my-app/deployments",
+        bodyFilters: [
+          {
+            objectPath: "deployment.git_ref",
+            objectValue: [{ type: "any", value: "main" }],
+          },
+        ],
+      },
+    ]);
+
+    const res = await app.request(`/${blob}/v1/apps/my-app/deployments`, {
+      method: "POST",
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+
+    assertEquals(res.status, 403);
     teardown();
   },
   sanitizeOps: false,

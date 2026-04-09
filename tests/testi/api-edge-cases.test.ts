@@ -262,7 +262,7 @@ Deno.test({
 // --- Catch-all /api/* returns 404 ---
 
 Deno.test({
-  name: "GET /api/nonexistent returns 404 with structured error",
+  name: "AC-12.6: GET /api/nonexistent returns 404 with structured error",
   fn: async () => {
     const res = await app.request("/api/nonexistent");
     const body = await res.json();
@@ -300,7 +300,7 @@ Deno.test({
 // --- /api/generate blob size validation ---
 
 Deno.test({
-  name: "POST /api/generate with massive scopes returns 400 blob_too_large",
+  name: "AC-13.3: POST /api/generate with massive scopes returns 400 blob_too_large",
   fn: async () => {
     setup();
 

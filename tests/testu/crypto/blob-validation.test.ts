@@ -106,7 +106,7 @@ Deno.test("decrypt rejects blob with v: 0", async () => {
   );
 });
 
-Deno.test("decrypt accepts blob with v: 3 and string scopes", async () => {
+Deno.test("AC-1.6: decrypt accepts blob with v: 3 and string scopes", async () => {
   const raw = makeConfig({ v: 3 });
   const blob = await encryptRaw(raw);
 
@@ -114,7 +114,7 @@ Deno.test("decrypt accepts blob with v: 3 and string scopes", async () => {
   assertEquals(config.v, 3);
 });
 
-Deno.test("decrypt accepts blob with v: 3 and ScopeEntry scopes", async () => {
+Deno.test("AC-1.6: decrypt accepts blob with v: 3 and ScopeEntry scopes", async () => {
   const raw = makeConfig({
     v: 3,
     scopes: [
@@ -188,7 +188,7 @@ Deno.test("decrypt rejects blob with v: 3 and unknown ObjectValue type", async (
   );
 });
 
-Deno.test("decrypt accepts blob with valid regex ObjectValue", async () => {
+Deno.test("AC-5.17: decrypt accepts blob with valid regex ObjectValue", async () => {
   const raw = makeConfig({
     v: 3,
     scopes: [{
@@ -226,7 +226,7 @@ Deno.test("decrypt rejects blob with regex exceeding 200 chars", async () => {
   );
 });
 
-Deno.test("decrypt rejects blob with invalid regex pattern", async () => {
+Deno.test("AC-5.19: decrypt rejects blob with invalid regex pattern", async () => {
   const raw = makeConfig({
     v: 3,
     scopes: [{
@@ -246,7 +246,7 @@ Deno.test("decrypt rejects blob with invalid regex pattern", async () => {
   );
 });
 
-Deno.test("decrypt rejects blob with deeply nested and exceeding depth limit", async () => {
+Deno.test("AC-6.1: decrypt rejects blob with deeply nested and exceeding depth limit", async () => {
   let nested: unknown = { type: "wildcard" };
   for (let i = 0; i < 15; i++) {
     nested = { type: "and", value: [nested] };
@@ -286,7 +286,7 @@ Deno.test("decrypt rejects blob with v: 4", async () => {
 
 // --- isExpired boundary ---
 
-Deno.test("isExpired at exact boundary (now === createdAt + ttl) returns false", () => {
+Deno.test("AC-2.4: isExpired at exact boundary (now === createdAt + ttl) returns false", () => {
   const createdAt = 1712534400;
   const ttl = 86400;
   const origNow = Date.now;
@@ -336,7 +336,7 @@ Deno.test("decrypt rejects blob with empty string token", async () => {
 
 // --- Limits: depth max 4 ---
 
-Deno.test("decrypt rejects blob with nesting depth > 4 (not chain)", async () => {
+Deno.test("AC-6.1: decrypt rejects blob with nesting depth > 4 (not chain)", async () => {
   let nested: unknown = { type: "any", value: "x" };
   for (let i = 0; i < 5; i++) {
     nested = { type: "and", value: [nested, { type: "any", value: "y" }] };
@@ -392,7 +392,7 @@ Deno.test("decrypt accepts blob with nesting depth exactly 4", async () => {
 
 // --- Limits: forbidden combinations ---
 
-Deno.test("decrypt rejects not(wildcard)", async () => {
+Deno.test("AC-6.6: decrypt rejects not(wildcard)", async () => {
   const raw = makeConfig({
     v: 3,
     scopes: [{
@@ -412,7 +412,7 @@ Deno.test("decrypt rejects not(wildcard)", async () => {
   );
 });
 
-Deno.test("decrypt rejects not(not(...))", async () => {
+Deno.test("AC-6.7: decrypt rejects not(not(...))", async () => {
   const raw = makeConfig({
     v: 3,
     scopes: [{
@@ -432,7 +432,7 @@ Deno.test("decrypt rejects not(not(...))", async () => {
   );
 });
 
-Deno.test("decrypt rejects and with empty array", async () => {
+Deno.test("AC-6.8: decrypt rejects and with empty array", async () => {
   const raw = makeConfig({
     v: 3,
     scopes: [{
@@ -452,7 +452,7 @@ Deno.test("decrypt rejects and with empty array", async () => {
   );
 });
 
-Deno.test("decrypt rejects and with single element", async () => {
+Deno.test("AC-6.9: decrypt rejects and with single element", async () => {
   const raw = makeConfig({
     v: 3,
     scopes: [{
@@ -474,7 +474,7 @@ Deno.test("decrypt rejects and with single element", async () => {
 
 // --- Limits: body filters per scope ---
 
-Deno.test("decrypt rejects scope with more than 8 body filters", async () => {
+Deno.test("AC-6.2: decrypt rejects scope with more than 8 body filters", async () => {
   const filters = [];
   for (let i = 0; i < 9; i++) {
     filters.push({ objectPath: "field" + i, objectValue: [{ type: "wildcard" }] });
@@ -515,7 +515,7 @@ Deno.test("decrypt accepts scope with exactly 8 body filters", async () => {
 
 // --- Limits: OR values per filter ---
 
-Deno.test("decrypt rejects filter with more than 16 OR values", async () => {
+Deno.test("AC-6.3: decrypt rejects filter with more than 16 OR values", async () => {
   const values = [];
   for (let i = 0; i < 17; i++) {
     values.push({ type: "any", value: "val" + i });
@@ -556,7 +556,7 @@ Deno.test("decrypt accepts filter with exactly 16 OR values", async () => {
 
 // --- Limits: dot-path segments ---
 
-Deno.test("decrypt rejects dot-path with more than 6 segments", async () => {
+Deno.test("AC-6.5: decrypt rejects dot-path with more than 6 segments", async () => {
   const raw = makeConfig({
     v: 3,
     scopes: [{
@@ -595,7 +595,7 @@ Deno.test("decrypt accepts dot-path with exactly 6 segments", async () => {
 
 // --- Limits: max 10 structured scopes ---
 
-Deno.test("decrypt rejects blob with more than 10 structured scopes", async () => {
+Deno.test("AC-6.4: decrypt rejects blob with more than 10 structured scopes", async () => {
   const scopes = [];
   for (let i = 0; i < 11; i++) {
     scopes.push({ methods: ["GET"], pattern: "/v1/test/" + i });

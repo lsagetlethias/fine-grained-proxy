@@ -54,7 +54,7 @@ function mockScalingoFetch() {
 // --- POST /api/generate ---
 
 Deno.test({
-  name: "POST /api/generate returns url and key (v2 blob)",
+  name: "AC-13.1: POST /api/generate returns url and key (v2 blob)",
   fn: async () => {
     setup();
 
@@ -93,7 +93,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate with invalid body returns 400",
+  name: "AC-13.2: POST /api/generate with invalid body returns 400",
   fn: async () => {
     setup();
 
@@ -114,7 +114,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate with missing target returns 400",
+  name: "AC-13.2: POST /api/generate with missing target returns 400",
   fn: async () => {
     setup();
 
@@ -386,7 +386,7 @@ Deno.test({
 // --- Scope limits validation on /api/generate ---
 
 Deno.test({
-  name: "POST /api/generate rejects not(wildcard) in body filter",
+  name: "AC-13.6: POST /api/generate rejects not(wildcard) in body filter",
   fn: async () => {
     setup();
     const res = await app.request("/api/generate", {
@@ -417,7 +417,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate rejects not(not(...)) in body filter",
+  name: "AC-13.6: POST /api/generate rejects not(not(...)) in body filter",
   fn: async () => {
     setup();
     const res = await app.request("/api/generate", {
@@ -451,7 +451,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate rejects more than 8 body filters per scope",
+  name: "AC-13.4: POST /api/generate rejects more than 8 body filters per scope",
   fn: async () => {
     setup();
     const filters = [];
@@ -479,7 +479,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate rejects more than 16 OR values per filter",
+  name: "AC-13.4: POST /api/generate rejects more than 16 OR values per filter",
   fn: async () => {
     setup();
     const values = [];
@@ -511,7 +511,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate rejects dot-path with more than 6 segments",
+  name: "AC-13.4: POST /api/generate rejects dot-path with more than 6 segments",
   fn: async () => {
     setup();
     const res = await app.request("/api/generate", {
@@ -542,7 +542,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate rejects more than 10 structured scopes",
+  name: "AC-13.4: POST /api/generate rejects more than 10 structured scopes",
   fn: async () => {
     setup();
     const scopes = [];
@@ -570,7 +570,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate accepts valid structured scopes within limits",
+  name: "AC-13.4: POST /api/generate accepts valid structured scopes within limits",
   fn: async () => {
     setup();
     const res = await app.request("/api/generate", {
@@ -603,6 +603,130 @@ Deno.test({
     assertEquals(res.status, 200);
     assertEquals(typeof body.url, "string");
     assertEquals(typeof body.key, "string");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-13.5: version automatique v2/v3 ---
+
+Deno.test({
+  name: "AC-13.5: POST /api/generate with string scopes only produces v2 blob",
+  fn: async () => {
+    setup();
+
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+
+    assertEquals(res.status, 200);
+    const blobPart = body.url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
+    const config = await decryptBlob(blobPart, body.key, SERVER_SALT);
+    assertEquals(config.v, 2);
+
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-13.5: POST /api/generate with ScopeEntry produces v3 blob",
+  fn: async () => {
+    setup();
+
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{ methods: ["POST"], pattern: "/v1/apps/*" }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+
+    assertEquals(res.status, 200);
+    const blobPart = body.url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
+    const config = await decryptBlob(blobPart, body.key, SERVER_SALT);
+    assertEquals(config.v, 3);
+
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-13.6: and vide et and 1 element interdits a la generation ---
+
+Deno.test({
+  name: "AC-13.6: POST /api/generate rejects and with empty array",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{
+          methods: ["POST"],
+          pattern: "/v1/test",
+          bodyFilters: [{
+            objectPath: "field",
+            objectValue: [{ type: "and", value: [] }],
+          }],
+        }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "scope_limit_exceeded");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-13.6: POST /api/generate rejects and with single element",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{
+          methods: ["POST"],
+          pattern: "/v1/test",
+          bodyFilters: [{
+            objectPath: "field",
+            objectValue: [{ type: "and", value: [{ type: "any", value: "x" }] }],
+          }],
+        }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "scope_limit_exceeded");
     teardown();
   },
   sanitizeOps: false,

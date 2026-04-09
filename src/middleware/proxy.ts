@@ -156,15 +156,15 @@ export function proxyMiddleware(): MiddlewareHandler {
       return jsonError(c, 401, "invalid_credentials", "Unable to decrypt token");
     }
 
+    if (isExpired(config)) {
+      return jsonError(c, 410, "token_expired", "This token has expired");
+    }
+
     const validAuthModes = ["bearer", "basic", "scalingo-exchange"];
     if (
       !validAuthModes.includes(config.auth) && !config.auth.startsWith("header:")
     ) {
       return jsonError(c, 400, "invalid_auth_mode", "Unsupported auth mode: " + config.auth);
-    }
-
-    if (isExpired(config)) {
-      return jsonError(c, 410, "token_expired", "This token has expired");
     }
 
     const methodsWithBody = ["POST", "PUT", "PATCH"];

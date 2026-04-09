@@ -1,3 +1,5 @@
+[![CI](https://github.com/lsagetlethias/fine-grained-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/lsagetlethias/fine-grained-proxy/actions/workflows/ci.yml)
+
 # Fine-Grained Proxy (FGP)
 
 Proxy HTTP stateless et API-agnostique qui ajoute des tokens fine-grained (scoping par methode HTTP, chemin et contenu du body) devant n'importe quelle API. Zero storage, double cle, scopes `METHOD:PATH` avec body filters optionnels.

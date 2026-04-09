@@ -105,7 +105,7 @@ async function makeBlob(
 // --- Core proxy flow ---
 
 Deno.test({
-  name: "integration: full proxy flow returns 200 (scalingo-exchange)",
+  name: "AC-1.5: integration: full proxy flow returns 200 (scalingo-exchange)",
   fn: async () => {
     setup();
     mockFetch();
@@ -124,7 +124,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: missing X-FGP-Key returns 401 missing_key",
+  name: "AC-1.1: integration: missing X-FGP-Key returns 401 missing_key",
   fn: async () => {
     setup();
     mockFetch();
@@ -143,7 +143,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: wrong key returns 401 invalid_credentials",
+  name: "AC-1.2: integration: wrong key returns 401 invalid_credentials",
   fn: async () => {
     setup();
     mockFetch();
@@ -164,7 +164,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: expired token returns 410 token_expired",
+  name: "AC-2.2: integration: expired token returns 410 token_expired",
   fn: async () => {
     setup();
     mockFetch();
@@ -185,7 +185,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: ttl 0 never expires",
+  name: "AC-2.3: integration: ttl 0 never expires",
   fn: async () => {
     setup();
     mockFetch();
@@ -204,7 +204,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: blob > 4096 chars returns 414 blob_too_large",
+  name: "AC-1.4: integration: blob > 4096 chars returns 414 blob_too_large",
   fn: async () => {
     setup();
     mockFetch();
@@ -227,7 +227,7 @@ Deno.test({
 // --- Scope checks (METHOD:PATH) ---
 
 Deno.test({
-  name: "integration: GET allowed, POST denied with GET-only scope",
+  name: "AC-3.1+AC-3.11: integration: GET allowed, POST denied with GET-only scope",
   fn: async () => {
     setup();
     mockFetch();
@@ -256,7 +256,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: exact path scope matches only that path",
+  name: "AC-3.2: integration: exact path scope matches only that path",
   fn: async () => {
     setup();
     mockFetch();
@@ -284,7 +284,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: wildcard method allows any method",
+  name: "AC-3.4: integration: wildcard method allows any method",
   fn: async () => {
     setup();
     mockFetch();
@@ -311,7 +311,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: full wildcard scope allows everything",
+  name: "AC-3.7: integration: full wildcard scope allows everything",
   fn: async () => {
     setup();
     mockFetch();
@@ -330,7 +330,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: multi-method scope works",
+  name: "AC-3.5+AC-3.6: integration: multi-method scope works",
   fn: async () => {
     setup();
     mockFetch();
@@ -365,7 +365,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: empty scopes deny everything",
+  name: "AC-3.11: integration: empty scopes deny everything",
   fn: async () => {
     setup();
     mockFetch();
@@ -385,7 +385,7 @@ Deno.test({
 // --- Auth modes ---
 
 Deno.test({
-  name: "integration: bearer auth sends Authorization: Bearer header",
+  name: "AC-7.1: integration: bearer auth sends Authorization: Bearer header",
   fn: async () => {
     setup();
     let capturedAuth = "";
@@ -413,7 +413,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: basic auth sends Authorization: Basic header",
+  name: "AC-7.2: integration: basic auth sends Authorization: Basic header",
   fn: async () => {
     setup();
     let capturedAuth = "";
@@ -441,7 +441,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: header:X-API-Key auth sends custom header",
+  name: "AC-7.4: integration: header:X-API-Key auth sends custom header",
   fn: async () => {
     setup();
     let capturedHeader = "";
@@ -469,7 +469,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: scalingo-exchange does token exchange and caches bearer",
+  name: "AC-7.3+AC-8.1: integration: scalingo-exchange does token exchange and caches bearer",
   fn: async () => {
     setup();
     let exchangeCount = 0;
@@ -510,7 +510,7 @@ Deno.test({
 // --- Upstream error handling ---
 
 Deno.test({
-  name: "integration: upstream 401 returns 502 upstream_auth_failed",
+  name: "AC-10.1: integration: upstream 401 returns 502 upstream_auth_failed",
   fn: async () => {
     setup();
     mockFetch({ apiStatus: 401 });
@@ -531,7 +531,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: upstream 429 returns 429 rate_limited with Retry-After",
+  name: "AC-10.3: integration: upstream 429 returns 429 rate_limited with Retry-After",
   fn: async () => {
     setup();
     mockFetch({ apiStatus: 429 });
@@ -553,7 +553,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: upstream 500 returns 502 upstream_error",
+  name: "AC-10.2: integration: upstream 500 returns 502 upstream_error",
   fn: async () => {
     setup();
     mockFetch({ apiStatus: 500 });
@@ -607,7 +607,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: Set-Cookie from upstream is stripped",
+  name: "AC-9.5: integration: Set-Cookie from upstream is stripped",
   fn: async () => {
     setup();
     globalThis.fetch = ((input: string | URL | Request) => {
@@ -641,7 +641,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "integration: X-FGP-Key is not forwarded to target",
+  name: "AC-9.1+AC-15.2: integration: X-FGP-Key is not forwarded to target",
   fn: async () => {
     setup();
     let forwardedFgpKey: string | null = "not-checked";
@@ -673,7 +673,7 @@ Deno.test({
 // --- Singleflight ---
 
 Deno.test({
-  name: "integration: singleflight deduplicates concurrent exchanges",
+  name: "AC-8.3: integration: singleflight deduplicates concurrent exchanges",
   fn: async () => {
     setup();
     let exchangeCount = 0;
@@ -718,7 +718,7 @@ Deno.test({
 // --- Token not leaked in errors ---
 
 Deno.test({
-  name: "integration: token never appears in error response bodies",
+  name: "AC-15.1: integration: token never appears in error response bodies",
   fn: async () => {
     setup();
     mockFetch();

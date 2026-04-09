@@ -60,7 +60,7 @@ async function makeBlob(
 // --- Query string forwarding ---
 
 Deno.test({
-  name: "integration: query string is forwarded to target",
+  name: "AC-9.3: integration: query string is forwarded to target",
   fn: async () => {
     setup();
     let capturedUrl = "";
@@ -112,7 +112,7 @@ Deno.test({
 // --- Network error (fetch throws) ---
 
 Deno.test({
-  name: "integration: network error (fetch throws) returns 502 upstream_error",
+  name: "AC-10.2: integration: network error (fetch throws) returns 502 upstream_error",
   fn: async () => {
     setup();
     globalThis.fetch = (() => {
@@ -213,7 +213,7 @@ Deno.test({
 // --- Singleflight error propagation ---
 
 Deno.test({
-  name: "integration: singleflight propagates exchange error to all concurrent requests",
+  name: "AC-8.4: integration: singleflight propagates exchange error to all concurrent requests",
   fn: async () => {
     setup();
     let exchangeCount = 0;
@@ -253,7 +253,7 @@ Deno.test({
 // --- Upstream 503 returns 502 ---
 
 Deno.test({
-  name: "integration: upstream 503 returns 502 upstream_error",
+  name: "AC-10.2: integration: upstream 503 returns 502 upstream_error",
   fn: async () => {
     setup();
     globalThis.fetch = (() => {
@@ -278,7 +278,7 @@ Deno.test({
 // --- Verification order: TTL checked before scopes ---
 
 Deno.test({
-  name: "integration: TTL checked before scope (expired + bad scope = 410 not 403)",
+  name: "AC-11.2: integration: TTL checked before scope (expired + bad scope = 410 not 403)",
   fn: async () => {
     setup();
     globalThis.fetch = (() => {
@@ -304,7 +304,8 @@ Deno.test({
 // --- Blob size checked before decryption ---
 
 Deno.test({
-  name: "integration: blob size checked before key check (oversized blob + wrong key = 414)",
+  name:
+    "AC-11.1: integration: blob size checked before key check (oversized blob + wrong key = 414)",
   fn: async () => {
     setup();
     const app = createApp();
@@ -325,7 +326,7 @@ Deno.test({
 // --- Corrupted blob returns 401 ---
 
 Deno.test({
-  name: "integration: corrupted base64url blob returns 401 invalid_credentials",
+  name: "AC-1.3: integration: corrupted base64url blob returns 401 invalid_credentials",
   fn: async () => {
     setup();
     const app = createApp();
@@ -372,7 +373,7 @@ Deno.test({
 // --- Invalid auth mode returns 400 ---
 
 Deno.test({
-  name: "integration: invalid auth mode returns 400 invalid_auth_mode",
+  name: "AC-7.5: integration: invalid auth mode returns 400 invalid_auth_mode",
   fn: async () => {
     setup();
     globalThis.fetch = (() => {
@@ -414,6 +415,71 @@ Deno.test({
     });
     assertEquals(res.status, 200);
     assertEquals(capturedHeaders?.get("X-Custom"), "secret123");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-11.3: auth mode verified after TTL ---
+
+Deno.test({
+  name: "AC-11.3: integration: expired TTL + invalid auth mode = 410 (TTL checked first)",
+  fn: async () => {
+    setup();
+    globalThis.fetch = (() => {
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }) as typeof globalThis.fetch;
+
+    const app = createApp();
+    const blob = await makeBlob(["*:*"], {
+      auth: "oauth2-invalid",
+      ttl: 1,
+      createdAt: nowUnix() - 60,
+    });
+
+    const res = await app.request(`/${blob}/v1/apps`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+    const body = await res.json();
+    assertEquals(res.status, 410);
+    assertEquals(body.error, "token_expired");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-15.3: error messages are generic ---
+
+Deno.test({
+  name: "AC-15.3: integration: error responses do not leak internal config details",
+  fn: async () => {
+    setup();
+    globalThis.fetch = (() => {
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }) as typeof globalThis.fetch;
+
+    const app = createApp();
+
+    const blob403 = await makeBlob(["GET:/v1/apps/secret-app-name"]);
+    const res403 = await app.request(`/${blob403}/v1/other-path`, {
+      method: "POST",
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+    const body403 = await res403.text();
+    assertEquals(res403.status, 403);
+    assertEquals(body403.includes("secret-app-name"), false);
+    assertEquals(body403.includes("/v1/apps/"), false);
+
+    const blob410 = await makeBlob(["*:*"], { ttl: 1, createdAt: nowUnix() - 60 });
+    const res410 = await app.request(`/${blob410}/v1/apps`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+    const body410 = await res410.text();
+    assertEquals(res410.status, 410);
+    assertEquals(body410.includes("api.mock.local"), false);
+
     teardown();
   },
   sanitizeOps: false,

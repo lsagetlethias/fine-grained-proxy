@@ -24,7 +24,7 @@ Deno.test("hashToken returns different hashes for different inputs", async () =>
   assertEquals(h1 !== h2, true);
 });
 
-Deno.test("set and get cached bearer", () => {
+Deno.test("AC-8.1: set and get cached bearer", () => {
   setup();
   setCachedBearer("hash-1", "bearer-abc");
   const result = getCachedBearer("hash-1");
@@ -36,7 +36,7 @@ Deno.test("getCachedBearer returns null for missing key", () => {
   assertEquals(getCachedBearer("nonexistent"), null);
 });
 
-Deno.test("getCachedBearer returns null for expired entry", () => {
+Deno.test("AC-8.2: getCachedBearer returns null for expired entry (56min > 55min TTL)", () => {
   setup();
   setCachedBearer("hash-exp", "bearer-value");
 

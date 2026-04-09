@@ -17,7 +17,7 @@ function makeConfig(overrides?: Partial<BlobConfig>): BlobConfig {
   };
 }
 
-Deno.test("encrypt then decrypt returns the same object", async () => {
+Deno.test("AC-14.1: encrypt then decrypt returns the same object", async () => {
   const config = makeConfig();
   const blob = await encryptBlob(config, CLIENT_KEY, SERVER_SALT);
   const result = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
@@ -31,7 +31,7 @@ Deno.test("encrypt then decrypt returns the same object", async () => {
   assertEquals(result.createdAt, config.createdAt);
 });
 
-Deno.test("decrypt with wrong key throws", async () => {
+Deno.test("AC-14.2: decrypt with wrong key throws", async () => {
   const config = makeConfig();
   const blob = await encryptBlob(config, CLIENT_KEY, SERVER_SALT);
 
@@ -42,14 +42,14 @@ Deno.test("decrypt with wrong key throws", async () => {
   );
 });
 
-Deno.test("decrypt with corrupted blob throws", async () => {
+Deno.test("AC-1.3: decrypt with corrupted blob throws", async () => {
   await assertRejects(
     () => decryptBlob("not-a-valid-blob!!!", CLIENT_KEY, SERVER_SALT),
     Error,
   );
 });
 
-Deno.test("decrypt with truncated blob throws", async () => {
+Deno.test("AC-1.3: decrypt with truncated blob throws", async () => {
   const config = makeConfig();
   const blob = await encryptBlob(config, CLIENT_KEY, SERVER_SALT);
   const truncated = blob.slice(0, 10);
@@ -60,7 +60,7 @@ Deno.test("decrypt with truncated blob throws", async () => {
   );
 });
 
-Deno.test("isExpired returns true when TTL has passed", () => {
+Deno.test("AC-2.2: isExpired returns true when TTL has passed", () => {
   const config = makeConfig({
     createdAt: Math.floor(Date.now() / 1000) - 7200,
     ttl: 3600,
@@ -68,7 +68,7 @@ Deno.test("isExpired returns true when TTL has passed", () => {
   assertEquals(isExpired(config), true);
 });
 
-Deno.test("isExpired returns false when TTL is still valid", () => {
+Deno.test("AC-2.1: isExpired returns false when TTL is still valid", () => {
   const config = makeConfig({
     createdAt: Math.floor(Date.now() / 1000),
     ttl: 3600,
@@ -76,7 +76,7 @@ Deno.test("isExpired returns false when TTL is still valid", () => {
   assertEquals(isExpired(config), false);
 });
 
-Deno.test("isExpired returns false when TTL is 0 (no expiration)", () => {
+Deno.test("AC-2.3: isExpired returns false when TTL is 0 (no expiration)", () => {
   const config = makeConfig({
     createdAt: Math.floor(Date.now() / 1000) - 999999,
     ttl: 0,
@@ -108,7 +108,7 @@ Deno.test("round-trip with empty scopes array", async () => {
   assertEquals(result.scopes, []);
 });
 
-Deno.test("decrypt with wrong salt throws", async () => {
+Deno.test("AC-14.3: decrypt with wrong salt throws", async () => {
   const config = makeConfig();
   const blob = await encryptBlob(config, CLIENT_KEY, SERVER_SALT);
 
@@ -119,7 +119,7 @@ Deno.test("decrypt with wrong salt throws", async () => {
   );
 });
 
-Deno.test("two encryptions of same config produce different blobs (unique IV)", async () => {
+Deno.test("AC-14.4: two encryptions of same config produce different blobs (unique IV)", async () => {
   const config = makeConfig();
   const blob1 = await encryptBlob(config, CLIENT_KEY, SERVER_SALT);
   const blob2 = await encryptBlob(config, CLIENT_KEY, SERVER_SALT);
