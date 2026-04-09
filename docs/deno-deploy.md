@@ -54,7 +54,9 @@ deno task build:client
 deno deploy create \
   --app fgp-proxy \
   --source local \
-  --build-timeout 5
+  --build-timeout 5 \
+  --org my-org \
+  --region eu
 
 # Deployments suivants
 deno deploy \

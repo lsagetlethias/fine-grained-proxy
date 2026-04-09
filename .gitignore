@@ -22,3 +22,7 @@ static/
 
 # Claude Code
 .claude/settings.local.json
+.agents/skills/*
+/skills/*
+.claude/skills/*
+!.claude/skills/**/
