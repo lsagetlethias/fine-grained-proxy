@@ -11,15 +11,17 @@ FGP est compatible avec Deno Deploy :
 - **CompressionStream** : gzip supporte nativement
 - **Deno.env.get()** : fonctionne pour les variables d'environnement
 
-## Pre-requis : build du client
+## Pre-requis : build des assets
 
-Le JS client (`static/client.js`) est compile depuis TypeScript via esbuild. Ce fichier est gitignore — il doit etre build avant chaque deploy :
+Le CSS et le JS client sont compiles depuis les sources. Ces fichiers sont gitignored — ils doivent etre build avant chaque deploy :
 
 ```bash
-deno task build:client
+deno task build
 ```
 
-Cela compile `src/ui/client.ts` → `static/client.js` (minifie, ~32KB).
+Cela compile :
+- `src/ui/tailwind.css` → `static/styles.css` (Tailwind CSS 3, minifie)
+- `src/ui/client.ts` → `static/client.js` (esbuild, minifie)
 
 ## Limitations
 
@@ -48,7 +50,7 @@ Configurer dans la console Deno Deploy ([console.deno.com](https://console.deno.
 
 ```bash
 # Build le client
-deno task build:client
+deno task build
 
 # Creer le projet et deployer
 deno deploy create \
@@ -68,7 +70,7 @@ deno deploy \
 1. [console.deno.com](https://console.deno.com) > New Project
 2. Connecter le repo GitHub
 3. Entry point : `src/main.ts`
-4. Build command : `deno task build:client`
+4. Build command : `deno task build`
 5. Framework preset : aucun
 6. Configurer les variables d'environnement
 7. Chaque push sur `main` declenche un deploiement automatique
@@ -99,7 +101,7 @@ jobs:
       - uses: denoland/setup-deno@v2
 
       - name: Build client
-        run: deno task build:client
+        run: deno task build
 
       - name: Run tests
         run: deno task verify

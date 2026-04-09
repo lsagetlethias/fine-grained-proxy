@@ -262,6 +262,7 @@ export function setupGenerate(
       resultKey.value = data.key;
       resultCurl.textContent = 'curl -H "X-FGP-Key: ' + data.key + '" ' + data.url + "v1/apps";
       els.resultSection.classList.remove("hidden");
+      resultUrl.focus();
     } catch (err) {
       showError("Erreur lors de la g\u00e9n\u00e9ration : " + (err as Error).message);
     } finally {

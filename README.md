@@ -128,7 +128,7 @@ GET|POST:/v1/apps/*       -> lecture + ecriture
 }
 ```
 
-Types de body filters : `any` (exact match), `wildcard` (champ existe), `stringwildcard` (glob), `not` (exclusion), `and` (composition). Voir `docs/specs.md` et `docs/limits.md` pour les details et limites.
+Types de body filters : `any` (exact match), `wildcard` (champ existe), `stringwildcard` (glob), `regex` (expression reguliere), `not` (exclusion), `and` (composition). Voir `docs/specs.md` et `docs/limits.md` pour les details et limites.
 
 ### Flow d'une requete proxy
 
@@ -146,8 +146,10 @@ Requete -> valider path -> verifier taille blob -> extraire X-FGP-Key
 
 | Commande | Description |
 |----------|-------------|
-| `deno task dev` | Serveur dev avec watch |
-| `deno task start` | Production |
+| `deno task build` | Build CSS (Tailwind) + client JS (esbuild) |
+| `deno task dev` | Watch parallele CSS + client + serveur |
+| `deno task start` | Build + production |
+| `deno task deploy` | Build + deploy Deno Deploy |
 | `deno task test` | Tous les tests |
 | `deno task test:unit` | Tests unitaires |
 | `deno task test:integration` | Tests integration |

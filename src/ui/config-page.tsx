@@ -69,7 +69,7 @@ export function ConfigPage() {
                     R&eacute;initialiser
                   </button>
                 </div>
-                <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Pr&eacute;-remplit le formulaire. Le bouton &laquo; Charger les apps &raquo; est
                   disponible avec le mode d'auth Scalingo exchange.
                 </p>
@@ -146,14 +146,14 @@ export function ConfigPage() {
                     Charger les apps
                   </button>
                 </div>
-                <p id="token-hint" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                <p id="token-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Le token est envoyé au serveur FGP via HTTPS pour le chiffrement. Il n'est jamais
                   stocké.
                 </p>
               </section>
 
               {/* Scalingo apps helper */}
-              <section id="apps-section" class="hidden">
+              <section id="apps-section" class="hidden" aria-live="polite">
                 <fieldset>
                   <legend class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Applications Scalingo
@@ -176,7 +176,7 @@ export function ConfigPage() {
                 >
                   Scopes (patterns METHOD:PATH)
                 </label>
-                <div id="scope-chips" class="space-y-1 mb-2 hidden"></div>
+                <div id="scope-chips" class="space-y-1 mb-2 hidden" aria-live="polite"></div>
                 <textarea
                   id="scopes"
                   name="scopes"
@@ -186,7 +186,7 @@ export function ConfigPage() {
                   aria-describedby="scopes-hint"
                 >
                 </textarea>
-                <p id="scopes-hint" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                <p id="scopes-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Un pattern par ligne. Wildcard * pour tout matcher. Les scopes POST/PUT/PATCH
                   permettent d'ajouter des filtres sur le contenu de la requ&ecirc;te.
                 </p>
@@ -281,7 +281,12 @@ export function ConfigPage() {
             </form>
 
             {/* Result */}
-            <section id="result-section" class="mt-8 hidden">
+            <section
+              id="result-section"
+              class="mt-8 hidden"
+              aria-live="polite"
+              aria-label="R&#233;sultat de la g&#233;n&#233;ration"
+            >
               <div class="rounded-md border border-green-200 bg-green-50 p-4 space-y-4 dark:bg-green-900/30 dark:border-green-700">
                 <h2 class="text-sm font-semibold text-green-900 dark:text-green-200">
                   URL générée

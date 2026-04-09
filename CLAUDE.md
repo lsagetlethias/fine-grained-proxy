@@ -11,20 +11,24 @@
 - **TTL** : expiration encodée dans le blob, vérifiée à chaque requête.
 - **4 modes d'auth** : bearer, basic, scalingo-exchange, header custom. Scalingo est un cas d'usage parmi d'autres.
 - **Blob v2/v3** : v2 = scopes string METHOD:PATH, v3 = scopes mixtes string + ScopeEntry avec body filters.
-- **Body filters** (v3) : filtrage du contenu JSON des requêtes POST/PUT/PATCH (types : any, wildcard, stringwildcard, not, and).
+- **Body filters** (v3) : filtrage du contenu JSON des requêtes POST/PUT/PATCH (types : any, wildcard, stringwildcard, regex, not, and).
 
 ## Stack
 - **Runtime** : Deno
 - **Framework** : Hono
 - **Langage** : TypeScript (strict)
 - **Crypto** : Web Crypto API native (AES-256-GCM, PBKDF2)
+- **CSS** : Tailwind CSS 3 build-time (pas de CDN) → `static/styles.css`
 - **Tests** : `deno test` — structure `tests/testu/` (unit), `tests/testi/` (integration), `tests/teste2e/` (e2e)
 - **Lint/Format** : `deno lint` + `deno fmt`
 
 ## Scripts (deno task)
+- `deno task build:css` — compile `src/ui/tailwind.css` → `static/styles.css` (Tailwind CSS 3, minifié)
 - `deno task build:client` — compile `src/ui/client.ts` → `static/client.js` (esbuild, minifié)
-- `deno task dev` — build client + watch parallèle (esbuild watch + deno serve watch via concurrently)
-- `deno task start` — build client + production
+- `deno task build` — build:css + build:client (à lancer avant deploy)
+- `deno task dev` — watch parallèle CSS + client + server (concurrently)
+- `deno task start` — build + production
+- `deno task deploy` — build + deployctl vers Deno Deploy
 - `deno task test` — tous les tests
 - `deno task test:unit` — tests unitaires
 - `deno task test:integration` — tests intégration
@@ -43,7 +47,11 @@ src/
   middleware/        — middlewares (proxy, scopes, body filters)
   crypto/           — chiffrement/déchiffrement blob, dérivation clé, gzip
   auth/             — client auth (Scalingo exchange), cache bearer, singleflight
-  ui/               — pages JSX (config-page, layout)
+  ui/               — pages JSX (config-page, layout, logo/SEO)
+  ui/client/        — modules TS client (presets, body-filters, apps, generate, ttl, clipboard, scopes)
+  ui/tailwind.css   — source Tailwind (build-time → static/styles.css)
+tailwind.config.js  — config Tailwind (couleurs fgp, dark mode media)
+static/             — assets compilés (client.js, styles.css) — gitignored
 tests/
   testu/            — tests unitaires
   testi/            — tests intégration

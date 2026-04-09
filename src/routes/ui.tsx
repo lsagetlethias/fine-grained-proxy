@@ -79,6 +79,10 @@ const ListAppsBodySchema = z.object({
     example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     description: "Scalingo API token (tk-us-...)",
   }),
+  target: z.string().optional().openapi({
+    example: "https://api.osc-fr1.scalingo.com",
+    description: "Scalingo API URL (defaults to osc-fr1 if omitted)",
+  }),
 }).openapi("ListAppsBody");
 
 const ListAppsResponseSchema = z.object({
@@ -284,7 +288,7 @@ uiRoutes.openapi(listAppsRoute, async (c) => {
     );
   }
 
-  const apiUrl = Deno.env.get("SCALINGO_API_URL") ?? DEFAULT_API_URL;
+  const apiUrl = body.target || Deno.env.get("SCALINGO_API_URL") || DEFAULT_API_URL;
   let appsResponse: Response;
   try {
     appsResponse = await fetch(`${apiUrl}/v1/apps`, {

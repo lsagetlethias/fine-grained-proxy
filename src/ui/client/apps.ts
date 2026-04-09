@@ -26,7 +26,7 @@ export function setupApps(
       const res = await fetch("/api/list-apps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: token }),
+        body: JSON.stringify({ token: token, target: els.targetInput.value.trim() || undefined }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(function () {
@@ -46,6 +46,36 @@ export function setupApps(
   });
 }
 
+function ensureSearchInput(els: Elements): HTMLInputElement {
+  const existingInput = document.getElementById("apps-search") as HTMLInputElement | null;
+  if (existingInput) return existingInput;
+
+  const searchInput = document.createElement("input");
+  searchInput.type = "search";
+  searchInput.id = "apps-search";
+  searchInput.placeholder = "Filtrer les apps...";
+  searchInput.setAttribute("aria-label", "Filtrer les applications");
+  searchInput.className =
+    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 mb-2";
+  els.appsList.parentNode!.insertBefore(searchInput, els.appsList);
+  return searchInput;
+}
+
+function filterAppsList(searchInput: HTMLInputElement, appsList: HTMLElement): void {
+  const query = searchInput.value.toLowerCase();
+  const wrappers = appsList.querySelectorAll<HTMLElement>(":scope > div[data-app-name]");
+  wrappers.forEach(function (wrapper) {
+    const appName = (wrapper.dataset.appName || "").toLowerCase();
+    const checkbox = wrapper.querySelector<HTMLInputElement>("input[data-app-checkbox]");
+    const isChecked = checkbox ? checkbox.checked : false;
+    if (!query || appName.indexOf(query) !== -1 || isChecked) {
+      wrapper.classList.remove("hidden");
+    } else {
+      wrapper.classList.add("hidden");
+    }
+  });
+}
+
 function renderApps(
   els: Elements,
   apps: string[],
@@ -54,6 +84,9 @@ function renderApps(
   updateVisibility: () => void,
 ): void {
   els.appsList.textContent = "";
+
+  const searchInput = ensureSearchInput(els);
+  searchInput.value = "";
 
   const keys = Object.keys(appsPerms);
   for (let i = 0; i < keys.length; i++) {
@@ -65,6 +98,7 @@ function renderApps(
 
     const wrapper = document.createElement("div");
     wrapper.className = "py-1";
+    wrapper.dataset.appName = name;
 
     const appLabel = document.createElement("label");
     appLabel.className =
@@ -101,6 +135,11 @@ function renderApps(
 
     els.appsList.appendChild(wrapper);
   });
+
+  searchInput.addEventListener("input", function () {
+    filterAppsList(searchInput, els.appsList);
+  });
+
   els.appsSection.classList.remove("hidden");
 }
 

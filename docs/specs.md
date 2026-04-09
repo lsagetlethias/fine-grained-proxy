@@ -181,6 +181,7 @@ type ObjectValue =
   | { type: "any"; value: JsonValue }
   | { type: "wildcard" }
   | { type: "stringwildcard"; value: string }
+  | { type: "regex"; value: string }
   | { type: "and"; value: ObjectValue[] }
   | { type: "not"; value: ObjectValue };
 ```
@@ -190,6 +191,7 @@ type ObjectValue =
 | `any` | Match exact sur une valeur JSON (string, number, boolean, null, array, object) | `{ type: "any", value: "main" }` |
 | `wildcard` | Le champ doit exister, valeur quelconque | `{ type: "wildcard" }` |
 | `stringwildcard` | Glob pattern sur une valeur string (même algo que matchPath) | `{ type: "stringwildcard", value: "release/*" }` |
+| `regex` | Match par expression régulière sur une valeur string | `{ type: "regex", value: "^release/\\d+\\.\\d+" }` |
 | `and` | AND explicite : toutes les conditions doivent matcher | `{ type: "and", value: [ov1, ov2] }` |
 | `not` | Exclusion : la condition NE doit PAS matcher | `{ type: "not", value: { type: "any", value: "develop" } }` |
 
@@ -511,7 +513,7 @@ L'interface de configuration est servie à la racine du proxy :
 GET https://fgp.example.com/
 ```
 
-C'est une page HTML (Hono JSX + Tailwind CSS CDN), pas de framework frontend.
+C'est une page HTML (Hono JSX + Tailwind CSS build-time), pas de framework frontend.
 
 ### 12.2 Layout
 
@@ -551,6 +553,7 @@ Types de filtres disponibles dans l'UI :
 - **Valeur exacte** : match exact sur une valeur (texte, nombre, booléen)
 - **Existe** : le champ doit exister (wildcard)
 - **Pattern glob** : glob sur une string (stringwildcard)
+- **Expression régulière** : regex sur une string (regex)
 - **Pas** : exclusion d'une valeur (not)
 - **ET** : composition de conditions (and)
 
@@ -575,4 +578,4 @@ Pour `not` et `and`, l'UI propose des sous-types (exact, glob, existe) pour comp
 - **Pas de WebSocket** : seules les requêtes HTTP classiques sont proxyfiées.
 - **Cache bearer uniquement pour Scalingo** : le cache du bearer (singleflight) est spécifique au mode `scalingo-exchange`. Les autres modes ne cachent rien.
 - **Body filters JSON uniquement** : seul le JSON est supporté pour le filtrage du body. Les form-data, multipart, etc. ne sont pas filtrés.
-- **Pas de regex dans les body filters** : le type `regex` est prévu dans l'extensibilité (ADR 0004) mais pas implémenté.
+- **Body filter `regex`** : le type `regex` est implémenté via `new RegExp(value).test(bodyValue)`. La regex est validée au déchiffrement du blob (regex invalide = blob rejeté).

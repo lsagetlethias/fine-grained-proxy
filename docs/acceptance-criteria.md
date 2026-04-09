@@ -276,13 +276,31 @@
 **When** le proxy analyse le body
 **Then** le proxy renvoie `400` avec `{"error": "invalid_body", "message": "Request body is not valid JSON"}`
 
-### AC-5.17 Requete GET avec ScopeEntry + body filters
+### AC-5.17 Body filter regex match
+
+**Given** un ScopeEntry avec `bodyFilters: [{ objectPath: "branch", objectValue: [{ type: "regex", value: "^release/\\d+\\.\\d+" }] }]`
+**When** la requete est `POST /deploy` avec body `{ "branch": "release/1.2.3" }`
+**Then** la requete est autorisee
+
+### AC-5.18 Body filter regex mismatch
+
+**Given** le meme blob que AC-5.17
+**When** la requete est `POST /deploy` avec body `{ "branch": "hotfix/1.2.3" }`
+**Then** le proxy renvoie `403` (`scope_denied`)
+
+### AC-5.19 Body filter regex invalide dans le blob
+
+**Given** un blob v3 avec `{ type: "regex", value: "[invalid" }` (regex non compilable)
+**When** le proxy valide le blob apres dechiffrement
+**Then** le blob est rejete (regex invalide = malformed BlobConfig)
+
+### AC-5.20 Requete GET avec ScopeEntry + body filters
 
 **Given** un blob v3 avec un ScopeEntry `POST:/deploy` avec body filters
 **When** la requete est `GET /deploy`
 **Then** le ScopeEntry ne matche pas (methode mismatch). Si un autre scope autorise GET, la requete passe.
 
-### AC-5.18 ScopeEntry avec body filters — body absent
+### AC-5.21 ScopeEntry avec body filters — body absent
 
 **Given** un ScopeEntry avec body filters et une requete POST sans body
 **When** le proxy evalue les body filters

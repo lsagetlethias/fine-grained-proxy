@@ -90,9 +90,27 @@
   - Client TS + esbuild plutôt que Vite (Hono recommande Vite mais pas de plugin Deno natif)
   - concurrently pour les tasks parallèles (pas d'équivalent Deno natif)
   - zod 4 compatible via @hono/zod-openapi 1.2 (la 0.19 ne marchait pas avec zod 4)
+- **Prochaines étapes** : ~~terminées dans la session suivante~~
+
+## 2026-04-09 — Tailwind build-time, regex body filter, preset enrichi, logo, SEO, split modules, a11y
+
+- **Changements** :
+  - Tailwind CDN → build-time CSS : `tailwind.config.js` + `src/ui/tailwind.css` → `static/styles.css` via `deno task build:css`
+  - Task `deno task build` unifiée (CSS + client JS), `deno task deploy` ajoutée
+  - `deno task dev` avec watch parallèle CSS + client + server (concurrently 3 processus)
+  - Découpage `src/ui/client.ts` → 9 modules dans `src/ui/client/` (presets, body-filters, apps, generate, ttl, clipboard, scopes, elements, types)
+  - Body filter type `regex` implémenté : `new RegExp(value).test(bodyValue)`, validé au déchiffrement du blob
+  - Regex disponible dans l'UI (body filters, not, and sub-conditions)
+  - Preset Scalingo enrichi : permissions par app (read, deploy avec branches, vars read/write, scale/restart) via `AppsPermissionsState`
+  - Logo SVG inline (bouclier + cadenas) dans `layout.tsx`, utilisé comme favicon data-URI
+  - SEO meta complet : description, theme-color, canonical, Open Graph, Twitter Card
+  - Palette couleurs custom `fgp-*` dans Tailwind config
+  - Dark mode via `darkMode: "media"` (Tailwind) au lieu de classes manuelles
+  - Accessibilité : `aria-label` sur les inputs body filters
+- **Décisions** :
+  - Tailwind 3 build-time (pas Tailwind 4) pour compatibilité Deno stable
+  - Regex validée au decrypt (pas seulement à la génération) pour se protéger des blobs craftés
+  - Palette fgp-* custom plutôt que les couleurs Tailwind par défaut pour une identité visuelle propre
 - **Prochaines étapes** :
   - Premier déploiement Deno Deploy
   - Test e2e avec un vrai token Scalingo
-  - Découper client.ts en modules
-  - Tailwind CDN → build-time CSS
-  - Preset Scalingo enrichi (permissions par app)

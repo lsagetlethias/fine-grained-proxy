@@ -168,7 +168,7 @@ function renderAndBlock(
 
   if (andConditions.length === 0) {
     const emptyMsg = document.createElement("p");
-    emptyMsg.className = "text-xs text-gray-400 dark:text-gray-500 py-1";
+    emptyMsg.className = "text-xs text-gray-500 dark:text-gray-400 py-1";
     emptyMsg.textContent = "(aucune condition)";
     andWrapper.appendChild(emptyMsg);
   }
@@ -521,7 +521,7 @@ function renderValuesBlock(
   if (!filterData.valueSubTypes) filterData.valueSubTypes = [];
 
   const valuesLabel = document.createElement("div");
-  valuesLabel.className = "text-xs text-gray-500 dark:text-gray-400 mt-2";
+  valuesLabel.className = "text-xs text-gray-600 dark:text-gray-400 mt-2";
   valuesLabel.textContent = "Valeurs (une des suivantes) :";
   parent.appendChild(valuesLabel);
 
@@ -678,11 +678,12 @@ function renderFilterBlock(
   if (filterIndex > 0) {
     const andLabel = document.createElement("div");
     andLabel.className = "text-center py-1";
+    andLabel.setAttribute("role", "separator");
+    andLabel.setAttribute("aria-hidden", "true");
     const andSpan = document.createElement("span");
     andSpan.className =
-      "text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider";
+      "text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider";
     andSpan.textContent = "ET";
-    andSpan.setAttribute("aria-label", "et aussi");
     andLabel.appendChild(andSpan);
     content.appendChild(andLabel);
   }

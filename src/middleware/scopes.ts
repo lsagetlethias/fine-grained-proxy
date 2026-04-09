@@ -104,6 +104,7 @@ function matchObjectValue(ov: ObjectValue, bodyValue: unknown): boolean {
       return typeof bodyValue === "string" && matchPath(ov.value, bodyValue);
     case "regex":
       if (typeof bodyValue !== "string") return false;
+      if (bodyValue.length > 1000) return false;
       try {
         return new RegExp(ov.value).test(bodyValue);
       } catch {

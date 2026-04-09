@@ -52,6 +52,12 @@ export function Layout({ children }: { children: Child }) {
           <link rel="stylesheet" href="/static/styles.css" />
         </head>
         <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen antialiased">
+          <a
+            href="#fgp-form"
+            class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-fgp-700 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-fgp-500"
+          >
+            Aller au formulaire
+          </a>
           <div class="max-w-7xl mx-auto px-4 py-8 sm:py-12">
             {children}
           </div>
