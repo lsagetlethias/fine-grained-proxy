@@ -73,7 +73,26 @@
   - Blob v3 auto-détecté (si au moins un ScopeEntry → v3, sinon v2)
   - Body filters JSON only (pas de form-data/multipart)
   - Limites structurelles bornées pour prévenir DoS par blob crafté
+- **Prochaines étapes** : ~~terminées dans la session suivante~~
+
+## 2026-04-09 — Extraction JS, zod 4, recette, UX fixes
+
+- **Changements** :
+  - Extraction JS inline (1400 lignes string template) → `src/ui/client.ts` typé
+  - Build pipeline esbuild → `static/client.js` (32.5KB minifié, gitignored)
+  - `deno task dev` avec concurrently (esbuild watch + deno serve watch en parallèle)
+  - Migration zod 3.24 → zod 4 + @hono/zod-openapi 0.19 → 1.2
+  - Migration `deno run` → `deno serve` (export `{ port, fetch }`)
+  - Phase recette complète : dev /verif, designer review skills, testeur tests statique, PO recette visuelle
+  - UX fixes : presets label + hint, guide deploy Deno Deploy mis à jour (console.deno.com)
+  - 263 tests, 0 failed
+- **Décisions** :
+  - Client TS + esbuild plutôt que Vite (Hono recommande Vite mais pas de plugin Deno natif)
+  - concurrently pour les tasks parallèles (pas d'équivalent Deno natif)
+  - zod 4 compatible via @hono/zod-openapi 1.2 (la 0.19 ne marchait pas avec zod 4)
 - **Prochaines étapes** :
-  - Tests body filters (unit + integration)
-  - Review UI body filters par PO + designer
-  - Regex body filter (type extensible, pas implémenté)
+  - Premier déploiement Deno Deploy
+  - Test e2e avec un vrai token Scalingo
+  - Découper client.ts en modules
+  - Tailwind CDN → build-time CSS
+  - Preset Scalingo enrichi (permissions par app)

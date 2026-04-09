@@ -34,7 +34,7 @@ Le plan Pro ($20/mois) leve ces limites.
 
 ## Variables d'environnement
 
-Configurer dans le dashboard (Project > Settings > Environment Variables) :
+Configurer dans la console Deno Deploy ([console.deno.com](https://console.deno.com) > Project > Settings > Environment Variables) :
 
 | Variable | Requis | Description |
 |----------|--------|-------------|
@@ -50,11 +50,32 @@ Configurer dans le dashboard (Project > Settings > Environment Variables) :
 # Build le client
 deno task build:client
 
-# Deploy
-deployctl deploy --project=fgp-proxy --entrypoint=src/main.ts --include=src,static,deno.json,deno.lock
+# Creer le projet et deployer
+deno deploy create \
+  --app fgp-proxy \
+  --source local \
+  --build-timeout 5
+
+# Deployments suivants
+deno deploy \
+  --app fgp-proxy
 ```
 
-Le `--include` est important pour inclure le dossier `static/` (build output) dans le deploy.
+## Deployer via GitHub (console)
+
+1. [console.deno.com](https://console.deno.com) > New Project
+2. Connecter le repo GitHub
+3. Entry point : `src/main.ts`
+4. Build command : `deno task build:client`
+5. Framework preset : aucun
+6. Configurer les variables d'environnement
+7. Chaque push sur `main` declenche un deploiement automatique
+
+Ou via le bouton deploy :
+
+```
+https://console.deno.com/new?clone=REPO_URL&build=deno%20task%20build:client
+```
 
 ## Deployer via GitHub Actions
 
@@ -89,15 +110,6 @@ jobs:
           include: src,static,deno.json,deno.lock
 ```
 
-## Deployer via GitHub Integration (dashboard)
-
-1. [dash.deno.com](https://dash.deno.com) > New Project > connecter le repo GitHub
-2. Entry point : `src/main.ts`
-3. Build command : `deno task build:client`
-4. Framework preset : aucun
-5. Configurer les variables d'environnement
-6. Chaque push sur `main` declenche un deploiement automatique
-
 ## Verifier
 
 ```bash
@@ -107,3 +119,7 @@ curl https://fgp-proxy.deno.dev/healthz
 curl https://fgp-proxy.deno.dev/api/docs
 # Swagger UI
 ```
+
+## Domaines custom
+
+Configurables depuis [console.deno.com](https://console.deno.com) > Project > Settings > Domains.

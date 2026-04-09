@@ -22,8 +22,9 @@
 - **Lint/Format** : `deno lint` + `deno fmt`
 
 ## Scripts (deno task)
-- `deno task dev` — serveur dev avec watch
-- `deno task start` — production
+- `deno task build:client` — compile `src/ui/client.ts` → `static/client.js` (esbuild, minifié)
+- `deno task dev` — build client + watch parallèle (esbuild watch + deno serve watch via concurrently)
+- `deno task start` — build client + production
 - `deno task test` — tous les tests
 - `deno task test:unit` — tests unitaires
 - `deno task test:integration` — tests intégration
