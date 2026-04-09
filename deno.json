@@ -38,7 +38,7 @@
     "rules": {
       "tags": ["recommended"]
     },
-    "exclude": ["docs/", "*.md", "static/", "src/ui/client.ts"]
+    "exclude": ["docs/", "*.md", "static/", "src/ui/client.ts", "src/ui/client/"]
   },
   "fmt": {
     "useTabs": false,
@@ -54,5 +54,3 @@
     "app": "fgp-proxy"
   }
 }
-
-
