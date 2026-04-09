@@ -7,11 +7,17 @@ import { exchangeToken } from "../auth/client.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
 import type { Scope, ScopeEntry } from "../middleware/scopes.ts";
 
-let commitHash = "dev";
+let commitHash = Deno.env.get("DENO_DEPLOYMENT_ID")?.slice(0, 7) ?? "dev";
 try {
-  commitHash = Deno.readTextFileSync("static/version.txt").trim();
+  const cmd = new Deno.Command("git", {
+    args: ["rev-parse", "--short", "HEAD"],
+    stdout: "piped",
+    stderr: "null",
+  });
+  const out = cmd.outputSync();
+  if (out.success) commitHash = new TextDecoder().decode(out.stdout).trim();
 } catch {
-  // dev mode, no build
+  // Deno Deploy or no git — keep DENO_DEPLOYMENT_ID or "dev"
 }
 
 function getRequestOrigin(c: Context): string {
