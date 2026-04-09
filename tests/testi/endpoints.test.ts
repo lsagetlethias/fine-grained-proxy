@@ -44,6 +44,48 @@ Deno.test({
 });
 
 Deno.test({
+  name: 'AC-10.3.1: GET / contains <script defer src="/static/client.js"',
+  fn: async () => {
+    const res = await app.request("/");
+    const body = await res.text();
+
+    assertEquals(res.status, 200);
+    assertEquals(
+      body.includes('<script defer src="/static/client.js"'),
+      true,
+    );
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-10.5: GET /static/client.js returns 200 with JS content",
+  fn: async () => {
+    const res = await app.request("/static/client.js");
+
+    assertEquals(res.status, 200);
+    const ct = res.headers.get("Content-Type") ?? "";
+    assertEquals(ct.includes("javascript"), true);
+    const body = await res.text();
+    assertEquals(body.length > 0, true);
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-10.6: GET /static/nonexistent.js falls through to blob proxy (401)",
+  fn: async () => {
+    const res = await app.request("/static/nonexistent.js");
+
+    assertEquals(res.status, 401);
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
   name: "AC-10.4: POST /api/generate with no body returns 400",
   fn: async () => {
     const res = await app.request("/api/generate", { method: "POST" });
