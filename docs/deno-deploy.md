@@ -4,92 +4,57 @@ Guide de deploiement de Fine-Grained Proxy sur [Deno Deploy](https://deno.com/de
 
 ## Compatibilite
 
-FGP est compatible avec Deno Deploy. Les points cles :
+FGP est compatible avec Deno Deploy :
 
-- **Entry point** : `src/main.ts` utilise `Deno.serve()` via `import.meta.main` et exporte `app` par defaut (pattern Hono standard). Deno Deploy supporte les deux approches.
-- **Web Crypto API** : supportee nativement sur Deno Deploy. AES-256-GCM et PBKDF2 fonctionnent sans modification.
-- **CompressionStream / DecompressionStream** : supportes nativement sur Deno Deploy (gzip, deflate).
-- **JSR imports** : natifs sur Deno Deploy. Les imports `jsr:@hono/hono`, `jsr:@std/encoding`, etc. du `deno.json` fonctionnent directement.
-- **`Deno.env.get()`** : fonctionne sur Deno Deploy pour lire les variables d'environnement.
+- **Entry point** : `src/main.ts` exporte `{ port, fetch }` (pattern `deno serve` standard)
+- **Web Crypto API** : AES-256-GCM et PBKDF2 supportes nativement
+- **CompressionStream** : gzip supporte nativement
+- **Deno.env.get()** : fonctionne pour les variables d'environnement
 
-## Limitations a connaitre
+## Pre-requis : build du client
+
+Le JS client (`static/client.js`) est compile depuis TypeScript via esbuild. Ce fichier est gitignore — il doit etre build avant chaque deploy :
+
+```bash
+deno task build:client
+```
+
+Cela compile `src/ui/client.ts` → `static/client.js` (minifie, ~32KB).
+
+## Limitations
 
 | Limite | Valeur (Free) | Impact FGP |
 |--------|---------------|------------|
 | Requetes/jour | 100 000 | Suffisant pour un usage modere |
-| Memoire | 512 MB | OK, FGP est stateless (seul le cache bearer Scalingo consomme de la RAM) |
-| CPU time | ~20h/mois | PBKDF2 (100k iterations) consomme du CPU par requete. A surveiller sous forte charge. |
-| Outbound data | 100 GiB/mois | Transparent, depend du volume proxy |
+| Memoire | 512 MB | OK, le cache bearer est la seule consommation RAM |
+| CPU time | ~20h/mois | PBKDF2 100k iterations consomme du CPU par requete. A surveiller. |
+| Outbound data | 100 GiB/mois | Depend du volume proxy |
 
-Le plan Pro ($20/mois) leve la plupart de ces limites.
-
-**Point d'attention** : PBKDF2 avec 100 000 iterations est CPU-intensive. Sur le free tier, chaque requete proxyfiee declenche une derivation de cle. Sous forte charge, le budget CPU peut etre atteint rapidement. A monitorer.
-
-## Prerequis
-
-- Un compte [Deno Deploy](https://dash.deno.com)
-- [Deno CLI](https://deno.com) >= 2.x installe localement
+Le plan Pro ($20/mois) leve ces limites.
 
 ## Variables d'environnement
 
-Configurer dans le dashboard Deno Deploy (Project > Settings > Environment Variables) :
+Configurer dans le dashboard (Project > Settings > Environment Variables) :
 
 | Variable | Requis | Description |
 |----------|--------|-------------|
-| `FGP_SALT` | Oui | Salt serveur pour la derivation de cle (PBKDF2) |
-| `SCALINGO_API_URL` | Non | URL de l'API Scalingo (defaut: `https://api.osc-fr1.scalingo.com`) |
-| `SCALINGO_AUTH_URL` | Non | URL du service auth Scalingo (defaut: `https://auth.scalingo.com`) |
+| `FGP_SALT` | Oui | Salt serveur pour PBKDF2 |
+| `SCALINGO_API_URL` | Non | URL API Scalingo (defaut: `https://api.osc-fr1.scalingo.com`) |
+| `SCALINGO_AUTH_URL` | Non | URL auth Scalingo (defaut: `https://auth.scalingo.com`) |
 
-`PORT` n'est pas necessaire sur Deno Deploy (gere automatiquement).
+`PORT` n'est pas necessaire (gere par Deno Deploy).
 
 ## Deployer via CLI
 
-### Premiere fois
-
 ```bash
-# Authentification (ouvre le navigateur)
-deno deploy
+# Build le client
+deno task build:client
 
-# Creer le projet et deployer
-deno deploy create --app fgp-proxy --entrypoint src/main.ts
+# Deploy
+deployctl deploy --project=fgp-proxy --entrypoint=src/main.ts --include=src,static,deno.json,deno.lock
 ```
 
-Ou via token pour CI :
-
-```bash
-export DENO_DEPLOY_TOKEN="ddp_xxxxxxxxxxxx"
-```
-
-### Deploiements suivants
-
-```bash
-deno deploy --app fgp-proxy
-```
-
-Le CLI detecte automatiquement le `deno.json` et uploade le repertoire courant.
-
-### Configurer les env vars via CLI
-
-```bash
-deno deploy env set FGP_SALT "votre-salt-secret" --app fgp-proxy
-```
-
-### Verifier
-
-```bash
-curl https://fgp-proxy.deno.dev/healthz
-# {"status":"ok"}
-```
-
-## Deployer via GitHub Integration
-
-1. Aller sur [dash.deno.com](https://dash.deno.com) > New Project
-2. Connecter le repo GitHub
-3. Configurer l'entry point : `src/main.ts`
-4. Framework preset : aucun (laisser vide)
-5. Configurer les variables d'environnement dans le dashboard
-6. Chaque push sur `main` declenche un deploiement automatique
-7. Chaque PR obtient une preview URL
+Le `--include` est important pour inclure le dossier `static/` (build output) dans le deploy.
 
 ## Deployer via GitHub Actions
 
@@ -109,15 +74,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-      - run: deno task verify
-      - uses: denoland/deployctl@v1
+
+      - name: Build client
+        run: deno task build:client
+
+      - name: Run tests
+        run: deno task verify
+
+      - name: Deploy
+        uses: denoland/deployctl@v1
         with:
           project: fgp-proxy
           entrypoint: src/main.ts
+          include: src,static,deno.json,deno.lock
 ```
 
-## Notes
+## Deployer via GitHub Integration (dashboard)
 
-- Le `export default app` dans `src/main.ts` est le pattern standard pour Deno Deploy avec Hono. Le guard `import.meta.main` fait que `Deno.serve()` n'est appele qu'en execution directe.
-- Les domaines custom sont configurables depuis le dashboard Deno Deploy.
-- Pas de stockage persistant sur Deno Deploy, ce qui colle avec l'architecture zero-storage de FGP.
+1. [dash.deno.com](https://dash.deno.com) > New Project > connecter le repo GitHub
+2. Entry point : `src/main.ts`
+3. Build command : `deno task build:client`
+4. Framework preset : aucun
+5. Configurer les variables d'environnement
+6. Chaque push sur `main` declenche un deploiement automatique
+
+## Verifier
+
+```bash
+curl https://fgp-proxy.deno.dev/healthz
+# {"status":"ok"}
+
+curl https://fgp-proxy.deno.dev/api/docs
+# Swagger UI
+```

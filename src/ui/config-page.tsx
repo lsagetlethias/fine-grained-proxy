@@ -34,7 +34,7 @@ export function ConfigPage() {
             {/* Preset */}
             <section>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Preset
+                Charger un preset
               </label>
               <div class="flex gap-2">
                 <button
@@ -49,9 +49,13 @@ export function ConfigPage() {
                   id="btn-preset-clear"
                   class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus:ring-offset-gray-900"
                 >
-                  Vide
+                  R&eacute;initialiser
                 </button>
               </div>
+              <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                Pr&eacute;-remplit le formulaire. Le bouton &laquo; Charger les apps &raquo; est
+                disponible avec le mode d'auth Scalingo exchange.
+              </p>
             </section>
 
             {/* Target */}
