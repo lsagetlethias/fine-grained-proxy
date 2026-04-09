@@ -16,8 +16,9 @@ app.all("/api/*", (c) => c.json({ error: "not_found", message: "Endpoint not fou
 
 app.use("/:blob/*", proxyMiddleware());
 
-export default app;
+export { app };
 
-if (import.meta.main) {
-  Deno.serve({ port: Number(Deno.env.get("PORT") ?? 8000) }, app.fetch);
-}
+export default {
+  port: Number(Deno.env.get("PORT") ?? 8000),
+  fetch: app.fetch,
+};

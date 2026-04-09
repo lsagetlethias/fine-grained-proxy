@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 
-import app from "../../src/main.ts";
+import { app } from "../../src/main.ts";
 
 const SERVER_SALT = "test-api-edge-salt";
 const originalFetch = globalThis.fetch;

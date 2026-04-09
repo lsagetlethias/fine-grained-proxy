@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert";
 
 import { decryptBlob } from "../../src/crypto/blob.ts";
-import app from "../../src/main.ts";
+import { app } from "../../src/main.ts";
 
 const SERVER_SALT = "test-api-salt";
 const originalFetch = globalThis.fetch;

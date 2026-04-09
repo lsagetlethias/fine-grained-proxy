@@ -7,6 +7,7 @@
     "jsr:@std/assert@1": "1.0.13",
     "jsr:@std/encoding@1": "1.0.10",
     "jsr:@std/internal@^1.0.6": "1.0.9",
+    "npm:@asteasolutions/zod-to-openapi@7": "7.3.4_zod@3.24.2",
     "npm:zod@^3.24.0": "3.24.2"
   },
   "jsr": {
@@ -33,6 +34,23 @@
     }
   },
   "npm": {
+    "@asteasolutions/zod-to-openapi@7.3.4_zod@3.24.2": {
+      "integrity": "sha512-/2rThQ5zPi9OzVwes6U7lK1+Yvug0iXu25olp7S0XsYmOqnyMfxH7gdSQjn/+DSOHRg7wnotwGJSyL+fBKdnEA==",
+      "dependencies": [
+        "openapi3-ts",
+        "zod"
+      ]
+    },
+    "openapi3-ts@4.5.0": {
+      "integrity": "sha512-jaL+HgTq2Gj5jRcfdutgRGLosCy/hT8sQf6VOy+P+g36cZOjI1iukdPnijC+4CmeRzg/jEllJUboEic2FhxhtQ==",
+      "dependencies": [
+        "yaml"
+      ]
+    },
+    "yaml@2.8.3": {
+      "integrity": "sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg==",
+      "bin": true
+    },
     "zod@3.24.2": {
       "integrity": "sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ=="
     }
@@ -41,11 +59,11 @@
     "dependencies": [
       "jsr:@hono/hono@4",
       "jsr:@hono/swagger-ui@0.6",
-      "jsr:@hono/zod-openapi@1",
       "jsr:@std/assert@1",
       "jsr:@std/crypto@1",
       "jsr:@std/encoding@1",
       "jsr:@std/testing@1",
+      "npm:@asteasolutions/zod-to-openapi@7",
       "npm:zod@^3.24.0"
     ]
   }

@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import app from "../../src/main.ts";
+import { app } from "../../src/main.ts";
 
 Deno.test({
   name: "AC-10.1: GET /healthz returns 200 ok",
