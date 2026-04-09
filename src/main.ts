@@ -20,5 +20,5 @@ export { app };
 
 export default {
   port: Number(Deno.env.get("PORT") ?? 8000),
-  fetch: app.fetch,
+  fetch: (req: Request, info: Deno.ServeHandlerInfo) => app.fetch(req, { info }),
 };

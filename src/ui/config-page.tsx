@@ -496,7 +496,7 @@ function clientScript(): string {
       document.getElementById("result-url").value = data.url;
       document.getElementById("result-key").value = data.key;
       document.getElementById("result-curl").textContent =
-        'curl -H "X-FGP-Key: ' + data.key + '" \\\\\n  ' + data.url + "v1/apps";
+        'curl -H "X-FGP-Key: ' + data.key + '" ' + data.url + "v1/apps";
       resultSection.classList.remove("hidden");
     } catch (err) {
       showError("Erreur lors de la g\\u00e9n\\u00e9ration : " + err.message);
