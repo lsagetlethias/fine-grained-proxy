@@ -1,10 +1,10 @@
 # Fine-Grained Proxy (FGP)
 
-Proxy HTTP stateless et API-agnostique qui ajoute des tokens fine-grained (scoping par methode HTTP et chemin) devant n'importe quelle API. Zero storage, double cle, scopes `METHOD:PATH`.
+Proxy HTTP stateless et API-agnostique qui ajoute des tokens fine-grained (scoping par methode HTTP, chemin et contenu du body) devant n'importe quelle API. Zero storage, double cle, scopes `METHOD:PATH` avec body filters optionnels.
 
 ## Pourquoi
 
-Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de generer des URLs a usage limite : scopees par methode et path, avec une duree de vie configurable, sans stocker quoi que ce soit. Toute la configuration (token, cible, mode d'auth, scopes) est chiffree dans l'URL elle-meme.
+Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de generer des URLs a usage limite : scopees par methode, path et contenu du body, avec une duree de vie configurable, sans stocker quoi que ce soit. Toute la configuration (token, cible, mode d'auth, scopes, body filters) est chiffree dans l'URL elle-meme.
 
 ## Quick start
 
@@ -75,6 +75,7 @@ Le proxy dechiffre le blob, verifie le TTL et les scopes, puis forward la requet
 | `/api/salt` | GET | Salt serveur (public) |
 | `/api/generate` | POST | Generation d'URL FGP |
 | `/api/list-apps` | POST | Helper Scalingo : listing des apps |
+| `/api/openapi.json` | GET | Spec OpenAPI 3.0 |
 | `/api/docs` | GET | Swagger UI |
 | `/{blob}/{path...}` | * | Proxy vers l'API cible |
 
@@ -84,7 +85,7 @@ Documentation OpenAPI complete : [Swagger UI](/api/docs)
 
 ### Blob chiffre dans l'URL
 
-Toute la config (token, cible, auth, scopes, TTL) est serializee en JSON, compressée (gzip), puis chiffree avec AES-256-GCM. La cle de chiffrement est derivee via PBKDF2 a partir de deux composants :
+Toute la config (token, cible, auth, scopes, body filters, TTL) est serializee en JSON, compressee (gzip), puis chiffree avec AES-256-GCM. La cle de chiffrement est derivee via PBKDF2 a partir de deux composants :
 
 - **Cle client** (`X-FGP-Key`) : generee a la creation, transmise au client, jamais stockee sur le serveur
 - **Salt serveur** (`FGP_SALT`) : configure sur le serveur, inutile sans la cle client
@@ -100,10 +101,11 @@ L'URL seule est inexploitable. Il faut les deux composants pour dechiffrer.
 | `scalingo-exchange` | Exchange token -> bearer temporaire (1h), avec cache en memoire |
 | `header:{name}` | Header custom (ex: `header:X-API-Key` -> `X-API-Key: {token}`) |
 
-### Scopes METHOD:PATH
+### Scopes METHOD:PATH + body filters
 
-Les scopes sont des patterns additifs (allowlist). Exemples :
+Les scopes sont des patterns additifs (allowlist). Deux formats :
 
+**Scopes string** (v2+) :
 ```
 GET:/v1/apps/*            -> lecture sur /v1/apps/ et sous-chemins
 POST:/v1/apps/my-app/*    -> ecriture sur une app specifique
@@ -111,14 +113,33 @@ GET|POST:/v1/apps/*       -> lecture + ecriture
 *:*                       -> acces total
 ```
 
+**Scopes structures** (v3) — avec body filters optionnels :
+```json
+{
+  "methods": ["POST"],
+  "pattern": "/v1/apps/my-app/deployments",
+  "bodyFilters": [{
+    "objectPath": "deployment.git_ref",
+    "objectValue": [
+      { "type": "any", "value": "main" },
+      { "type": "stringwildcard", "value": "release/*" }
+    ]
+  }]
+}
+```
+
+Types de body filters : `any` (exact match), `wildcard` (champ existe), `stringwildcard` (glob), `not` (exclusion), `and` (composition). Voir `docs/specs.md` et `docs/limits.md` pour les details et limites.
+
 ### Flow d'une requete proxy
 
 ```
-Requete -> extraire blob du path -> extraire X-FGP-Key du header
-  -> PBKDF2(client_key + server_salt) -> dechiffrer blob
-  -> verifier TTL -> verifier scopes vs methode/path
-  -> auth (bearer direct ou exchange) -> forward vers API cible
-  -> renvoyer reponse
+Requete -> valider path -> verifier taille blob -> extraire X-FGP-Key
+  -> PBKDF2(client_key + server_salt) -> dechiffrer blob (gunzip + AES-256-GCM)
+  -> valider auth mode -> verifier TTL
+  -> parser body si body filters requis (POST/PUT/PATCH + JSON)
+  -> verifier scopes vs methode/path/body
+  -> auth (bearer, basic, header custom, ou scalingo-exchange avec cache)
+  -> forward vers config.target -> renvoyer reponse
 ```
 
 ## Scripts
@@ -139,8 +160,10 @@ Requete -> extraire blob du path -> extraire X-FGP-Key du header
 
 ## Documentation
 
+- [Specifications fonctionnelles v3](docs/specs.md)
+- [Criteres d'acceptation](docs/acceptance-criteria.md)
+- [Limites fonctionnelles body filters](docs/limits.md)
 - [Architecture Decision Records](docs/adr/)
-- [Specifications fonctionnelles](docs/specs.md)
 - [Guide deploiement Deno Deploy](docs/deno-deploy.md)
 - [Guide deploiement Scalingo](docs/scalingo-deploy.md)
 

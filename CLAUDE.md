@@ -5,11 +5,13 @@
 - Manière de parler : t'es un bro', tu ne prends pas de pincettes. Tu dis les choses telles qu'elles sont, même si c'est brutal. Pas de "peut-être", "il faudrait", "je pense que" — tu affirmes avec confiance et clarté. Tu ne laisses aucune place à l'ambiguïté ou au doute. Tu es direct, franc, et précis. Tu proposes des alternatives quand tu penses que c'est pertinent. Tu me parles comme à un collègue dev expérimenté. Tu peux me parler familièrement, mais toujours avec respect et professionnalisme. Si tu vois un problème ou une amélioration possible, tu le dis sans hésiter.
 
 ## Projet
-- **Fine-Grained Proxy** : proxy HTTP stateless devant l'API Scalingo qui ajoute des tokens fine-grained (scoping par app, par action) là où Scalingo n'en propose pas.
-- **Zero storage** : aucune base de données. Le token Scalingo + la config de droits sont chiffrés dans l'URL elle-même.
+- **Fine-Grained Proxy** : proxy HTTP stateless et API-agnostique qui ajoute des tokens fine-grained (scoping par méthode HTTP, chemin, et contenu du body) devant n'importe quelle API.
+- **Zero storage** : aucune base de données. Le token + cible + auth + scopes + TTL sont chiffrés (gzip + AES-256-GCM) dans l'URL elle-même.
 - **Double clé** : le blob URL est déchiffrable uniquement avec une clé client (header `X-FGP-Key`) + un salt serveur. L'URL seule est inexploitable.
 - **TTL** : expiration encodée dans le blob, vérifiée à chaque requête.
-- **Auth Scalingo** : double step — API token (`tk-us-...`) → exchange → bearer (1h TTL). Le proxy gère l'exchange et cache le bearer chiffré en mémoire.
+- **4 modes d'auth** : bearer, basic, scalingo-exchange, header custom. Scalingo est un cas d'usage parmi d'autres.
+- **Blob v2/v3** : v2 = scopes string METHOD:PATH, v3 = scopes mixtes string + ScopeEntry avec body filters.
+- **Body filters** (v3) : filtrage du contenu JSON des requêtes POST/PUT/PATCH (types : any, wildcard, stringwildcard, not, and).
 
 ## Stack
 - **Runtime** : Deno
@@ -36,17 +38,19 @@
 ```
 src/
   main.ts           — point d'entrée, Hono app
-  routes/           — routes Hono (proxy, UI config, healthz)
-  middleware/        — middlewares (auth, scoping, logging)
-  crypto/           — chiffrement/déchiffrement blob, dérivation clé
-  scalingo/         — client API Scalingo (token exchange, proxy)
-  ui/               — pages JSX (formulaire de config)
+  routes/           — routes Hono (UI, API, OpenAPI/Swagger)
+  middleware/        — middlewares (proxy, scopes, body filters)
+  crypto/           — chiffrement/déchiffrement blob, dérivation clé, gzip
+  auth/             — client auth (Scalingo exchange), cache bearer, singleflight
+  ui/               — pages JSX (config-page, layout)
 tests/
   testu/            — tests unitaires
   testi/            — tests intégration
   teste2e/          — tests e2e
 docs/
   adr/              — Architecture Decision Records
+  specs.md          — spécifications fonctionnelles v3
+  limits.md         — limites fonctionnelles body filters
 ```
 
 ## Conventions code
@@ -59,19 +63,21 @@ docs/
 
 ## Flow proxy
 ```
-Requête → extraire blob du path → extraire X-FGP-Key du header
-  → PBKDF2(client_key + server_salt) → déchiffrer blob
-  → vérifier TTL → vérifier scopes vs route/méthode
-  → cache hit? déchiffrer bearer : exchange token → chiffrer bearer → cache
-  → forward vers api.osc-fr1.scalingo.com avec bearer
-  → renvoyer réponse
+Requête → valider path → vérifier taille blob → extraire X-FGP-Key
+  → PBKDF2(client_key + server_salt) → déchiffrer blob (gunzip + AES-256-GCM)
+  → valider auth mode → vérifier TTL
+  → parser body si body filters requis (POST/PUT/PATCH + JSON)
+  → vérifier scopes vs méthode/path/body
+  → auth (bearer direct, basic, header custom, ou scalingo-exchange avec cache)
+  → forward vers config.target avec auth headers
+  → renvoyer réponse (filtrage Set-Cookie)
 ```
 
 ## Variables d'environnement
 - `PORT` — port du serveur (défaut: 8000)
 - `FGP_SALT` — salt serveur pour la dérivation de clé (requis)
-- `SCALINGO_API_URL` — URL de l'API Scalingo (défaut: https://api.osc-fr1.scalingo.com)
-- `SCALINGO_AUTH_URL` — URL du service auth Scalingo (défaut: https://auth.scalingo.com)
+- `SCALINGO_API_URL` — URL de l'API Scalingo pour le helper list-apps (défaut: https://api.osc-fr1.scalingo.com)
+- `SCALINGO_AUTH_URL` — URL du service auth Scalingo pour le mode scalingo-exchange (défaut: https://auth.scalingo.com)
 
 ## Documentation
 - **OpenAPI** : `GET /api/openapi.json` — spec OpenAPI 3.0 auto-générée depuis le code (schemas Zod)

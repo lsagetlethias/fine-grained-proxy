@@ -42,9 +42,38 @@
   - Équipe 5 rôles (lead dev, dev, PO, designer, testeur) — le testeur a challengé le PO efficacement
   - Feedback : le designer ne touche pas à main.ts, le dev doit respecter les pauses, doc API non négociable
   - Copilotage archi avec l'utilisateur sur les décisions structurantes (server-side crypto, proxy agnostique)
+- **Prochaines étapes** : ~~terminées dans les sessions suivantes~~
+
+## 2026-04-08 → 2026-04-09 — Tailscale, OpenAPI, guides déploiement, README
+
+- **Changements** :
+  - Compatibilité reverse proxy (X-Forwarded-Host/Proto pour Tailscale)
+  - Guides de déploiement : Deno Deploy + Scalingo
+  - README.md complet
+- **Prochaines étapes** : ~~terminées dans la session suivante~~
+
+## 2026-04-09 — Body filters, limites fonctionnelles, and/not, UI split
+
+- **Changements** :
+  - ADR-0004 : Body filters et scopes structurés (blob v3)
+  - Implémentation body filters : ObjectValue (any, wildcard, stringwildcard, and, not)
+  - ScopeEntry structurés avec bodyFilters optionnels dans `scopes.ts`
+  - Backward compat v2/v3 dans `decryptBlob` et `checkAccess`
+  - Validation limites dans `blob.ts` : profondeur and/not (4), body filters/scope (8), valeurs OR (16), ScopeEntry (10), dot-path (6)
+  - Combinaisons interdites : not(wildcard), not(not), and([]), and(1)
+  - Validation limites côté API dans `ui.tsx` (`validateScopeLimits`, `validateObjectValue`)
+  - Body parsing conditionnel dans `proxy.ts` (lazy, seulement si body filters + POST/PUT/PATCH)
+  - UI body filters : panel accordéon par scope, types exact/wildcard/glob/not/and avec sous-conditions
+  - UI layout split : formulaire 3/5 + guide 2/5
+  - UI dark mode (Tailwind media query)
+  - Limites fonctionnelles documentées dans `docs/limits.md`
+  - Specs v3, acceptance criteria v2 synchronisés avec le code
+- **Décisions** :
+  - ADR-0004 : discriminated union `ObjectValue` avec `type` comme discriminant — extensible sans casser l'existant
+  - Blob v3 auto-détecté (si au moins un ScopeEntry → v3, sinon v2)
+  - Body filters JSON only (pas de form-data/multipart)
+  - Limites structurelles bornées pour prévenir DoS par blob crafté
 - **Prochaines étapes** :
-  - Compatibilité Tailscale (X-Forwarded-Host/Proto)
-  - Guide déploiement Deno Deploy + Scalingo
-  - README.md
-  - /verif + /add-tests sur le code agnostique v2
-  - Review UI par PO + designer
+  - Tests body filters (unit + integration)
+  - Review UI body filters par PO + designer
+  - Regex body filter (type extensible, pas implémenté)
