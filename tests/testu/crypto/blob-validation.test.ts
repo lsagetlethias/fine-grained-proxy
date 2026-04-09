@@ -275,3 +275,289 @@ Deno.test("decrypt rejects blob with empty string token", async () => {
     "malformed BlobConfig",
   );
 });
+
+// --- Limits: depth max 4 ---
+
+Deno.test("decrypt rejects blob with nesting depth > 4 (not chain)", async () => {
+  let nested: unknown = { type: "any", value: "x" };
+  for (let i = 0; i < 5; i++) {
+    nested = { type: "and", value: [nested, { type: "any", value: "y" }] };
+  }
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{ objectPath: "f", objectValue: [nested] as unknown[] }] as unknown[],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt accepts blob with nesting depth exactly 4", async () => {
+  const nested = {
+    type: "and",
+    value: [
+      {
+        type: "and",
+        value: [
+          {
+            type: "and",
+            value: [
+              { type: "any", value: "a" },
+              { type: "any", value: "b" },
+            ],
+          },
+          { type: "any", value: "c" },
+        ],
+      },
+      { type: "any", value: "d" },
+    ],
+  };
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{ objectPath: "f", objectValue: [nested] }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 3);
+});
+
+// --- Limits: forbidden combinations ---
+
+Deno.test("decrypt rejects not(wildcard)", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "f",
+        objectValue: [{ type: "not", value: { type: "wildcard" } }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt rejects not(not(...))", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "f",
+        objectValue: [{ type: "not", value: { type: "not", value: { type: "any", value: "x" } } }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt rejects and with empty array", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "f",
+        objectValue: [{ type: "and", value: [] }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt rejects and with single element", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "f",
+        objectValue: [{ type: "and", value: [{ type: "any", value: "x" }] }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+// --- Limits: body filters per scope ---
+
+Deno.test("decrypt rejects scope with more than 8 body filters", async () => {
+  const filters = [];
+  for (let i = 0; i < 9; i++) {
+    filters.push({ objectPath: "field" + i, objectValue: [{ type: "wildcard" }] });
+  }
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: filters,
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt accepts scope with exactly 8 body filters", async () => {
+  const filters = [];
+  for (let i = 0; i < 8; i++) {
+    filters.push({ objectPath: "field" + i, objectValue: [{ type: "wildcard" }] });
+  }
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: filters,
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 3);
+});
+
+// --- Limits: OR values per filter ---
+
+Deno.test("decrypt rejects filter with more than 16 OR values", async () => {
+  const values = [];
+  for (let i = 0; i < 17; i++) {
+    values.push({ type: "any", value: "val" + i });
+  }
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{ objectPath: "f", objectValue: values }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt accepts filter with exactly 16 OR values", async () => {
+  const values = [];
+  for (let i = 0; i < 16; i++) {
+    values.push({ type: "any", value: "val" + i });
+  }
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{ objectPath: "f", objectValue: values }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 3);
+});
+
+// --- Limits: dot-path segments ---
+
+Deno.test("decrypt rejects dot-path with more than 6 segments", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "a.b.c.d.e.f.g",
+        objectValue: [{ type: "wildcard" }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt accepts dot-path with exactly 6 segments", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "a.b.c.d.e.f",
+        objectValue: [{ type: "wildcard" }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 3);
+});
+
+// --- Limits: max 10 structured scopes ---
+
+Deno.test("decrypt rejects blob with more than 10 structured scopes", async () => {
+  const scopes = [];
+  for (let i = 0; i < 11; i++) {
+    scopes.push({ methods: ["GET"], pattern: "/v1/test/" + i });
+  }
+  const raw = makeConfig({ v: 3, scopes: scopes as unknown as BlobConfig["scopes"] });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt accepts blob with exactly 10 structured scopes", async () => {
+  const scopes = [];
+  for (let i = 0; i < 10; i++) {
+    scopes.push({ methods: ["GET"], pattern: "/v1/test/" + i });
+  }
+  const raw = makeConfig({ v: 3, scopes: scopes as unknown as BlobConfig["scopes"] });
+  const blob = await encryptRaw(raw);
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 3);
+});

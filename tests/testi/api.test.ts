@@ -382,3 +382,229 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
 });
+
+// --- Scope limits validation on /api/generate ---
+
+Deno.test({
+  name: "POST /api/generate rejects not(wildcard) in body filter",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{
+          methods: ["POST"],
+          pattern: "/v1/test",
+          bodyFilters: [{
+            objectPath: "field",
+            objectValue: [{ type: "not", value: { type: "wildcard" } }],
+          }],
+        }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "scope_limit_exceeded");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "POST /api/generate rejects not(not(...)) in body filter",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{
+          methods: ["POST"],
+          pattern: "/v1/test",
+          bodyFilters: [{
+            objectPath: "field",
+            objectValue: [{
+              type: "not",
+              value: { type: "not", value: { type: "any", value: "x" } },
+            }],
+          }],
+        }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "scope_limit_exceeded");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "POST /api/generate rejects more than 8 body filters per scope",
+  fn: async () => {
+    setup();
+    const filters = [];
+    for (let i = 0; i < 9; i++) {
+      filters.push({ objectPath: "field" + i, objectValue: [{ type: "wildcard" }] });
+    }
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{ methods: ["POST"], pattern: "/v1/test", bodyFilters: filters }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "scope_limit_exceeded");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "POST /api/generate rejects more than 16 OR values per filter",
+  fn: async () => {
+    setup();
+    const values = [];
+    for (let i = 0; i < 17; i++) {
+      values.push({ type: "any", value: "val" + i });
+    }
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{
+          methods: ["POST"],
+          pattern: "/v1/test",
+          bodyFilters: [{ objectPath: "field", objectValue: values }],
+        }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "scope_limit_exceeded");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "POST /api/generate rejects dot-path with more than 6 segments",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{
+          methods: ["POST"],
+          pattern: "/v1/test",
+          bodyFilters: [{
+            objectPath: "a.b.c.d.e.f.g",
+            objectValue: [{ type: "wildcard" }],
+          }],
+        }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "scope_limit_exceeded");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "POST /api/generate rejects more than 10 structured scopes",
+  fn: async () => {
+    setup();
+    const scopes = [];
+    for (let i = 0; i < 11; i++) {
+      scopes.push({ methods: ["GET"], pattern: "/v1/test/" + i });
+    }
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: scopes,
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "scope_limit_exceeded");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "POST /api/generate accepts valid structured scopes within limits",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: [{
+          methods: ["POST"],
+          pattern: "/v1/apps/my-app/deployments",
+          bodyFilters: [{
+            objectPath: "deployment.git_ref",
+            objectValue: [
+              {
+                type: "and",
+                value: [
+                  { type: "stringwildcard", value: "release/*" },
+                  { type: "not", value: { type: "any", value: "release/broken" } },
+                ],
+              },
+            ],
+          }],
+        }],
+        ttl: 3600,
+      }),
+    });
+    const body = await res.json();
+    assertEquals(res.status, 200);
+    assertEquals(typeof body.url, "string");
+    assertEquals(typeof body.key, "string");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
