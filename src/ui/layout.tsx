@@ -1,17 +1,22 @@
 import type { Child } from "hono/jsx";
+import { raw } from "hono/html";
 
 export function Layout({ children }: { children: Child }) {
   return (
-    <html lang="fr">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>FGP — Fine-Grained Proxy</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
+    <>
+      {raw("<!DOCTYPE html>")}
+      <html lang="fr">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>FGP — Fine-Grained Proxy</title>
+          {/* TODO: replace with build-time Tailwind CSS — CDN script kept for now because we use a custom fgp-* palette and dark mode that require tailwind.config at runtime. A proper build step (e.g. Tailwind CLI or PostCSS) will eliminate this. */}
+          <script src="https://cdn.tailwindcss.com"></script>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
               tailwind.config = {
+                darkMode: 'media',
                 theme: {
                   extend: {
                     colors: {
@@ -30,12 +35,13 @@ export function Layout({ children }: { children: Child }) {
                 }
               }
             `,
-          }}
-        />
-      </head>
-      <body class="bg-gray-50 text-gray-900 min-h-screen antialiased">
-        {children}
-      </body>
-    </html>
+            }}
+          />
+        </head>
+        <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen antialiased">
+          {children}
+        </body>
+      </html>
+    </>
   );
 }

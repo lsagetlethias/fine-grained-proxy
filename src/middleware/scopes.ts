@@ -10,7 +10,9 @@ export function parseScope(scope: string): ParsedScope {
   }
   const methodPart = scope.slice(0, colonIdx);
   const pattern = scope.slice(colonIdx + 1);
-  const methods = methodPart.includes("|") ? methodPart.split("|") : [methodPart];
+  const methods = (methodPart.includes("|") ? methodPart.split("|") : [methodPart]).map((m) =>
+    m.toUpperCase()
+  );
   return { methods, pattern };
 }
 

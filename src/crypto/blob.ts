@@ -116,7 +116,7 @@ export async function decryptBlob(
   if (
     typeof config.v !== "number" ||
     config.v !== 2 ||
-    typeof config.token !== "string" ||
+    typeof config.token !== "string" || config.token.length === 0 ||
     typeof config.target !== "string" || !config.target ||
     typeof config.auth !== "string" || !config.auth ||
     !Array.isArray(config.scopes) ||

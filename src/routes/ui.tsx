@@ -297,6 +297,14 @@ uiRoutes.post("/api/generate", async (c) => {
   };
 
   const blob = await encryptBlob(config, clientKey, serverSalt);
+
+  if (blob.length > 4096) {
+    return c.json(
+      { error: "blob_too_large", message: "Generated blob exceeds 4KB limit. Reduce scopes." },
+      400,
+    );
+  }
+
   const origin = getRequestOrigin(c);
   return c.json({ url: `${origin}/${blob}/`, key: clientKey });
 });
