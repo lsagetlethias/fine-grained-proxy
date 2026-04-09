@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { serveStatic } from "hono/deno";
 import { logger } from "hono/logger";
 
 import { proxyMiddleware } from "./middleware/proxy.ts";
@@ -9,6 +10,17 @@ const app = new Hono();
 app.use("*", logger());
 
 app.get("/healthz", (c) => c.json({ status: "ok" }));
+
+app.get(
+  "/static/*",
+  serveStatic({
+    root: "./src/ui/",
+    rewriteRequestPath: (path) => path.replace(/^\/static/, ""),
+    onFound: (_path, c) => {
+      c.header("Cache-Control", "public, max-age=86400");
+    },
+  }),
+);
 
 app.route("/", uiRoutes);
 
