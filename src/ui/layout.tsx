@@ -39,7 +39,9 @@ export function Layout({ children }: { children: Child }) {
           />
         </head>
         <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen antialiased">
-          {children}
+          <div class="max-w-7xl mx-auto px-4 py-8 sm:py-12">
+            {children}
+          </div>
         </body>
       </html>
     </>
