@@ -436,8 +436,16 @@ function clientScript(): string {
         parts.push(field + " exists");
       } else {
         var vals = [];
+        var subTypes = f.valueSubTypes || [];
         for (var j = 0; j < f.values.length; j++) {
-          if (f.values[j].trim()) vals.push(f.values[j].trim());
+          var st = subTypes[j] || "text";
+          if (st === "null") {
+            vals.push("null");
+          } else if (st === "boolean") {
+            vals.push(f.values[j] === "true" ? "true" : "false");
+          } else if (f.values[j].trim()) {
+            vals.push(f.values[j].trim());
+          }
         }
         if (vals.length > 0) {
           parts.push(field + " = " + vals.join(" | "));
@@ -735,8 +743,10 @@ function clientScript(): string {
                 filterData.filterType = typeSelect.value;
                 if (filterData.filterType === "wildcard") {
                   filterData.values = [];
+                  filterData.valueSubTypes = [];
                 } else if (filterData.values.length === 0) {
                   filterData.values = [""];
+                  filterData.valueSubTypes = ["text"];
                 }
                 renderBodyFiltersPanel();
                 renderChips();
@@ -745,6 +755,8 @@ function clientScript(): string {
               filterBlock.appendChild(typeSelect);
 
               if (filterData.filterType !== "wildcard") {
+                if (!filterData.valueSubTypes) filterData.valueSubTypes = [];
+
                 var valuesLabel = document.createElement("div");
                 valuesLabel.className = "text-xs text-gray-500 dark:text-gray-400 mt-2";
                 valuesLabel.textContent = "Valeurs (une des suivantes) :";
@@ -753,22 +765,95 @@ function clientScript(): string {
                 var valuesContainer = document.createElement("div");
                 valuesContainer.className = "space-y-1 mt-1";
 
+                var isExactType = filterData.filterType === "any";
+
                 for (var vi = 0; vi < filterData.values.length; vi++) {
                   (function(valIndex) {
+                    var subType = (filterData.valueSubTypes[valIndex] || "text");
                     var valRow = document.createElement("div");
                     valRow.className = "flex gap-1";
                     var valInputId = "bf-val-" + filterData.id + "-" + valIndex;
-                    var valInput = document.createElement("input");
-                    valInput.type = "text";
-                    valInput.id = valInputId;
-                    valInput.value = filterData.values[valIndex] || "";
-                    valInput.placeholder = filterData.filterType === "stringwildcard" ? "release/*" : "master";
-                    valInput.className = "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
-                    valInput.setAttribute("aria-label", "Valeur " + (valIndex + 1) + " du filtre " + (filterIndex + 1));
-                    valInput.addEventListener("input", function() {
-                      filterData.values[valIndex] = valInput.value;
-                      renderChips();
-                    });
+
+                    if (isExactType) {
+                      var subTypeSelectId = "bf-subtype-" + filterData.id + "-" + valIndex;
+                      var subTypeSelect = document.createElement("select");
+                      subTypeSelect.id = subTypeSelectId;
+                      subTypeSelect.className = "w-24 flex-shrink-0 rounded-md border border-gray-300 px-2 py-1.5 text-xs shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100";
+                      subTypeSelect.setAttribute("aria-label", "Type de la valeur " + (valIndex + 1));
+                      var subTypeOpts = [
+                        { value: "text", label: "Texte" },
+                        { value: "number", label: "Nombre" },
+                        { value: "boolean", label: "Bool\\u00e9en" },
+                        { value: "null", label: "Null" }
+                      ];
+                      for (var st = 0; st < subTypeOpts.length; st++) {
+                        var stOpt = document.createElement("option");
+                        stOpt.value = subTypeOpts[st].value;
+                        stOpt.textContent = subTypeOpts[st].label;
+                        if (subType === subTypeOpts[st].value) stOpt.selected = true;
+                        subTypeSelect.appendChild(stOpt);
+                      }
+                      subTypeSelect.addEventListener("change", function() {
+                        filterData.valueSubTypes[valIndex] = subTypeSelect.value;
+                        if (subTypeSelect.value === "boolean") {
+                          filterData.values[valIndex] = "true";
+                        } else if (subTypeSelect.value === "null") {
+                          filterData.values[valIndex] = "";
+                        } else if (subTypeSelect.value === "number") {
+                          var parsed = Number(filterData.values[valIndex]);
+                          if (isNaN(parsed)) filterData.values[valIndex] = "";
+                        }
+                        renderBodyFiltersPanel();
+                        renderChips();
+                      });
+                      valRow.appendChild(subTypeSelect);
+                    }
+
+                    if (isExactType && subType === "boolean") {
+                      var boolSelect = document.createElement("select");
+                      boolSelect.id = valInputId;
+                      boolSelect.className = "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100";
+                      boolSelect.setAttribute("aria-label", "Valeur " + (valIndex + 1) + " du filtre " + (filterIndex + 1));
+                      var boolTrue = document.createElement("option");
+                      boolTrue.value = "true";
+                      boolTrue.textContent = "true";
+                      if (filterData.values[valIndex] === "true") boolTrue.selected = true;
+                      var boolFalse = document.createElement("option");
+                      boolFalse.value = "false";
+                      boolFalse.textContent = "false";
+                      if (filterData.values[valIndex] === "false") boolFalse.selected = true;
+                      boolSelect.appendChild(boolTrue);
+                      boolSelect.appendChild(boolFalse);
+                      boolSelect.addEventListener("change", function() {
+                        filterData.values[valIndex] = boolSelect.value;
+                        renderChips();
+                      });
+                      valRow.appendChild(boolSelect);
+                    } else if (isExactType && subType === "null") {
+                      var nullSpan = document.createElement("span");
+                      nullSpan.className = "flex-1 rounded-md border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-400 italic dark:bg-gray-700 dark:border-gray-600 dark:text-gray-500";
+                      nullSpan.textContent = "null";
+                      valRow.appendChild(nullSpan);
+                    } else {
+                      var valInput = document.createElement("input");
+                      valInput.id = valInputId;
+                      valInput.value = filterData.values[valIndex] || "";
+                      if (isExactType && subType === "number") {
+                        valInput.type = "number";
+                        valInput.step = "any";
+                        valInput.placeholder = "42";
+                      } else {
+                        valInput.type = "text";
+                        valInput.placeholder = filterData.filterType === "stringwildcard" ? "release/*" : "master";
+                      }
+                      valInput.className = "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
+                      valInput.setAttribute("aria-label", "Valeur " + (valIndex + 1) + " du filtre " + (filterIndex + 1));
+                      valInput.addEventListener("input", function() {
+                        filterData.values[valIndex] = valInput.value;
+                        renderChips();
+                      });
+                      valRow.appendChild(valInput);
+                    }
 
                     var btnRemoveVal = document.createElement("button");
                     btnRemoveVal.type = "button";
@@ -777,12 +862,15 @@ function clientScript(): string {
                     btnRemoveVal.setAttribute("aria-label", "Supprimer la valeur " + (valIndex + 1));
                     btnRemoveVal.addEventListener("click", function() {
                       filterData.values.splice(valIndex, 1);
-                      if (filterData.values.length === 0) filterData.values = [""];
+                      filterData.valueSubTypes.splice(valIndex, 1);
+                      if (filterData.values.length === 0) {
+                        filterData.values = [""];
+                        filterData.valueSubTypes = ["text"];
+                      }
                       renderBodyFiltersPanel();
                       renderChips();
                     });
 
-                    valRow.appendChild(valInput);
                     valRow.appendChild(btnRemoveVal);
                     valuesContainer.appendChild(valRow);
                   })(vi);
@@ -796,6 +884,8 @@ function clientScript(): string {
                 btnAddVal.textContent = "+ Ajouter une valeur";
                 btnAddVal.addEventListener("click", function() {
                   filterData.values.push("");
+                  if (!filterData.valueSubTypes) filterData.valueSubTypes = [];
+                  filterData.valueSubTypes.push("text");
                   renderBodyFiltersPanel();
                   var newIdx = filterData.values.length - 1;
                   var newInput = document.getElementById("bf-val-" + filterData.id + "-" + newIdx);
@@ -814,7 +904,7 @@ function clientScript(): string {
           btnAddFilter.className = "mt-2 text-sm text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline";
           btnAddFilter.textContent = "+ Ajouter un filtre";
           btnAddFilter.addEventListener("click", function() {
-            var newFilter = { id: nextFilterId++, objectPath: "", filterType: "any", values: [""] };
+            var newFilter = { id: nextFilterId++, objectPath: "", filterType: "any", values: [""], valueSubTypes: ["text"] };
             if (!bodyFiltersData[scopeKey]) bodyFiltersData[scopeKey] = [];
             bodyFiltersData[scopeKey].push(newFilter);
             renderBodyFiltersPanel();
@@ -963,10 +1053,27 @@ function clientScript(): string {
         if (f.filterType === "wildcard") {
           objValues.push({ type: "wildcard", value: "*" });
         } else {
+          var subTypes = f.valueSubTypes || [];
           for (var vi = 0; vi < f.values.length; vi++) {
             var v = f.values[vi].trim();
-            if (v) {
-              objValues.push({ type: f.filterType === "stringwildcard" ? "stringwildcard" : "any", value: v });
+            var st = subTypes[vi] || "text";
+            if (f.filterType === "any") {
+              if (st === "null") {
+                objValues.push({ type: "any", value: null });
+              } else if (st === "boolean") {
+                objValues.push({ type: "any", value: v === "true" });
+              } else if (st === "number") {
+                var num = Number(v);
+                if (v && !isNaN(num)) {
+                  objValues.push({ type: "any", value: num });
+                }
+              } else {
+                if (v) objValues.push({ type: "any", value: v });
+              }
+            } else {
+              if (v) {
+                objValues.push({ type: "stringwildcard", value: v });
+              }
             }
           }
         }
