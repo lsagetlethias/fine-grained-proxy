@@ -434,6 +434,23 @@ function clientScript(): string {
       var field = f.objectPath || "?";
       if (f.filterType === "wildcard") {
         parts.push(field + " exists");
+      } else if (f.filterType === "not") {
+        var innerType = f.notInnerType || "any";
+        var innerSubType = f.notInnerSubType || "text";
+        var innerVal = (f.notInnerValue || "").trim();
+        var displayVal = "";
+        if (innerSubType === "null") {
+          displayVal = "null";
+        } else if (innerSubType === "boolean") {
+          displayVal = innerVal === "true" ? "true" : "false";
+        } else if (innerVal) {
+          displayVal = innerVal;
+        }
+        if (displayVal) {
+          parts.push(field + " \\u2260 " + displayVal);
+        } else {
+          parts.push(field + " \\u2260 ?");
+        }
       } else {
         var vals = [];
         var subTypes = f.valueSubTypes || [];
@@ -730,7 +747,8 @@ function clientScript(): string {
               var types = [
                 { value: "any", label: "Valeur exacte" },
                 { value: "stringwildcard", label: "Pattern (wildcard)" },
-                { value: "wildcard", label: "Existe (toute valeur)" }
+                { value: "wildcard", label: "Existe (toute valeur)" },
+                { value: "not", label: "Exclure (not)" }
               ];
               for (var t = 0; t < types.length; t++) {
                 var opt = document.createElement("option");
@@ -744,6 +762,12 @@ function clientScript(): string {
                 if (filterData.filterType === "wildcard") {
                   filterData.values = [];
                   filterData.valueSubTypes = [];
+                } else if (filterData.filterType === "not") {
+                  filterData.values = [];
+                  filterData.valueSubTypes = [];
+                  if (!filterData.notInnerType) filterData.notInnerType = "any";
+                  if (!filterData.notInnerSubType) filterData.notInnerSubType = "text";
+                  if (filterData.notInnerValue === undefined) filterData.notInnerValue = "";
                 } else if (filterData.values.length === 0) {
                   filterData.values = [""];
                   filterData.valueSubTypes = ["text"];
@@ -754,7 +778,160 @@ function clientScript(): string {
               filterBlock.appendChild(typeLabel);
               filterBlock.appendChild(typeSelect);
 
-              if (filterData.filterType !== "wildcard") {
+              if (filterData.filterType === "not") {
+                if (!filterData.notInnerType) filterData.notInnerType = "any";
+                if (!filterData.notInnerSubType) filterData.notInnerSubType = "text";
+                if (filterData.notInnerValue === undefined) filterData.notInnerValue = "";
+
+                var notWrapper = document.createElement("div");
+                notWrapper.className = "mt-2 ml-3 rounded-md border border-amber-200 bg-amber-50/50 p-3 space-y-2 dark:bg-amber-900/10 dark:border-amber-700/50";
+
+                var notTitle = document.createElement("span");
+                notTitle.className = "block text-xs font-medium text-amber-700 dark:text-amber-400";
+                notTitle.textContent = "Exclure :";
+                notWrapper.appendChild(notTitle);
+
+                var notTypeId = "bf-not-type-" + filterData.id;
+                var notTypeLabel = document.createElement("label");
+                notTypeLabel.className = "block text-xs font-medium text-gray-600 dark:text-gray-400";
+                notTypeLabel.setAttribute("for", notTypeId);
+                notTypeLabel.textContent = "Type";
+                var notTypeSelect = document.createElement("select");
+                notTypeSelect.id = notTypeId;
+                notTypeSelect.className = "mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100";
+                var notTypes = [
+                  { value: "any", label: "Valeur exacte" },
+                  { value: "stringwildcard", label: "Pattern (wildcard)" }
+                ];
+                for (var nt = 0; nt < notTypes.length; nt++) {
+                  var notOpt = document.createElement("option");
+                  notOpt.value = notTypes[nt].value;
+                  notOpt.textContent = notTypes[nt].label;
+                  if (filterData.notInnerType === notTypes[nt].value) notOpt.selected = true;
+                  notTypeSelect.appendChild(notOpt);
+                }
+                notTypeSelect.addEventListener("change", function() {
+                  filterData.notInnerType = notTypeSelect.value;
+                  if (notTypeSelect.value === "any") {
+                    if (!filterData.notInnerSubType) filterData.notInnerSubType = "text";
+                  } else {
+                    filterData.notInnerSubType = "text";
+                  }
+                  filterData.notInnerValue = "";
+                  renderBodyFiltersPanel();
+                  renderChips();
+                });
+                notWrapper.appendChild(notTypeLabel);
+                notWrapper.appendChild(notTypeSelect);
+
+                var notIsExact = filterData.notInnerType === "any";
+
+                var notValLabel = document.createElement("div");
+                notValLabel.className = "text-xs text-gray-500 dark:text-gray-400 mt-2";
+                notValLabel.textContent = "Valeurs :";
+                notWrapper.appendChild(notValLabel);
+
+                var notValRow = document.createElement("div");
+                notValRow.className = "flex gap-1 mt-1";
+
+                var notValInputId = "bf-not-val-" + filterData.id;
+
+                if (notIsExact) {
+                  var notSubType = filterData.notInnerSubType || "text";
+                  var notSubTypeSelect = document.createElement("select");
+                  notSubTypeSelect.className = "w-24 flex-shrink-0 rounded-md border border-gray-300 px-2 py-1.5 text-xs shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100";
+                  notSubTypeSelect.setAttribute("aria-label", "Type de la valeur exclue");
+                  var notSubOpts = [
+                    { value: "text", label: "Texte" },
+                    { value: "number", label: "Nombre" },
+                    { value: "boolean", label: "Bool\\u00e9en" },
+                    { value: "null", label: "Null" }
+                  ];
+                  for (var nst = 0; nst < notSubOpts.length; nst++) {
+                    var nstOpt = document.createElement("option");
+                    nstOpt.value = notSubOpts[nst].value;
+                    nstOpt.textContent = notSubOpts[nst].label;
+                    if (notSubType === notSubOpts[nst].value) nstOpt.selected = true;
+                    notSubTypeSelect.appendChild(nstOpt);
+                  }
+                  notSubTypeSelect.addEventListener("change", function() {
+                    filterData.notInnerSubType = notSubTypeSelect.value;
+                    if (notSubTypeSelect.value === "boolean") {
+                      filterData.notInnerValue = "true";
+                    } else if (notSubTypeSelect.value === "null") {
+                      filterData.notInnerValue = "";
+                    } else if (notSubTypeSelect.value === "number") {
+                      var parsedN = Number(filterData.notInnerValue);
+                      if (isNaN(parsedN)) filterData.notInnerValue = "";
+                    }
+                    renderBodyFiltersPanel();
+                    renderChips();
+                  });
+                  notValRow.appendChild(notSubTypeSelect);
+
+                  if (notSubType === "boolean") {
+                    var notBoolSelect = document.createElement("select");
+                    notBoolSelect.id = notValInputId;
+                    notBoolSelect.className = "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100";
+                    notBoolSelect.setAttribute("aria-label", "Valeur bool\\u00e9enne exclue");
+                    var nbTrue = document.createElement("option");
+                    nbTrue.value = "true"; nbTrue.textContent = "true";
+                    if (filterData.notInnerValue === "true") nbTrue.selected = true;
+                    var nbFalse = document.createElement("option");
+                    nbFalse.value = "false"; nbFalse.textContent = "false";
+                    if (filterData.notInnerValue === "false") nbFalse.selected = true;
+                    notBoolSelect.appendChild(nbTrue);
+                    notBoolSelect.appendChild(nbFalse);
+                    notBoolSelect.addEventListener("change", function() {
+                      filterData.notInnerValue = notBoolSelect.value;
+                      renderChips();
+                    });
+                    notValRow.appendChild(notBoolSelect);
+                  } else if (notSubType === "null") {
+                    var notNullSpan = document.createElement("span");
+                    notNullSpan.className = "flex-1 rounded-md border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-400 italic dark:bg-gray-700 dark:border-gray-600 dark:text-gray-500";
+                    notNullSpan.textContent = "null";
+                    notValRow.appendChild(notNullSpan);
+                  } else {
+                    var notValInput = document.createElement("input");
+                    notValInput.id = notValInputId;
+                    notValInput.value = filterData.notInnerValue || "";
+                    if (notSubType === "number") {
+                      notValInput.type = "number";
+                      notValInput.step = "any";
+                      notValInput.placeholder = "42";
+                    } else {
+                      notValInput.type = "text";
+                      notValInput.placeholder = "develop";
+                    }
+                    notValInput.className = "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
+                    notValInput.setAttribute("aria-label", "Valeur exclue");
+                    notValInput.addEventListener("input", function() {
+                      filterData.notInnerValue = notValInput.value;
+                      renderChips();
+                    });
+                    notValRow.appendChild(notValInput);
+                  }
+                } else {
+                  var notPatInput = document.createElement("input");
+                  notPatInput.id = notValInputId;
+                  notPatInput.type = "text";
+                  notPatInput.value = filterData.notInnerValue || "";
+                  notPatInput.placeholder = "release/broken*";
+                  notPatInput.className = "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
+                  notPatInput.setAttribute("aria-label", "Pattern exclu");
+                  notPatInput.addEventListener("input", function() {
+                    filterData.notInnerValue = notPatInput.value;
+                    renderChips();
+                  });
+                  notValRow.appendChild(notPatInput);
+                }
+
+                notWrapper.appendChild(notValRow);
+                filterBlock.appendChild(notWrapper);
+              }
+
+              if (filterData.filterType !== "wildcard" && filterData.filterType !== "not") {
                 if (!filterData.valueSubTypes) filterData.valueSubTypes = [];
 
                 var valuesLabel = document.createElement("div");
@@ -1052,6 +1229,29 @@ function clientScript(): string {
         var objValues = [];
         if (f.filterType === "wildcard") {
           objValues.push({ type: "wildcard", value: "*" });
+        } else if (f.filterType === "not") {
+          var notInner = f.notInnerType || "any";
+          var notSub = f.notInnerSubType || "text";
+          var notVal = (f.notInnerValue || "").trim();
+          var innerValue = null;
+          if (notInner === "any") {
+            if (notSub === "null") {
+              innerValue = null;
+            } else if (notSub === "boolean") {
+              innerValue = notVal === "true";
+            } else if (notSub === "number") {
+              var notNum = Number(notVal);
+              if (notVal && !isNaN(notNum)) innerValue = notNum;
+              else innerValue = undefined;
+            } else {
+              innerValue = notVal || undefined;
+            }
+          } else {
+            innerValue = notVal || undefined;
+          }
+          if (innerValue !== undefined) {
+            objValues.push({ type: "not", value: { type: notInner, value: innerValue } });
+          }
         } else {
           var subTypes = f.valueSubTypes || [];
           for (var vi = 0; vi < f.values.length; vi++) {
