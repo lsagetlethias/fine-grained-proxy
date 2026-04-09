@@ -47,7 +47,7 @@ Deno.test("matchPath: exact match", () => {
 Deno.test("matchPath: prefix wildcard matches sub-paths", () => {
   assertEquals(matchPath("/v1/apps/*", "/v1/apps/my-app"), true);
   assertEquals(matchPath("/v1/apps/*", "/v1/apps/my-app/scale"), true);
-  assertEquals(matchPath("/v1/apps/*", "/v1/apps/"), true);
+  assertEquals(matchPath("/v1/apps/*", "/v1/apps/"), false);
   assertEquals(matchPath("/v1/apps/*", "/v1/users/me"), false);
 });
 
@@ -60,6 +60,39 @@ Deno.test("matchPath: app-specific wildcard", () => {
 Deno.test("matchPath: no wildcard requires exact match", () => {
   assertEquals(matchPath("/v1/apps", "/v1/apps"), true);
   assertEquals(matchPath("/v1/apps", "/v1/apps/my-app"), false);
+});
+
+// --- matchPath: multi-segment wildcards ---
+
+Deno.test("matchPath: mid-pattern wildcard matches app + sub-resource", () => {
+  assertEquals(matchPath("/v1/apps/*/collaborators/*", "/v1/apps/my-app/collaborators/john"), true);
+  assertEquals(
+    matchPath("/v1/apps/*/collaborators/*", "/v1/apps/my-app/collaborators/john/details"),
+    true,
+  );
+});
+
+Deno.test("matchPath: mid-pattern wildcard rejects path without sub-resource", () => {
+  assertEquals(matchPath("/v1/apps/*/collaborators/*", "/v1/apps/my-app/scale"), false);
+  assertEquals(matchPath("/v1/apps/*/collaborators/*", "/v1/apps/my-app/collaborators/"), false);
+});
+
+Deno.test("matchPath: mid-pattern wildcard requires at least one char per wildcard", () => {
+  assertEquals(matchPath("/v1/*/containers", "/v1/apps/containers"), true);
+  assertEquals(matchPath("/v1/*/containers", "/v1//containers"), false);
+  assertEquals(matchPath("/v1/*/containers", "/v1/containers"), false);
+});
+
+Deno.test("matchPath: trailing wildcard still works with mid-pattern wildcards", () => {
+  assertEquals(matchPath("/v1/apps/*", "/v1/apps/my-app"), true);
+  assertEquals(matchPath("/v1/apps/*", "/v1/apps/my-app/anything"), true);
+  assertEquals(matchPath("/v1/apps/*", "/v1/apps/"), false);
+});
+
+Deno.test("matchPath: multiple wildcards in sequence", () => {
+  assertEquals(matchPath("/v1/*/ops/*/logs", "/v1/apps/ops/deploy/logs"), true);
+  assertEquals(matchPath("/v1/*/ops/*/logs", "/v1/apps/ops/deploy/other"), false);
+  assertEquals(matchPath("/v1/*/ops/*/logs", "/v1/x/ops/y/logs"), true);
 });
 
 // --- checkAccess ---

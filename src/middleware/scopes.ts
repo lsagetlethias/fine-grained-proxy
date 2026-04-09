@@ -20,9 +20,36 @@ export function matchPath(pattern: string, path: string): boolean {
   if (pattern === "*") return true;
   if (!pattern.includes("*")) return pattern === path;
 
-  const wildcardIdx = pattern.indexOf("*");
-  const prefix = pattern.slice(0, wildcardIdx);
-  return path.startsWith(prefix);
+  const segments = pattern.split("*");
+  let cursor = 0;
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+
+    if (i === 0) {
+      if (!path.startsWith(seg)) return false;
+      cursor = seg.length;
+      continue;
+    }
+
+    const remaining = path.slice(cursor);
+    if (remaining.length === 0) return false;
+
+    if (i === segments.length - 1 && seg === "") {
+      return true;
+    }
+
+    const idx = remaining.indexOf(seg);
+    if (idx < 1) return false;
+
+    cursor += idx + seg.length;
+  }
+
+  if (segments[segments.length - 1] !== "") {
+    return cursor === path.length;
+  }
+
+  return true;
 }
 
 export function checkAccess(scopes: string[], method: string, path: string): boolean {

@@ -47,13 +47,13 @@ Deno.test("matchPath: trailing slash exact mismatch", () => {
 });
 
 Deno.test("matchPath: wildcard at end with trailing slash in path", () => {
-  assertEquals(matchPath("/v1/apps/*", "/v1/apps/"), true);
+  assertEquals(matchPath("/v1/apps/*", "/v1/apps/"), false);
   assertEquals(matchPath("/v1/apps/*", "/v1/apps/my-app/"), true);
 });
 
-Deno.test("matchPath: wildcard mid-pattern treats as prefix match up to wildcard", () => {
+Deno.test("matchPath: wildcard mid-pattern requires segments on both sides", () => {
   assertEquals(matchPath("/v1/*/containers", "/v1/apps/containers"), true);
-  assertEquals(matchPath("/v1/*/containers", "/v1/anything-goes-here"), true);
+  assertEquals(matchPath("/v1/*/containers", "/v1/anything-goes-here"), false);
   assertEquals(matchPath("/v1/*/containers", "/v2/apps/containers"), false);
 });
 
@@ -64,9 +64,11 @@ Deno.test("matchPath: pattern is just a wildcard star", () => {
 });
 
 Deno.test("matchPath: pattern with wildcard at position 0", () => {
-  assertEquals(matchPath("*/foo", ""), true);
-  assertEquals(matchPath("*/foo", "/bar"), true);
-  assertEquals(matchPath("*/foo", "anything"), true);
+  assertEquals(matchPath("*/foo", "x/foo"), true);
+  assertEquals(matchPath("*/foo", "/bar/foo"), true);
+  assertEquals(matchPath("*/foo", ""), false);
+  assertEquals(matchPath("*/foo", "/bar"), false);
+  assertEquals(matchPath("*/foo", "/foo"), false);
 });
 
 // --- checkAccess edge cases ---

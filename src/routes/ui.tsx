@@ -1,10 +1,10 @@
-import { Context, Hono } from "hono";
+import { Context } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
+import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
 import { encryptBlob } from "../crypto/blob.ts";
 import { exchangeToken } from "../auth/client.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
-import { GenerateBodySchema, ListAppsBodySchema, openApiSpec } from "../openapi/spec.ts";
 
 function getRequestOrigin(c: Context): string {
   const forwardedProto = c.req.header("X-Forwarded-Proto");
@@ -20,36 +20,146 @@ function getRequestOrigin(c: Context): string {
 
 const DEFAULT_API_URL = "https://api.osc-fr1.scalingo.com";
 
-export const uiRoutes = new Hono();
+const ErrorSchema = z.object({
+  error: z.string(),
+  message: z.string(),
+}).openapi("Error");
+
+const GenerateBodySchema = z.object({
+  token: z.string().min(1).openapi({ example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx" }),
+  target: z.string().min(1).openapi({ example: "https://api.osc-fr1.scalingo.com" }),
+  auth: z.string().min(1).openapi({
+    example: "scalingo-exchange",
+    description: "Auth mode: bearer, basic, scalingo-exchange, or header:{name}",
+  }),
+  scopes: z.array(z.string()).openapi({
+    example: ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"],
+    description: "List of METHOD:PATH patterns",
+  }),
+  ttl: z.number().openapi({
+    example: 3600,
+    description: "Validity duration in seconds. 0 = no expiration",
+  }),
+}).openapi("GenerateBody");
+
+const GenerateResponseSchema = z.object({
+  url: z.string().openapi({ example: "https://fgp.example.com/eyJhbGci.../" }),
+  key: z.string().openapi({ example: "a7f2c9d4-1234-5678-abcd-ef0123456789" }),
+}).openapi("GenerateResponse");
+
+const SaltResponseSchema = z.object({
+  salt: z.string(),
+}).openapi("SaltResponse");
+
+const ListAppsBodySchema = z.object({
+  token: z.string().min(1).openapi({
+    example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    description: "Scalingo API token (tk-us-...)",
+  }),
+}).openapi("ListAppsBody");
+
+const ListAppsResponseSchema = z.object({
+  apps: z.array(z.string()).openapi({
+    example: ["my-app", "other-app", "staging-app"],
+  }),
+}).openapi("ListAppsResponse");
+
+// --- Route definitions ---
+
+const saltRoute = createRoute({
+  method: "get",
+  path: "/api/salt",
+  tags: ["Configuration"],
+  summary: "Get server salt",
+  description: "Returns the server salt used for PBKDF2 key derivation.",
+  responses: {
+    200: {
+      description: "Server salt",
+      content: { "application/json": { schema: SaltResponseSchema } },
+    },
+  },
+});
+
+const generateRoute = createRoute({
+  method: "post",
+  path: "/api/generate",
+  tags: ["Configuration"],
+  summary: "Generate an FGP URL",
+  description:
+    "Server-side encrypted URL generation. Creates a client key, encrypts the blob, returns URL + key.",
+  request: {
+    body: {
+      required: true as const,
+      content: { "application/json": { schema: GenerateBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Generated URL and client key",
+      content: { "application/json": { schema: GenerateResponseSchema } },
+    },
+    400: {
+      description: "Invalid JSON body or missing fields",
+      content: { "application/json": { schema: ErrorSchema } },
+    },
+    500: {
+      description: "Server misconfigured",
+      content: { "application/json": { schema: ErrorSchema } },
+    },
+  },
+});
+
+const listAppsRoute = createRoute({
+  method: "post",
+  path: "/api/list-apps",
+  tags: ["Scalingo"],
+  summary: "List Scalingo apps",
+  description: "Scalingo helper: lists apps accessible with the provided token via token exchange.",
+  request: {
+    body: {
+      required: true as const,
+      content: { "application/json": { schema: ListAppsBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Sorted list of app names",
+      content: { "application/json": { schema: ListAppsResponseSchema } },
+    },
+    400: {
+      description: "Invalid JSON body or missing fields",
+      content: { "application/json": { schema: ErrorSchema } },
+    },
+    401: {
+      description: "Token exchange failed",
+      content: { "application/json": { schema: ErrorSchema } },
+    },
+    502: {
+      description: "Upstream error",
+      content: { "application/json": { schema: ErrorSchema } },
+    },
+  },
+});
+
+export const uiRoutes = new OpenAPIHono({
+  defaultHook: (result, c) => {
+    if (!result.success) {
+      return c.json({ error: "invalid_body", message: "Missing or invalid fields" }, 400);
+    }
+  },
+});
 
 uiRoutes.get("/", (c) => {
   return c.html(<ConfigPage />);
 });
 
-uiRoutes.get("/api/salt", (c) => {
+uiRoutes.openapi(saltRoute, (c) => {
   const salt = Deno.env.get("FGP_SALT") ?? "";
-  return c.json({ salt });
+  return c.json({ salt }, 200);
 });
 
-uiRoutes.get("/api/openapi.json", (c) => {
-  return c.json(openApiSpec);
-});
-
-uiRoutes.get("/api/docs", swaggerUI({ url: "/api/openapi.json" }));
-
-uiRoutes.post("/api/generate", async (c) => {
-  let rawBody: unknown;
-  try {
-    rawBody = await c.req.json();
-  } catch {
-    return c.json({ error: "invalid_body", message: "Invalid JSON body" }, 400);
-  }
-
-  const parsed = GenerateBodySchema.safeParse(rawBody);
-  if (!parsed.success) {
-    return c.json({ error: "invalid_body", message: "Missing or invalid fields" }, 400);
-  }
-  const body = parsed.data;
+uiRoutes.openapi(generateRoute, async (c) => {
+  const body = c.req.valid("json");
 
   const serverSalt = Deno.env.get("FGP_SALT");
   if (!serverSalt) {
@@ -77,22 +187,11 @@ uiRoutes.post("/api/generate", async (c) => {
   }
 
   const origin = getRequestOrigin(c);
-  return c.json({ url: `${origin}/${blob}/`, key: clientKey });
+  return c.json({ url: `${origin}/${blob}/`, key: clientKey }, 200);
 });
 
-uiRoutes.post("/api/list-apps", async (c) => {
-  let rawBody: unknown;
-  try {
-    rawBody = await c.req.json();
-  } catch {
-    return c.json({ error: "invalid_body", message: "Invalid JSON body" }, 400);
-  }
-
-  const parsed = ListAppsBodySchema.safeParse(rawBody);
-  if (!parsed.success) {
-    return c.json({ error: "invalid_body", message: "Missing or invalid fields" }, 400);
-  }
-  const body = parsed.data;
+uiRoutes.openapi(listAppsRoute, async (c) => {
+  const body = c.req.valid("json");
 
   let bearer: string;
   try {
@@ -120,5 +219,17 @@ uiRoutes.post("/api/list-apps", async (c) => {
 
   const data = await appsResponse.json();
   const apps = (data.apps || []).map((a: { name: string }) => a.name).sort();
-  return c.json({ apps });
+  return c.json({ apps }, 200);
 });
+
+uiRoutes.doc("/api/openapi.json", {
+  openapi: "3.0.0",
+  info: {
+    version: "2.0.0",
+    title: "Fine-Grained Proxy (FGP) API",
+    description:
+      "Stateless HTTP proxy that adds fine-grained token scoping on top of any API. Zero storage: the token and permission config are encrypted in the URL itself.",
+  },
+});
+
+uiRoutes.get("/api/docs", swaggerUI({ url: "/api/openapi.json" }));
