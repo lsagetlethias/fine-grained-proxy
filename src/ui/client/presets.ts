@@ -1,4 +1,5 @@
 import type { BodyFiltersState } from "./body-filters.ts";
+import { assertElement } from "./elements.ts";
 import type { Elements } from "./elements.ts";
 import type { AppsPermissionsState } from "./types.ts";
 
@@ -8,7 +9,7 @@ export function setupPresets(
   appsPerms: AppsPermissionsState,
   updateVisibility: () => void,
 ): void {
-  const btnPresetScalingo = document.getElementById("btn-preset-scalingo") as HTMLButtonElement;
+  const btnPresetScalingo = assertElement("btn-preset-scalingo", HTMLButtonElement);
   btnPresetScalingo.addEventListener("click", function () {
     els.targetInput.value = "https://api.osc-fr1.scalingo.com";
     els.authSelect.value = "scalingo-exchange";
@@ -19,7 +20,7 @@ export function setupPresets(
     updateVisibility();
   });
 
-  const btnPresetClear = document.getElementById("btn-preset-clear") as HTMLButtonElement;
+  const btnPresetClear = assertElement("btn-preset-clear", HTMLButtonElement);
   btnPresetClear.addEventListener("click", function () {
     els.targetInput.value = "";
     els.authSelect.value = "bearer";

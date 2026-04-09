@@ -174,13 +174,71 @@ Deno.test("decrypt rejects blob with v: 3 and unknown ObjectValue type", async (
         pattern: "/v1/apps/*",
         bodyFilters: [{
           objectPath: "field",
-          objectValue: [{ type: "regex", value: ".*" }] as unknown[],
+          objectValue: [{ type: "unknown_type", value: ".*" }] as unknown[],
         }] as unknown[],
       },
     ] as unknown as BlobConfig["scopes"],
   });
   const blob = await encryptRaw(raw);
 
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt accepts blob with valid regex ObjectValue", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "ref",
+        objectValue: [{ type: "regex", value: "^release\\/v\\d+" }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 3);
+});
+
+Deno.test("decrypt rejects blob with regex exceeding 200 chars", async () => {
+  const longRegex = "a".repeat(201);
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "ref",
+        objectValue: [{ type: "regex", value: longRegex }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt rejects blob with invalid regex pattern", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [{
+      methods: ["POST"],
+      pattern: "/v1/test",
+      bodyFilters: [{
+        objectPath: "ref",
+        objectValue: [{ type: "regex", value: "[invalid(" }],
+      }],
+    }] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
   await assertRejects(
     () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
     Error,

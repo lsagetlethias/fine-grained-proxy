@@ -75,11 +75,13 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.6: GET /static/nonexistent.js falls through to blob proxy (401)",
+  name: "AC-10.6: GET /static/nonexistent.js returns 404",
   fn: async () => {
     const res = await app.request("/static/nonexistent.js");
 
-    assertEquals(res.status, 401);
+    assertEquals(res.status, 404);
+    const body = await res.json();
+    assertEquals(body.error, "not_found");
   },
   sanitizeOps: false,
   sanitizeResources: false,

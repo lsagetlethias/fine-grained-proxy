@@ -170,9 +170,49 @@ Deno.test("matchBodyFilter: body is null or not an object", () => {
 Deno.test("matchBodyFilter: unknown type defaults to deny", () => {
   const filter: BodyFilter = {
     objectPath: "field",
-    objectValue: [{ type: "regex" as "any", value: ".*" }],
+    objectValue: [{ type: "unknown_type" as "any", value: ".*" }],
   };
   assertEquals(matchBodyFilter(filter, { field: "anything" }), false);
+});
+
+// --- regex ---
+
+Deno.test("matchBodyFilter: regex simple match", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "regex", value: "^release\\/v\\d+" }],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "release/v2.0.1" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "main" }), false);
+});
+
+Deno.test("matchBodyFilter: regex does not match", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "regex", value: "^hotfix-" }],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), false);
+  assertEquals(matchBodyFilter(filter, { ref: "main" }), false);
+});
+
+Deno.test("matchBodyFilter: regex on non-string value returns false", () => {
+  const filter: BodyFilter = {
+    objectPath: "count",
+    objectValue: [{ type: "regex", value: "\\d+" }],
+  };
+  assertEquals(matchBodyFilter(filter, { count: 42 }), false);
+  assertEquals(matchBodyFilter(filter, { count: true }), false);
+  assertEquals(matchBodyFilter(filter, { count: null }), false);
+  assertEquals(matchBodyFilter(filter, { count: [1, 2] }), false);
+});
+
+Deno.test("matchBodyFilter: invalid regex does not crash, returns false", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "regex", value: "[invalid(" }],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "anything" }), false);
 });
 
 // --- checkAccess with ScopeEntry ---

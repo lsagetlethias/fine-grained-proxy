@@ -22,6 +22,8 @@ app.get(
   }),
 );
 
+app.get("/static/*", (c) => c.json({ error: "not_found", message: "Static file not found" }, 404));
+
 app.route("/", uiRoutes);
 
 app.all("/api/*", (c) => c.json({ error: "not_found", message: "Endpoint not found" }, 404));

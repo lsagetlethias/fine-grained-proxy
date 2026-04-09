@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "exports": "./src/main.ts",
   "tasks": {
+    "build:css": "deno run -A npm:tailwindcss@3 -i src/ui/tailwind.css -o static/styles.css --minify",
     "build:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --minify --target=es2020",
+    "build": "deno task build:css && deno task build:client",
+    "dev:css": "deno run -A npm:tailwindcss@3 -i src/ui/tailwind.css -o static/styles.css --watch",
     "dev:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --watch",
     "dev:server": "deno serve --watch --allow-net --allow-env --allow-read src/main.ts",
-    "dev": "deno run -A npm:concurrently --names client,server --prefix-colors blue,green 'deno task dev:client' 'deno task dev:server'",
-    "start": "deno task build:client && deno serve --allow-net --allow-env --allow-read src/main.ts",
-    "deploy": "deno task build:client && deployctl deploy --project=fgp-proxy --entrypoint=src/main.ts --include=src,static,deno.json,deno.lock",
+    "dev": "deno run -A npm:concurrently --names css,client,server --prefix-colors yellow,blue,green 'deno task dev:css' 'deno task dev:client' 'deno task dev:server'",
+    "start": "deno task build && deno serve --allow-net --allow-env --allow-read src/main.ts",
+    "deploy": "deno task build && deployctl deploy --project=fgp-proxy --entrypoint=src/main.ts --include=src,static,deno.json,deno.lock",
     "test": "deno test --allow-net --allow-env --allow-read tests/",
     "test:unit": "deno test --allow-env --allow-read tests/testu/",
     "test:integration": "deno test --allow-net --allow-env --allow-read tests/testi/",
@@ -38,7 +41,14 @@
     "rules": {
       "tags": ["recommended"]
     },
-    "exclude": ["docs/", "*.md", "static/", "src/ui/client.ts", "src/ui/client/"]
+    "exclude": [
+      "docs/",
+      "*.md",
+      "static/",
+      "src/ui/client.ts",
+      "src/ui/client/",
+      "tailwind.config.*"
+    ]
   },
   "fmt": {
     "useTabs": false,
@@ -46,7 +56,14 @@
     "indentWidth": 2,
     "singleQuote": false,
     "proseWrap": "preserve",
-    "exclude": ["docs/", "*.md", "static/"]
+    "exclude": [
+      "docs/",
+      "*.md",
+      "static/",
+      "tailwind.config.*",
+      "src/ui/client.ts",
+      "src/ui/client/"
+    ]
   },
   "exclude": [".claude/", "node_modules/", "static/"],
   "deploy": {

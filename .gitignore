@@ -22,6 +22,8 @@ static/
 
 # Claude Code
 .claude/settings.local.json
+
+# Skills marketplace (symlinks + .agents experimental)
 .agents/skills/*
 /skills/*
 .claude/skills/*

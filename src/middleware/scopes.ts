@@ -6,6 +6,7 @@ export type ObjectValue =
   | { type: "any"; value: JsonValue }
   | { type: "wildcard" }
   | { type: "stringwildcard"; value: string }
+  | { type: "regex"; value: string }
   | { type: "and"; value: ObjectValue[] }
   | { type: "not"; value: ObjectValue };
 
@@ -101,6 +102,13 @@ function matchObjectValue(ov: ObjectValue, bodyValue: unknown): boolean {
       return true;
     case "stringwildcard":
       return typeof bodyValue === "string" && matchPath(ov.value, bodyValue);
+    case "regex":
+      if (typeof bodyValue !== "string") return false;
+      try {
+        return new RegExp(ov.value).test(bodyValue);
+      } catch {
+        return false;
+      }
     case "and":
       return ov.value.every((sub) => matchObjectValue(sub, bodyValue));
     case "not":

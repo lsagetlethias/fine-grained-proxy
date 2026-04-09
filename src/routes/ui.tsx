@@ -30,6 +30,7 @@ const ObjectValueSchema = z.union([
   z.object({ type: z.literal("any"), value: z.unknown() }),
   z.object({ type: z.literal("wildcard") }),
   z.object({ type: z.literal("stringwildcard"), value: z.string() }),
+  z.object({ type: z.literal("regex"), value: z.string() }),
   z.object({ type: z.literal("and"), value: z.array(z.unknown()) }),
   z.object({ type: z.literal("not"), value: z.unknown() }),
 ]);

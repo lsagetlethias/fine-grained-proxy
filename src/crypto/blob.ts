@@ -85,6 +85,16 @@ function isValidObjectValue(ov: unknown, depth = 0): boolean {
       return true;
     case "stringwildcard":
       return typeof o.value === "string";
+    case "regex": {
+      if (typeof o.value !== "string") return false;
+      if (o.value.length > 200) return false;
+      try {
+        new RegExp(o.value);
+        return true;
+      } catch {
+        return false;
+      }
+    }
     case "and": {
       if (!Array.isArray(o.value)) return false;
       if (o.value.length < 2) return false;

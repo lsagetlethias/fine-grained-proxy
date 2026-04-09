@@ -51,6 +51,7 @@ function renderConditionNotBlock(
   populateSelect(condNotTypeSelect, [
     { value: "any", label: "Valeur exacte" },
     { value: "stringwildcard", label: "Pattern (wildcard)" },
+    { value: "regex", label: "Expression r\u00e9guli\u00e8re (regex)" },
   ], cond.notInnerType);
   condNotTypeSelect.addEventListener("change", function () {
     cond.notInnerType = condNotTypeSelect.value;
@@ -129,7 +130,9 @@ function renderConditionNotBlock(
     const cnPatInput = document.createElement("input");
     cnPatInput.type = "text";
     cnPatInput.value = cond.notInnerValue || "";
-    cnPatInput.placeholder = "release/broken*";
+    cnPatInput.placeholder = cond.notInnerType === "regex"
+      ? "^release\\/v\\d+"
+      : "release/broken*";
     cnPatInput.className =
       "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
     cnPatInput.addEventListener("input", function () {
@@ -216,6 +219,7 @@ function renderAndBlock(
       populateSelect(condTypeSelect, [
         { value: "any", label: "Valeur exacte" },
         { value: "stringwildcard", label: "Pattern (wildcard)" },
+        { value: "regex", label: "Expression r\u00e9guli\u00e8re (regex)" },
         { value: "wildcard", label: "Existe (toute valeur)" },
         { value: "not", label: "Exclure (not)" },
       ], cond.conditionType);
@@ -310,6 +314,18 @@ function renderAndBlock(
           renderChips();
         });
         condBlock.appendChild(condSwInput);
+      } else if (cond.conditionType === "regex") {
+        const condRxInput = document.createElement("input");
+        condRxInput.type = "text";
+        condRxInput.value = cond.value || "";
+        condRxInput.placeholder = "^release\\/v\\d+";
+        condRxInput.className =
+          "w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
+        condRxInput.addEventListener("input", function () {
+          cond.value = condRxInput.value;
+          renderChips();
+        });
+        condBlock.appendChild(condRxInput);
       } else if (cond.conditionType === "not") {
         renderConditionNotBlock(cond, condBlock, renderPanel, renderChips);
       }
@@ -372,6 +388,7 @@ function renderNotBlock(
   populateSelect(notTypeSelect, [
     { value: "any", label: "Valeur exacte" },
     { value: "stringwildcard", label: "Pattern (wildcard)" },
+    { value: "regex", label: "Expression r\u00e9guli\u00e8re (regex)" },
   ], filterData.notInnerType);
   notTypeSelect.addEventListener("change", function () {
     filterData.notInnerType = notTypeSelect.value;
@@ -475,10 +492,14 @@ function renderNotBlock(
     notPatInput.id = notValInputId;
     notPatInput.type = "text";
     notPatInput.value = filterData.notInnerValue || "";
-    notPatInput.placeholder = "release/broken*";
+    notPatInput.placeholder = filterData.notInnerType === "regex"
+      ? "^release\\/v\\d+"
+      : "release/broken*";
     notPatInput.className =
       "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
-    notPatInput.setAttribute("aria-label", "Pattern exclu");
+    notPatInput.setAttribute("aria-label", filterData.notInnerType === "regex"
+      ? "Regex exclue"
+      : "Pattern exclu");
     notPatInput.addEventListener("input", function () {
       filterData.notInnerValue = notPatInput.value;
       renderChips();
@@ -583,6 +604,8 @@ function renderValuesBlock(
           valInput.type = "text";
           valInput.placeholder = filterData.filterType === "stringwildcard"
             ? "release/*"
+            : filterData.filterType === "regex"
+            ? "^release\\/v\\d+"
             : "master";
         }
         valInput.className =
@@ -723,6 +746,7 @@ function renderFilterBlock(
   populateSelect(typeSelect, [
     { value: "any", label: "Valeur exacte" },
     { value: "stringwildcard", label: "Pattern (wildcard)" },
+    { value: "regex", label: "Expression r\u00e9guli\u00e8re (regex)" },
     { value: "wildcard", label: "Existe (toute valeur)" },
     { value: "not", label: "Exclure (not)" },
     { value: "and", label: "Toutes les conditions (ET)" },

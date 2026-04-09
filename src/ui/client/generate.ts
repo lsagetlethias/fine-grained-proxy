@@ -80,6 +80,11 @@ function buildScopes(
             if (swVal) {
               andSubs.push({ type: "stringwildcard", value: swVal });
             }
+          } else if (ac.conditionType === "regex") {
+            const rxVal = (ac.value || "").trim();
+            if (rxVal) {
+              andSubs.push({ type: "regex", value: rxVal });
+            }
           } else if (ac.conditionType === "wildcard") {
             andSubs.push({ type: "wildcard", value: "*" });
           } else if (ac.conditionType === "not") {
@@ -130,6 +135,10 @@ function buildScopes(
               }
             } else {
               if (v) objValues.push({ type: "any", value: v });
+            }
+          } else if (f.filterType === "regex") {
+            if (v) {
+              objValues.push({ type: "regex", value: v });
             }
           } else {
             if (v) {
