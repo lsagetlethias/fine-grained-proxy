@@ -17,5 +17,8 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Build output
+static/
+
 # Claude Code
 .claude/settings.local.json

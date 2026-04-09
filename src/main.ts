@@ -14,8 +14,8 @@ app.get("/healthz", (c) => c.json({ status: "ok" }));
 app.get(
   "/static/*",
   serveStatic({
-    root: "./src/ui/",
-    rewriteRequestPath: (path) => path.replace(/^\/static/, ""),
+    root: "./",
+    rewriteRequestPath: (path) => path,
     onFound: (_path, c) => {
       c.header("Cache-Control", "public, max-age=86400");
     },

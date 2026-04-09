@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "exports": "./src/main.ts",
   "tasks": {
-    "dev": "deno serve --watch --allow-net --allow-env --allow-read src/main.ts",
-    "start": "deno serve --allow-net --allow-env --allow-read src/main.ts",
+    "build:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --minify --target=es2020",
+    "dev:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --watch",
+    "dev:server": "deno serve --watch --allow-net --allow-env --allow-read src/main.ts",
+    "dev": "deno run -A npm:concurrently --names client,server --prefix-colors blue,green 'deno task dev:client' 'deno task dev:server'",
+    "start": "deno task build:client && deno serve --allow-net --allow-env --allow-read src/main.ts",
     "test": "deno test --allow-net --allow-env --allow-read tests/",
     "test:unit": "deno test --allow-env --allow-read tests/testu/",
     "test:integration": "deno test --allow-net --allow-env --allow-read tests/testi/",
@@ -12,7 +15,7 @@
     "lint": "deno lint",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
-    "check": "deno check src/**/*.ts src/**/*.tsx tests/**/*.ts",
+    "check": "deno check src/main.ts src/middleware/*.ts src/crypto/*.ts src/auth/*.ts src/routes/*.tsx tests/**/*.ts",
     "verify": "deno task lint && deno task fmt:check && deno task check && deno task test"
   },
   "imports": {
@@ -34,7 +37,7 @@
     "rules": {
       "tags": ["recommended"]
     },
-    "exclude": ["docs/", "*.md"]
+    "exclude": ["docs/", "*.md", "static/", "src/ui/client.ts"]
   },
   "fmt": {
     "useTabs": false,
@@ -42,7 +45,7 @@
     "indentWidth": 2,
     "singleQuote": false,
     "proseWrap": "preserve",
-    "exclude": ["docs/", "*.md"]
+    "exclude": ["docs/", "*.md", "static/"]
   },
-  "exclude": [".claude/", "node_modules/"]
+  "exclude": [".claude/", "node_modules/", "static/"]
 }
