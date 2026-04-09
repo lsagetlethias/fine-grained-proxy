@@ -2,7 +2,7 @@ import type { Child } from "hono/jsx";
 import { raw } from "hono/html";
 
 const FGP_LOGO_SVG =
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none"><path d="M16 2L4 8v8c0 7.2 5.1 13.3 12 15 6.9-1.7 12-7.8 12-15V8L16 2z" fill="#4c6ef5" opacity="0.15"/><path d="M16 2L4 8v8c0 7.2 5.1 13.3 12 15 6.9-1.7 12-7.8 12-15V8L16 2z" stroke="#4c6ef5" stroke-width="1.5" fill="none"/><circle cx="16" cy="14" r="3" stroke="#3b5bdb" stroke-width="1.5" fill="none"/><path d="M16 17v5" stroke="#3b5bdb" stroke-width="1.5" stroke-linecap="round"/><path d="M14.5 20h3" stroke="#3b5bdb" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none"><path d="M16 2L4 8v8c0 7.2 5.1 13.3 12 15 6.9-1.7 12-7.8 12-15V8L16 2z" fill="#4c6ef5" opacity="0.15"/><path d="M16 2L4 8v8c0 7.2 5.1 13.3 12 15 6.9-1.7 12-7.8 12-15V8L16 2z" stroke="#4c6ef5" stroke-width="1.5" fill="none"/><rect x="12.5" y="14" width="7" height="6" rx="1" stroke="#3b5bdb" stroke-width="1.5" fill="none"/><path d="M13.5 14v-2.5a2.5 2.5 0 015 0V14" stroke="#3b5bdb" stroke-width="1.5" stroke-linecap="round" fill="none"/><circle cx="16" cy="17" r="1" fill="#3b5bdb"/></svg>`;
 
 const FGP_FAVICON_URI = `data:image/svg+xml,${encodeURIComponent(FGP_LOGO_SVG)}`;
 

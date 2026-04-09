@@ -48,3 +48,25 @@ export interface SelectOption {
   value: string;
   label: string;
 }
+
+export interface AppPermissions {
+  read: boolean;
+  deploy: boolean;
+  deployBranches: string;
+  varsRead: boolean;
+  varsWrite: boolean;
+  scaleRestart: boolean;
+}
+
+export type AppsPermissionsState = Record<string, AppPermissions>;
+
+export function defaultAppPermissions(): AppPermissions {
+  return {
+    read: false,
+    deploy: false,
+    deployBranches: "",
+    varsRead: false,
+    varsWrite: false,
+    scaleRestart: false,
+  };
+}

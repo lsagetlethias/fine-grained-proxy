@@ -6,6 +6,7 @@ import { setupApps } from "./client/apps.ts";
 import { setupTtl } from "./client/ttl.ts";
 import { setupClipboard } from "./client/clipboard.ts";
 import { setupGenerate } from "./client/generate.ts";
+import type { AppsPermissionsState } from "./client/types.ts";
 
 (function () {
   "use strict";
@@ -17,6 +18,8 @@ import { setupGenerate } from "./client/generate.ts";
     nextFilterId: 1,
     expandedScopes: {},
   };
+
+  const appsPerms: AppsPermissionsState = {};
 
   function showError(msg: string): void {
     els.errorBanner.textContent = msg;
@@ -62,8 +65,8 @@ import { setupGenerate } from "./client/generate.ts";
     els.btnLoadApps.classList.toggle("hidden", els.authSelect.value !== "scalingo-exchange");
   });
 
-  setupPresets(els, state, doUpdateVisibility);
-  setupApps(els, showError, hideError, doUpdateVisibility);
+  setupPresets(els, state, appsPerms, doUpdateVisibility);
+  setupApps(els, state, appsPerms, showError, hideError, doUpdateVisibility);
   setupTtl(els);
   setupGenerate(els, state.bodyFiltersData, showError, hideError);
   setupClipboard();

@@ -1,9 +1,11 @@
 import type { BodyFiltersState } from "./body-filters.ts";
 import type { Elements } from "./elements.ts";
+import type { AppsPermissionsState } from "./types.ts";
 
 export function setupPresets(
   els: Elements,
   state: BodyFiltersState,
+  appsPerms: AppsPermissionsState,
   updateVisibility: () => void,
 ): void {
   const btnPresetScalingo = document.getElementById("btn-preset-scalingo") as HTMLButtonElement;
@@ -24,11 +26,18 @@ export function setupPresets(
     els.authHeaderName.classList.add("hidden");
     els.btnLoadApps.classList.add("hidden");
     els.appsSection.classList.add("hidden");
+    els.appsList.textContent = "";
     els.scopesTextarea.value = "";
     els.tokenInput.placeholder = "Votre cl\u00e9 API";
     state.bodyFiltersData = {};
     state.expandedScopes = {};
     els.bodyFiltersPanel.classList.add("hidden");
+
+    const keys = Object.keys(appsPerms);
+    for (let i = 0; i < keys.length; i++) {
+      delete appsPerms[keys[i]];
+    }
+
     updateVisibility();
   });
 }
