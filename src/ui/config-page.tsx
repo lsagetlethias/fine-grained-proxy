@@ -153,6 +153,7 @@ export function ConfigPage() {
             >
               Scopes (patterns METHOD:PATH)
             </label>
+            <div id="scope-chips" class="space-y-1 mb-2 hidden"></div>
             <textarea
               id="scopes"
               name="scopes"
@@ -165,6 +166,34 @@ export function ConfigPage() {
             <p id="scopes-hint" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
               Un pattern par ligne. Wildcard * pour tout matcher.
             </p>
+            <button
+              type="button"
+              id="btn-add-body-filters"
+              class="hidden mt-1 text-sm text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline"
+            >
+              + Ajouter des filtres body sur un scope...
+            </button>
+            <div
+              id="body-filters-panel"
+              class="hidden mt-3 rounded-md border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-600"
+              role="region"
+              aria-label="Filtres body avanc&#233;s"
+            >
+              <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Body Filters (avanc&#233;)
+                </span>
+                <button
+                  type="button"
+                  id="btn-close-body-filters"
+                  class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-fgp-500 rounded p-1"
+                  aria-label="Fermer le panel body filters"
+                >
+                  &#10005;
+                </button>
+              </div>
+              <div id="body-filters-list" class="p-4 space-y-1"></div>
+            </div>
           </section>
 
           {/* TTL */}
@@ -329,6 +358,15 @@ function clientScript(): string {
   var errorBanner = document.getElementById("error-banner");
   var customTtlWrapper = document.getElementById("custom-ttl-wrapper");
   var ttlWarning = document.getElementById("ttl-warning");
+  var scopeChips = document.getElementById("scope-chips");
+  var btnAddBodyFilters = document.getElementById("btn-add-body-filters");
+  var bodyFiltersPanel = document.getElementById("body-filters-panel");
+  var bodyFiltersList = document.getElementById("body-filters-list");
+  var btnCloseBodyFilters = document.getElementById("btn-close-body-filters");
+
+  var ELIGIBLE_METHODS = ["POST", "PUT", "PATCH", "*"];
+  var bodyFiltersData = {};
+  var nextFilterId = 1;
 
   function showError(msg) {
     errorBanner.textContent = msg;
@@ -340,6 +378,458 @@ function clientScript(): string {
     errorBanner.classList.add("hidden");
   }
 
+  // --- Body Filters: helpers ---
+
+  function parseScope(line) {
+    var trimmed = line.trim();
+    if (!trimmed) return null;
+    var idx = trimmed.indexOf(":");
+    if (idx === -1) return null;
+    return { method: trimmed.substring(0, idx), path: trimmed.substring(idx + 1), raw: trimmed };
+  }
+
+  function isEligible(parsed) {
+    if (!parsed) return false;
+    return ELIGIBLE_METHODS.indexOf(parsed.method) !== -1;
+  }
+
+  function getEligibleScopes() {
+    var lines = scopesTextarea.value.split("\\n");
+    var result = [];
+    for (var i = 0; i < lines.length; i++) {
+      var p = parseScope(lines[i]);
+      if (isEligible(p)) result.push(p.raw);
+    }
+    return result;
+  }
+
+  function getScopesWithFilters() {
+    var keys = Object.keys(bodyFiltersData);
+    var result = [];
+    for (var i = 0; i < keys.length; i++) {
+      if (bodyFiltersData[keys[i]] && bodyFiltersData[keys[i]].length > 0) {
+        result.push(keys[i]);
+      }
+    }
+    return result;
+  }
+
+  function truncatePath(raw, maxLen) {
+    if (raw.length <= maxLen) return raw;
+    var idx = raw.indexOf(":");
+    if (idx === -1) return raw.substring(0, maxLen) + "\\u2026";
+    var method = raw.substring(0, idx + 1);
+    var path = raw.substring(idx + 1);
+    var budget = maxLen - method.length - 3;
+    if (budget < 5) return raw.substring(0, maxLen) + "\\u2026";
+    return method + "\\u2026" + path.substring(path.length - budget);
+  }
+
+  function filterSummary(scopeKey) {
+    var filters = bodyFiltersData[scopeKey] || [];
+    var parts = [];
+    for (var i = 0; i < filters.length; i++) {
+      var f = filters[i];
+      var field = f.objectPath || "?";
+      if (f.filterType === "wildcard") {
+        parts.push(field + " exists");
+      } else {
+        var vals = [];
+        for (var j = 0; j < f.values.length; j++) {
+          if (f.values[j].trim()) vals.push(f.values[j].trim());
+        }
+        if (vals.length > 0) {
+          parts.push(field + " = " + vals.join(" | "));
+        } else {
+          parts.push(field);
+        }
+      }
+    }
+    return parts.join(", ");
+  }
+
+  // --- Body Filters: Phase 1 - detection ---
+
+  function updateBodyFiltersVisibility() {
+    var eligible = getEligibleScopes();
+    var allFromTextarea = eligible;
+    var withFilters = getScopesWithFilters();
+
+    for (var i = 0; i < withFilters.length; i++) {
+      if (allFromTextarea.indexOf(withFilters[i]) === -1) {
+        allFromTextarea.push(withFilters[i]);
+      }
+    }
+
+    var hasEligibleWithoutFilters = false;
+    for (var j = 0; j < eligible.length; j++) {
+      if (withFilters.indexOf(eligible[j]) === -1) {
+        hasEligibleWithoutFilters = true;
+        break;
+      }
+    }
+
+    btnAddBodyFilters.classList.toggle("hidden", !hasEligibleWithoutFilters);
+    renderChips();
+    if (bodyFiltersPanel.classList.contains("hidden")) return;
+    renderBodyFiltersPanel();
+  }
+
+  scopesTextarea.addEventListener("input", updateBodyFiltersVisibility);
+
+  // --- Body Filters: Phase 3 - chips ---
+
+  function renderChips() {
+    var withFilters = getScopesWithFilters();
+    scopeChips.innerHTML = "";
+    if (withFilters.length === 0) {
+      scopeChips.classList.add("hidden");
+      return;
+    }
+    scopeChips.classList.remove("hidden");
+    for (var i = 0; i < withFilters.length; i++) {
+      (function(scopeKey) {
+        var chip = document.createElement("div");
+        chip.className = "flex items-center gap-2 rounded-md border border-fgp-200 bg-fgp-50 px-3 py-2 text-sm font-mono dark:bg-fgp-900/50 dark:border-fgp-700";
+
+        var textSpan = document.createElement("span");
+        textSpan.className = "flex-1 truncate text-gray-800 dark:text-gray-200";
+        var summary = filterSummary(scopeKey);
+        textSpan.textContent = truncatePath(scopeKey, 50) + (summary ? " \\u2192 " + summary : "");
+        textSpan.title = scopeKey + (summary ? " \\u2192 " + summary : "");
+
+        var btnEdit = document.createElement("button");
+        btnEdit.type = "button";
+        btnEdit.className = "flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-fgp-600 hover:bg-fgp-100 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:text-fgp-400 dark:hover:bg-fgp-800";
+        btnEdit.textContent = "\\u00e9diter";
+        btnEdit.setAttribute("aria-label", "\\u00c9diter les filtres de " + scopeKey);
+        btnEdit.addEventListener("click", function() {
+          bodyFiltersPanel.classList.remove("hidden");
+          renderBodyFiltersPanel();
+          var target = document.getElementById("bf-scope-" + scopeKey.replace(/[^a-zA-Z0-9]/g, "_"));
+          if (target) {
+            expandScope(scopeKey);
+            target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        });
+
+        var btnRemove = document.createElement("button");
+        btnRemove.type = "button";
+        btnRemove.className = "flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-400 dark:hover:bg-red-900/30";
+        btnRemove.textContent = "\\u00d7";
+        btnRemove.setAttribute("aria-label", "Supprimer le scope " + scopeKey + " et ses filtres");
+        btnRemove.addEventListener("click", function() {
+          delete bodyFiltersData[scopeKey];
+          var lines = scopesTextarea.value.split("\\n");
+          var kept = [];
+          for (var k = 0; k < lines.length; k++) {
+            if (lines[k].trim() !== scopeKey) kept.push(lines[k]);
+          }
+          scopesTextarea.value = kept.join("\\n");
+          updateBodyFiltersVisibility();
+        });
+
+        chip.appendChild(textSpan);
+        chip.appendChild(btnEdit);
+        chip.appendChild(btnRemove);
+        scopeChips.appendChild(chip);
+      })(withFilters[i]);
+    }
+  }
+
+  // --- Body Filters: Phase 2 - panel ---
+
+  var expandedScopes = {};
+
+  function expandScope(scopeKey) {
+    expandedScopes[scopeKey] = true;
+    renderBodyFiltersPanel();
+  }
+
+  function collapseScope(scopeKey) {
+    expandedScopes[scopeKey] = false;
+    renderBodyFiltersPanel();
+  }
+
+  btnAddBodyFilters.addEventListener("click", function() {
+    bodyFiltersPanel.classList.remove("hidden");
+    renderBodyFiltersPanel();
+    bodyFiltersPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
+  btnCloseBodyFilters.addEventListener("click", function() {
+    bodyFiltersPanel.classList.add("hidden");
+  });
+
+  function renderBodyFiltersPanel() {
+    var eligible = getEligibleScopes();
+    var withFilters = getScopesWithFilters();
+    var allScopes = [];
+    for (var i = 0; i < eligible.length; i++) {
+      if (allScopes.indexOf(eligible[i]) === -1) allScopes.push(eligible[i]);
+    }
+    for (var j = 0; j < withFilters.length; j++) {
+      if (allScopes.indexOf(withFilters[j]) === -1) allScopes.push(withFilters[j]);
+    }
+
+    bodyFiltersList.innerHTML = "";
+
+    if (allScopes.length === 0) {
+      var empty = document.createElement("p");
+      empty.className = "text-sm text-gray-400 dark:text-gray-500";
+      empty.textContent = "Aucun scope \\u00e9ligible (POST, PUT, PATCH).";
+      bodyFiltersList.appendChild(empty);
+      return;
+    }
+
+    for (var s = 0; s < allScopes.length; s++) {
+      (function(scopeKey) {
+        var inTextarea = eligible.indexOf(scopeKey) !== -1;
+        var filters = bodyFiltersData[scopeKey] || [];
+        var filterCount = filters.length;
+        var isExpanded = !!expandedScopes[scopeKey];
+        var safeId = "bf-scope-" + scopeKey.replace(/[^a-zA-Z0-9]/g, "_");
+        var contentId = safeId + "-content";
+
+        var row = document.createElement("div");
+        row.id = safeId;
+
+        var header = document.createElement("button");
+        header.type = "button";
+        header.className = "w-full flex items-center gap-2 px-3 py-2 rounded text-sm font-mono cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 text-left" + (isExpanded ? " bg-fgp-50 dark:bg-fgp-900/30 border-l-2 border-fgp-500" : " text-gray-700 dark:text-gray-300");
+        header.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+        header.setAttribute("aria-controls", contentId);
+
+        if (!inTextarea) {
+          header.className += " opacity-50";
+          header.title = "Scope introuvable dans le textarea";
+        }
+
+        var chevron = document.createElement("span");
+        chevron.className = "flex-shrink-0 text-xs transition-transform" + (isExpanded ? " rotate-90" : "");
+        chevron.textContent = "\\u25b6";
+        chevron.setAttribute("aria-hidden", "true");
+
+        var label = document.createElement("span");
+        label.className = "flex-1 truncate";
+        label.textContent = scopeKey;
+
+        var badge = document.createElement("span");
+        badge.className = "text-xs text-fgp-600 dark:text-fgp-300 font-medium flex items-center gap-1";
+        badge.textContent = filterCount + " filtre" + (filterCount > 1 ? "s" : "");
+
+        if (filterCount > 0) {
+          var dot = document.createElement("span");
+          dot.className = "w-2 h-2 rounded-full bg-fgp-500 inline-block";
+          dot.setAttribute("aria-hidden", "true");
+          badge.appendChild(dot);
+        }
+
+        header.appendChild(chevron);
+        header.appendChild(label);
+        header.appendChild(badge);
+
+        header.addEventListener("click", function() {
+          if (isExpanded) collapseScope(scopeKey);
+          else expandScope(scopeKey);
+        });
+        header.addEventListener("keydown", function(ev) {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            if (isExpanded) collapseScope(scopeKey);
+            else expandScope(scopeKey);
+          }
+        });
+
+        row.appendChild(header);
+
+        if (isExpanded) {
+          var content = document.createElement("div");
+          content.id = contentId;
+          content.className = "ml-4 mt-2 mb-3 space-y-3 border-l-2 border-gray-200 dark:border-gray-700 pl-4";
+
+          if (!bodyFiltersData[scopeKey]) {
+            bodyFiltersData[scopeKey] = [];
+          }
+          var scopeFilters = bodyFiltersData[scopeKey];
+
+          for (var fi = 0; fi < scopeFilters.length; fi++) {
+            (function(filterIndex) {
+              var filterData = scopeFilters[filterIndex];
+
+              if (filterIndex > 0) {
+                var andLabel = document.createElement("div");
+                andLabel.className = "text-center py-1";
+                var andSpan = document.createElement("span");
+                andSpan.className = "text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider";
+                andSpan.textContent = "ET";
+                andSpan.setAttribute("aria-label", "et aussi");
+                andLabel.appendChild(andSpan);
+                content.appendChild(andLabel);
+              }
+
+              var filterBlock = document.createElement("div");
+              filterBlock.className = "rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2 dark:bg-gray-700/50 dark:border-gray-600";
+
+              var filterHeader = document.createElement("div");
+              filterHeader.className = "flex items-center justify-between";
+              var filterTitle = document.createElement("span");
+              filterTitle.className = "text-xs font-medium text-gray-500 dark:text-gray-400";
+              filterTitle.textContent = "Filtre " + (filterIndex + 1);
+              var btnDelete = document.createElement("button");
+              btnDelete.type = "button";
+              btnDelete.className = "text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 rounded p-0.5";
+              btnDelete.setAttribute("aria-label", "Supprimer le filtre " + (filterIndex + 1));
+              btnDelete.innerHTML = "&#128465;";
+              btnDelete.addEventListener("click", function() {
+                scopeFilters.splice(filterIndex, 1);
+                if (scopeFilters.length === 0) delete bodyFiltersData[scopeKey];
+                updateBodyFiltersVisibility();
+                var addBtn = document.getElementById("bf-add-" + safeId);
+                if (addBtn) addBtn.focus();
+              });
+              filterHeader.appendChild(filterTitle);
+              filterHeader.appendChild(btnDelete);
+              filterBlock.appendChild(filterHeader);
+
+              var fieldId = "bf-field-" + filterData.id;
+              var fieldLabel = document.createElement("label");
+              fieldLabel.className = "block text-xs font-medium text-gray-600 dark:text-gray-400";
+              fieldLabel.setAttribute("for", fieldId);
+              fieldLabel.textContent = "Champ (dot-path)";
+              var fieldInput = document.createElement("input");
+              fieldInput.type = "text";
+              fieldInput.id = fieldId;
+              fieldInput.value = filterData.objectPath || "";
+              fieldInput.placeholder = "deployment.git_ref";
+              fieldInput.className = "mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
+              fieldInput.addEventListener("input", function() {
+                filterData.objectPath = fieldInput.value;
+                renderChips();
+              });
+              filterBlock.appendChild(fieldLabel);
+              filterBlock.appendChild(fieldInput);
+
+              var typeId = "bf-type-" + filterData.id;
+              var typeLabel = document.createElement("label");
+              typeLabel.className = "block text-xs font-medium text-gray-600 dark:text-gray-400 mt-2";
+              typeLabel.setAttribute("for", typeId);
+              typeLabel.textContent = "Type";
+              var typeSelect = document.createElement("select");
+              typeSelect.id = typeId;
+              typeSelect.className = "mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100";
+              var types = [
+                { value: "any", label: "Valeur exacte" },
+                { value: "stringwildcard", label: "Pattern (wildcard)" },
+                { value: "wildcard", label: "Existe (toute valeur)" }
+              ];
+              for (var t = 0; t < types.length; t++) {
+                var opt = document.createElement("option");
+                opt.value = types[t].value;
+                opt.textContent = types[t].label;
+                if (filterData.filterType === types[t].value) opt.selected = true;
+                typeSelect.appendChild(opt);
+              }
+              typeSelect.addEventListener("change", function() {
+                filterData.filterType = typeSelect.value;
+                if (filterData.filterType === "wildcard") {
+                  filterData.values = [];
+                } else if (filterData.values.length === 0) {
+                  filterData.values = [""];
+                }
+                renderBodyFiltersPanel();
+                renderChips();
+              });
+              filterBlock.appendChild(typeLabel);
+              filterBlock.appendChild(typeSelect);
+
+              if (filterData.filterType !== "wildcard") {
+                var valuesLabel = document.createElement("div");
+                valuesLabel.className = "text-xs text-gray-500 dark:text-gray-400 mt-2";
+                valuesLabel.textContent = "Valeurs (une des suivantes) :";
+                filterBlock.appendChild(valuesLabel);
+
+                var valuesContainer = document.createElement("div");
+                valuesContainer.className = "space-y-1 mt-1";
+
+                for (var vi = 0; vi < filterData.values.length; vi++) {
+                  (function(valIndex) {
+                    var valRow = document.createElement("div");
+                    valRow.className = "flex gap-1";
+                    var valInputId = "bf-val-" + filterData.id + "-" + valIndex;
+                    var valInput = document.createElement("input");
+                    valInput.type = "text";
+                    valInput.id = valInputId;
+                    valInput.value = filterData.values[valIndex] || "";
+                    valInput.placeholder = filterData.filterType === "stringwildcard" ? "release/*" : "master";
+                    valInput.className = "flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400";
+                    valInput.setAttribute("aria-label", "Valeur " + (valIndex + 1) + " du filtre " + (filterIndex + 1));
+                    valInput.addEventListener("input", function() {
+                      filterData.values[valIndex] = valInput.value;
+                      renderChips();
+                    });
+
+                    var btnRemoveVal = document.createElement("button");
+                    btnRemoveVal.type = "button";
+                    btnRemoveVal.className = "flex-shrink-0 rounded px-2 py-1 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-400 dark:hover:bg-red-900/30";
+                    btnRemoveVal.textContent = "\\u00d7";
+                    btnRemoveVal.setAttribute("aria-label", "Supprimer la valeur " + (valIndex + 1));
+                    btnRemoveVal.addEventListener("click", function() {
+                      filterData.values.splice(valIndex, 1);
+                      if (filterData.values.length === 0) filterData.values = [""];
+                      renderBodyFiltersPanel();
+                      renderChips();
+                    });
+
+                    valRow.appendChild(valInput);
+                    valRow.appendChild(btnRemoveVal);
+                    valuesContainer.appendChild(valRow);
+                  })(vi);
+                }
+
+                filterBlock.appendChild(valuesContainer);
+
+                var btnAddVal = document.createElement("button");
+                btnAddVal.type = "button";
+                btnAddVal.className = "mt-1 text-xs text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline";
+                btnAddVal.textContent = "+ Ajouter une valeur";
+                btnAddVal.addEventListener("click", function() {
+                  filterData.values.push("");
+                  renderBodyFiltersPanel();
+                  var newIdx = filterData.values.length - 1;
+                  var newInput = document.getElementById("bf-val-" + filterData.id + "-" + newIdx);
+                  if (newInput) newInput.focus();
+                });
+                filterBlock.appendChild(btnAddVal);
+              }
+
+              content.appendChild(filterBlock);
+            })(fi);
+          }
+
+          var btnAddFilter = document.createElement("button");
+          btnAddFilter.type = "button";
+          btnAddFilter.id = "bf-add-" + safeId;
+          btnAddFilter.className = "mt-2 text-sm text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline";
+          btnAddFilter.textContent = "+ Ajouter un filtre";
+          btnAddFilter.addEventListener("click", function() {
+            var newFilter = { id: nextFilterId++, objectPath: "", filterType: "any", values: [""] };
+            if (!bodyFiltersData[scopeKey]) bodyFiltersData[scopeKey] = [];
+            bodyFiltersData[scopeKey].push(newFilter);
+            renderBodyFiltersPanel();
+            renderChips();
+            var newFieldInput = document.getElementById("bf-field-" + newFilter.id);
+            if (newFieldInput) newFieldInput.focus();
+          });
+          content.appendChild(btnAddFilter);
+          row.appendChild(content);
+        }
+
+        bodyFiltersList.appendChild(row);
+      })(allScopes[s]);
+    }
+  }
+
   // --- Presets ---
 
   document.getElementById("btn-preset-scalingo").addEventListener("click", function() {
@@ -349,6 +839,7 @@ function clientScript(): string {
     btnLoadApps.classList.remove("hidden");
     scopesTextarea.value = "GET:/v1/apps/*";
     tokenInput.placeholder = "tk-us-...";
+    updateBodyFiltersVisibility();
   });
 
   document.getElementById("btn-preset-clear").addEventListener("click", function() {
@@ -359,6 +850,10 @@ function clientScript(): string {
     appsSection.classList.add("hidden");
     scopesTextarea.value = "";
     tokenInput.placeholder = "Votre cl\\u00e9 API";
+    bodyFiltersData = {};
+    expandedScopes = {};
+    bodyFiltersPanel.classList.add("hidden");
+    updateBodyFiltersVisibility();
   });
 
   // --- Auth mode toggle ---
@@ -434,6 +929,7 @@ function clientScript(): string {
       lines.unshift("GET:/v1/apps");
     }
     scopesTextarea.value = lines.join("\\n");
+    updateBodyFiltersVisibility();
   }
 
   // --- TTL ---
@@ -444,6 +940,55 @@ function clientScript(): string {
       ttlWarning.classList.toggle("hidden", radio.value !== "0");
     });
   });
+
+  // --- Phase 5: Serialization ---
+
+  function buildScopes() {
+    var textareaScopes = scopesTextarea.value.split("\\n").map(function(l) { return l.trim(); }).filter(Boolean);
+    var result = [];
+
+    var withFilters = getScopesWithFilters();
+
+    for (var i = 0; i < withFilters.length; i++) {
+      var scopeKey = withFilters[i];
+      var parsed = parseScope(scopeKey);
+      if (!parsed) continue;
+      var filters = bodyFiltersData[scopeKey];
+      var serializedFilters = [];
+      for (var fi = 0; fi < filters.length; fi++) {
+        var f = filters[fi];
+        if (!f.objectPath || !f.objectPath.trim()) continue;
+        var objValues = [];
+        if (f.filterType === "wildcard") {
+          objValues.push({ type: "wildcard", value: "*" });
+        } else {
+          for (var vi = 0; vi < f.values.length; vi++) {
+            var v = f.values[vi].trim();
+            if (v) {
+              objValues.push({ type: f.filterType === "stringwildcard" ? "stringwildcard" : "any", value: v });
+            }
+          }
+        }
+        if (objValues.length > 0) {
+          serializedFilters.push({ objectPath: f.objectPath.trim(), objectValue: objValues });
+        }
+      }
+      if (serializedFilters.length > 0) {
+        var methods = parsed.method === "*" ? ["*"] : [parsed.method];
+        result.push({ methods: methods, pattern: parsed.path, bodyFilters: serializedFilters });
+      } else {
+        result.push(scopeKey);
+      }
+    }
+
+    for (var j = 0; j < textareaScopes.length; j++) {
+      if (withFilters.indexOf(textareaScopes[j]) === -1) {
+        result.push(textareaScopes[j]);
+      }
+    }
+
+    return result;
+  }
 
   // --- Generate ---
 
@@ -463,8 +1008,8 @@ function clientScript(): string {
     if (!token) { showError("Token manquant."); return; }
     if (!target) { showError("URL cible manquante."); return; }
 
-    var scopeLines = scopesTextarea.value.split("\\n").map(function(l) { return l.trim(); }).filter(Boolean);
-    if (scopeLines.length === 0) { showError("Au moins un scope requis."); return; }
+    var scopes = buildScopes();
+    if (scopes.length === 0) { showError("Au moins un scope requis."); return; }
 
     var ttlRadio = document.querySelector("input[name=ttl]:checked");
     if (!ttlRadio) { showError("S\\u00e9lectionnez une dur\\u00e9e de validit\\u00e9."); return; }
@@ -485,7 +1030,7 @@ function clientScript(): string {
       var res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: token, target: target, auth: auth, scopes: scopeLines, ttl: ttl }),
+        body: JSON.stringify({ token: token, target: target, auth: auth, scopes: scopes, ttl: ttl }),
       });
       if (!res.ok) {
         var errData = await res.json().catch(function() { return {}; });
@@ -521,6 +1066,8 @@ function clientScript(): string {
       setTimeout(function() { btn.textContent = orig; }, 1500);
     });
   });
+
+  updateBodyFiltersVisibility();
 })();
 `;
 }

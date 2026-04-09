@@ -129,6 +129,92 @@ Deno.test("decrypt accepts blob with v: 3 and ScopeEntry scopes", async () => {
   assertEquals(config.scopes.length, 2);
 });
 
+Deno.test("decrypt rejects blob with v: 3 and malformed bodyFilters content", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [
+      { methods: ["POST"], pattern: "/v1/apps/*", bodyFilters: [42, "garbage"] as unknown[] },
+    ] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt rejects blob with v: 3 and bodyFilter missing objectPath", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [
+      {
+        methods: ["POST"],
+        pattern: "/v1/apps/*",
+        bodyFilters: [{ objectValue: [{ type: "wildcard" }] }] as unknown[],
+      },
+    ] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt rejects blob with v: 3 and unknown ObjectValue type", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [
+      {
+        methods: ["POST"],
+        pattern: "/v1/apps/*",
+        bodyFilters: [{
+          objectPath: "field",
+          objectValue: [{ type: "regex", value: ".*" }] as unknown[],
+        }] as unknown[],
+      },
+    ] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("decrypt rejects blob with deeply nested and exceeding depth limit", async () => {
+  let nested: unknown = { type: "wildcard" };
+  for (let i = 0; i < 15; i++) {
+    nested = { type: "and", value: [nested] };
+  }
+  const raw = makeConfig({
+    v: 3,
+    scopes: [
+      {
+        methods: ["POST"],
+        pattern: "/v1/apps/*",
+        bodyFilters: [{
+          objectPath: "field",
+          objectValue: [nested] as unknown[],
+        }] as unknown[],
+      },
+    ] as unknown as BlobConfig["scopes"],
+  });
+  const blob = await encryptRaw(raw);
+
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
 Deno.test("decrypt rejects blob with v: 4", async () => {
   const raw = makeConfig({ v: 4 });
   const blob = await encryptRaw(raw);

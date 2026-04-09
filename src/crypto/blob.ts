@@ -73,6 +73,34 @@ export async function encryptBlob(
   return encodeBase64Url(result);
 }
 
+function isValidObjectValue(ov: unknown, depth = 0): boolean {
+  if (depth > 10) return false;
+  if (typeof ov !== "object" || ov === null) return false;
+  const o = ov as Record<string, unknown>;
+  if (typeof o.type !== "string") return false;
+  switch (o.type) {
+    case "any":
+      return "value" in o;
+    case "wildcard":
+      return true;
+    case "stringwildcard":
+      return typeof o.value === "string";
+    case "and":
+      return Array.isArray(o.value) &&
+        o.value.every((sub: unknown) => isValidObjectValue(sub, depth + 1));
+    default:
+      return false;
+  }
+}
+
+function isValidBodyFilter(bf: unknown): boolean {
+  if (typeof bf !== "object" || bf === null) return false;
+  const f = bf as Record<string, unknown>;
+  if (typeof f.objectPath !== "string" || f.objectPath.length === 0) return false;
+  if (!Array.isArray(f.objectValue) || f.objectValue.length === 0) return false;
+  return f.objectValue.every((ov: unknown) => isValidObjectValue(ov));
+}
+
 function isValidScopeEntry(s: unknown): s is ScopeEntry {
   if (typeof s !== "object" || s === null) return false;
   const entry = s as Record<string, unknown>;
@@ -84,6 +112,7 @@ function isValidScopeEntry(s: unknown): s is ScopeEntry {
   if (typeof entry.pattern !== "string") return false;
   if (entry.bodyFilters !== undefined) {
     if (!Array.isArray(entry.bodyFilters)) return false;
+    if (!entry.bodyFilters.every((bf: unknown) => isValidBodyFilter(bf))) return false;
   }
   return true;
 }
