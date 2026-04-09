@@ -5,6 +5,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { encryptBlob } from "../crypto/blob.ts";
 import { exchangeToken } from "../auth/client.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
+import type { Scope } from "../middleware/scopes.ts";
 
 function getRequestOrigin(c: Context): string {
   const forwardedProto = c.req.header("X-Forwarded-Proto");
@@ -25,6 +26,26 @@ const ErrorSchema = z.object({
   message: z.string(),
 }).openapi("Error");
 
+const ObjectValueSchema = z.union([
+  z.object({ type: z.literal("any"), value: z.unknown() }),
+  z.object({ type: z.literal("wildcard") }),
+  z.object({ type: z.literal("stringwildcard"), value: z.string() }),
+  z.object({ type: z.literal("and"), value: z.array(z.unknown()) }),
+]);
+
+const BodyFilterSchema = z.object({
+  objectPath: z.string().min(1),
+  objectValue: z.array(ObjectValueSchema).min(1),
+});
+
+const ScopeEntrySchema = z.object({
+  methods: z.array(z.string().min(1)).min(1),
+  pattern: z.string(),
+  bodyFilters: z.array(BodyFilterSchema).optional(),
+});
+
+const ScopeSchema = z.union([z.string(), ScopeEntrySchema]);
+
 const GenerateBodySchema = z.object({
   token: z.string().min(1).openapi({ example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx" }),
   target: z.string().min(1).openapi({ example: "https://api.osc-fr1.scalingo.com" }),
@@ -32,9 +53,9 @@ const GenerateBodySchema = z.object({
     example: "scalingo-exchange",
     description: "Auth mode: bearer, basic, scalingo-exchange, or header:{name}",
   }),
-  scopes: z.array(z.string()).openapi({
+  scopes: z.array(ScopeSchema).openapi({
     example: ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"],
-    description: "List of METHOD:PATH patterns",
+    description: "List of scopes: string patterns or structured ScopeEntry objects",
   }),
   ttl: z.number().openapi({
     example: 3600,
@@ -167,12 +188,14 @@ uiRoutes.openapi(generateRoute, async (c) => {
   }
 
   const clientKey = crypto.randomUUID();
+  const scopes = body.scopes as Scope[];
+  const hasStructuredScope = scopes.some((s) => typeof s !== "string");
   const config = {
-    v: 2,
+    v: hasStructuredScope ? 3 : 2,
     token: body.token,
     target: body.target,
     auth: body.auth,
-    scopes: body.scopes,
+    scopes,
     ttl: body.ttl,
     createdAt: Math.floor(Date.now() / 1000),
   };

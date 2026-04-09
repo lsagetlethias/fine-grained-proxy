@@ -106,8 +106,31 @@ Deno.test("decrypt rejects blob with v: 0", async () => {
   );
 });
 
-Deno.test("decrypt rejects blob with v: 3", async () => {
+Deno.test("decrypt accepts blob with v: 3 and string scopes", async () => {
   const raw = makeConfig({ v: 3 });
+  const blob = await encryptRaw(raw);
+
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 3);
+});
+
+Deno.test("decrypt accepts blob with v: 3 and ScopeEntry scopes", async () => {
+  const raw = makeConfig({
+    v: 3,
+    scopes: [
+      "GET:/v1/apps/*",
+      { methods: ["POST"], pattern: "/v1/apps/my-app/deployments" },
+    ],
+  });
+  const blob = await encryptRaw(raw);
+
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 3);
+  assertEquals(config.scopes.length, 2);
+});
+
+Deno.test("decrypt rejects blob with v: 4", async () => {
+  const raw = makeConfig({ v: 4 });
   const blob = await encryptRaw(raw);
 
   await assertRejects(

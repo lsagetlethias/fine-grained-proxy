@@ -11,7 +11,7 @@ import {
   setCachedBearer,
   setInflight,
 } from "../auth/cache.ts";
-import { checkAccess } from "./scopes.ts";
+import { checkAccess, type Scope } from "./scopes.ts";
 
 const MAX_BLOB_LENGTH = 4096;
 
@@ -167,7 +167,36 @@ export function proxyMiddleware(): MiddlewareHandler {
       return jsonError(c, 410, "token_expired", "This token has expired");
     }
 
-    if (!checkAccess(config.scopes, c.req.method, proxyPath)) {
+    const methodsWithBody = ["POST", "PUT", "PATCH"];
+    const hasBodyMethod = methodsWithBody.includes(c.req.method.toUpperCase());
+    const isJsonContent = (c.req.header("content-type") ?? "").includes("application/json");
+
+    const scopesHaveBodyFilters = config.scopes.some(
+      (s: Scope) => typeof s !== "string" && s.bodyFilters && s.bodyFilters.length > 0,
+    );
+
+    let parsedBody: unknown;
+    let rawBody: ArrayBuffer | undefined;
+
+    if (hasBodyMethod && scopesHaveBodyFilters) {
+      rawBody = await c.req.raw.clone().arrayBuffer();
+      if (isJsonContent) {
+        try {
+          parsedBody = JSON.parse(new TextDecoder().decode(rawBody));
+        } catch {
+          return jsonError(c, 400, "invalid_body", "Request body is not valid JSON");
+        }
+      } else {
+        return jsonError(
+          c,
+          403,
+          "scope_denied",
+          "Body filters require application/json content type",
+        );
+      }
+    }
+
+    if (!checkAccess(config.scopes, c.req.method, proxyPath, parsedBody)) {
       return jsonError(c, 403, "scope_denied", "Insufficient permissions for this action");
     }
 

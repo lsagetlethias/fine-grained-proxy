@@ -1,11 +1,13 @@
 import { decodeBase64Url, encodeBase64Url } from "@std/encoding/base64url";
 
+import type { Scope, ScopeEntry } from "../middleware/scopes.ts";
+
 export interface BlobConfig {
   v: number;
   token: string;
   target: string;
   auth: string;
-  scopes: string[];
+  scopes: Scope[];
   ttl: number;
   createdAt: number;
 }
@@ -71,6 +73,21 @@ export async function encryptBlob(
   return encodeBase64Url(result);
 }
 
+function isValidScopeEntry(s: unknown): s is ScopeEntry {
+  if (typeof s !== "object" || s === null) return false;
+  const entry = s as Record<string, unknown>;
+  if (
+    !Array.isArray(entry.methods) || !entry.methods.every((m: unknown) => typeof m === "string")
+  ) {
+    return false;
+  }
+  if (typeof entry.pattern !== "string") return false;
+  if (entry.bodyFilters !== undefined) {
+    if (!Array.isArray(entry.bodyFilters)) return false;
+  }
+  return true;
+}
+
 export async function decryptBlob(
   blob: string,
   clientKey: string,
@@ -115,16 +132,29 @@ export async function decryptBlob(
   const config = parsed as BlobConfig;
   if (
     typeof config.v !== "number" ||
-    config.v !== 2 ||
+    (config.v !== 2 && config.v !== 3) ||
     typeof config.token !== "string" || config.token.length === 0 ||
     typeof config.target !== "string" || !config.target ||
     typeof config.auth !== "string" || !config.auth ||
     !Array.isArray(config.scopes) ||
-    !config.scopes.every((s: unknown) => typeof s === "string") ||
     typeof config.ttl !== "number" ||
     typeof config.createdAt !== "number"
   ) {
     throw new Error("Invalid blob: malformed BlobConfig");
+  }
+
+  if (config.v === 2) {
+    if (!config.scopes.every((s: unknown) => typeof s === "string")) {
+      throw new Error("Invalid blob: malformed BlobConfig");
+    }
+  } else {
+    if (
+      !config.scopes.every(
+        (s: unknown) => typeof s === "string" || isValidScopeEntry(s),
+      )
+    ) {
+      throw new Error("Invalid blob: malformed BlobConfig");
+    }
   }
 
   return config;
