@@ -7,6 +7,13 @@ import { exchangeToken } from "../auth/client.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
 import type { Scope, ScopeEntry } from "../middleware/scopes.ts";
 
+let commitHash = "dev";
+try {
+  commitHash = Deno.readTextFileSync("static/version.txt").trim();
+} catch {
+  // dev mode, no build
+}
+
 function getRequestOrigin(c: Context): string {
   const forwardedProto = c.req.header("X-Forwarded-Proto");
   const forwardedHost = c.req.header("X-Forwarded-Host");
@@ -227,7 +234,7 @@ export const uiRoutes = new OpenAPIHono({
 });
 
 uiRoutes.get("/", (c) => {
-  return c.html(<ConfigPage />);
+  return c.html(<ConfigPage commitHash={commitHash} />);
 });
 
 uiRoutes.openapi(saltRoute, (c) => {
