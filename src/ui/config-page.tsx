@@ -164,7 +164,8 @@ export function ConfigPage() {
             >
             </textarea>
             <p id="scopes-hint" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-              Un pattern par ligne. Wildcard * pour tout matcher.
+              Un pattern par ligne. Wildcard * pour tout matcher. Les scopes POST/PUT/PATCH
+              permettent d'ajouter des filtres sur le contenu de la requ&ecirc;te.
             </p>
             <button
               type="button"
