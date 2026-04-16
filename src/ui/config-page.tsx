@@ -1374,7 +1374,10 @@ POST:/v1/apps/my-app/scale`}</pre>
                       <li>Import d'URL FGP existante avec token redact&eacute;</li>
                       <li>API encode/decode pour URLs publiques</li>
                       <li>Champ &laquo; Nom de la configuration &raquo;</li>
-                      <li>Body filters dans l'URL de partage <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">?c=</code></li>
+                      <li>
+                        Body filters dans l'URL de partage{" "}
+                        <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">?c=</code>
+                      </li>
                       <li>Presets r&eacute;organis&eacute;s en accord&eacute;ons</li>
                       <li>Fix pipe methods dans le scope matching</li>
                       <li>Onglets Doc / Exemples / Changelog</li>
