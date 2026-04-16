@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(git commit *)",
+            "prompt": "Avant de commit, lis les fiches de poste dans docs/team/*.md et docs/ia-architecture-reference.md (section process type et feedbacks). Pour chaque rôle qui a été impliqué dans cette session, vérifie que sa checklist de fin de tâche (définie dans sa fiche) a été respectée. Si un rôle n'a pas fait ses checks, bloque le commit et liste les checks manquants avec le rôle concerné. Si tous les checks sont faits, autorise le commit.",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
