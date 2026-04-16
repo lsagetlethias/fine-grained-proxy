@@ -1,4 +1,5 @@
 export interface PublicConfig {
+  name?: string;
   target: string;
   auth: string;
   scopes: unknown[];

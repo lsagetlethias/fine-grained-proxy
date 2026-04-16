@@ -39,6 +39,9 @@ export function setupPresets(
       delete appsPerms[keys[i]];
     }
 
+    const configName = document.getElementById("config-name") as HTMLInputElement | null;
+    if (configName) configName.value = "";
+    document.title = "FGP \u2014 Fine-Grained Proxy";
     history.replaceState(null, "", window.location.pathname);
 
     updateVisibility();

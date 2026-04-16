@@ -74,6 +74,18 @@ export function setupTestScope(bodyFiltersData: Record<string, FilterData[]>): v
   const verdictSpan = assertElement("test-scope-verdict", HTMLElement);
   const jsonContainer = assertElement("test-scope-json", HTMLElement);
   const scopesTextarea = assertElement("scopes", HTMLTextAreaElement);
+  const badge = document.getElementById("test-scope-badge");
+
+  function updateBadge(): void {
+    if (!badge) return;
+    const path = pathInput.value.trim();
+    if (path) {
+      badge.textContent = `${methodSelect.value} ${path}`;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+  }
 
   function toggleBodySection(): void {
     const show = METHODS_WITH_BODY.includes(methodSelect.value);
@@ -81,6 +93,7 @@ export function setupTestScope(bodyFiltersData: Record<string, FilterData[]>): v
   }
 
   function doHighlight(): void {
+    updateBadge();
     const rawScopes = readScopes(scopesTextarea);
     const method = methodSelect.value;
     const path = pathInput.value;

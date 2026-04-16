@@ -48,6 +48,22 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
           <div class="lg:col-span-3">
             <form id="fgp-form" class="space-y-6" autocomplete="off">
+              {/* Name */}
+              <section>
+                <label
+                  for="config-name"
+                  class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Nom de la configuration
+                </label>
+                <input
+                  type="text"
+                  id="config-name"
+                  placeholder="Ex : Scalingo deploy PR nosgestesclimat"
+                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                />
+              </section>
+
               {/* Preset */}
               <section>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -352,9 +368,14 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
               </section>
 
               {/* Test scope */}
-              <details class="mt-6 rounded-md border border-gray-200 dark:border-gray-700">
+              <details class="mt-6 rounded-md border border-gray-200 dark:border-gray-700 group/test">
                 <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
                   Tester un scope
+                  <span
+                    id="test-scope-badge"
+                    class="hidden group-open/test:!hidden ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                  </span>
                 </summary>
                 <div class="px-4 pb-4 pt-2 space-y-3">
                   <div class="grid grid-cols-4 gap-3">
@@ -1352,6 +1373,11 @@ POST:/v1/apps/my-app/scale`}</pre>
                       </li>
                       <li>Import d'URL FGP existante avec token redact&eacute;</li>
                       <li>API encode/decode pour URLs publiques</li>
+                      <li>Champ &laquo; Nom de la configuration &raquo;</li>
+                      <li>Body filters dans l'URL de partage <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">?c=</code></li>
+                      <li>Presets r&eacute;organis&eacute;s en accord&eacute;ons</li>
+                      <li>Fix pipe methods dans le scope matching</li>
+                      <li>Onglets Doc / Exemples / Changelog</li>
                     </ul>
                   </section>
 
