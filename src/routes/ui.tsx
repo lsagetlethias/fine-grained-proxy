@@ -16,17 +16,21 @@ import {
   type ScopeEntry,
 } from "../middleware/scopes.ts";
 
-let commitHash = Deno.env.get("DENO_DEPLOYMENT_ID")?.slice(0, 7) ?? "dev";
+let commitHash = "dev";
 try {
-  const cmd = new Deno.Command("git", {
-    args: ["rev-parse", "--short", "HEAD"],
-    stdout: "piped",
-    stderr: "null",
-  });
-  const out = cmd.outputSync();
-  if (out.success) commitHash = new TextDecoder().decode(out.stdout).trim();
+  commitHash = Deno.readTextFileSync("static/version.txt").trim();
 } catch {
-  // Deno Deploy or no git — keep DENO_DEPLOYMENT_ID or "dev"
+  try {
+    const cmd = new Deno.Command("git", {
+      args: ["rev-parse", "--short", "HEAD"],
+      stdout: "piped",
+      stderr: "null",
+    });
+    const out = cmd.outputSync();
+    if (out.success) commitHash = new TextDecoder().decode(out.stdout).trim();
+  } catch {
+    // no version file and no git — keep "dev"
+  }
 }
 
 function getRequestOrigin(c: Context): string {

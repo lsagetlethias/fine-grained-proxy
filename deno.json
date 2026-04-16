@@ -5,7 +5,8 @@
   "tasks": {
     "build:css": "deno run -A npm:tailwindcss@3 -i src/ui/tailwind.css -o static/styles.css --minify",
     "build:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --minify --target=es2020",
-    "build": "deno task build:css && deno task build:client",
+    "build:version": "git rev-parse --short HEAD > static/version.txt",
+    "build": "deno task build:css && deno task build:client && deno task build:version",
     "dev:css": "deno run -A npm:tailwindcss@3 -i src/ui/tailwind.css -o static/styles.css --watch",
     "dev:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --watch",
     "dev:server": "deno serve --watch --env-file --allow-net --allow-env --allow-read src/main.ts",
