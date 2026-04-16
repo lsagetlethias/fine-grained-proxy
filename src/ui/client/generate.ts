@@ -257,10 +257,16 @@ export function setupGenerate(
 
       const resultUrl = assertElement("result-url", HTMLInputElement);
       const resultKey = assertElement("result-key", HTMLInputElement);
+      const resultBlob = assertElement("result-blob", HTMLInputElement);
       const resultCurl = assertElement("result-curl", HTMLElement);
+      const resultCurlHeader = assertElement("result-curl-header", HTMLElement);
       resultUrl.value = data.url;
       resultKey.value = data.key;
+      resultBlob.value = data.blob;
       resultCurl.textContent = 'curl -H "X-FGP-Key: ' + data.key + '" ' + data.url + "v1/apps";
+      const origin = new URL(data.url).origin;
+      resultCurlHeader.textContent = 'curl -H "X-FGP-Key: ' + data.key + '" \\\n  -H "X-FGP-Blob: ' +
+        data.blob + '" \\\n  ' + origin + "/v1/apps";
       els.resultSection.classList.remove("hidden");
       resultUrl.focus();
     } catch (err) {

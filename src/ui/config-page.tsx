@@ -340,7 +340,30 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
 
                 <div>
                   <label class="block text-xs font-medium text-green-700 dark:text-green-300 mb-1">
-                    Exemple d'utilisation
+                    Blob (header <code class="font-mono">X-FGP-Blob</code>)
+                  </label>
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      id="result-blob"
+                      readonly
+                      class="flex-1 rounded-md border border-green-300 bg-white px-3 py-2 text-xs font-mono text-gray-800 select-all dark:bg-gray-800 dark:border-green-700 dark:text-gray-200"
+                      aria-label="Blob X-FGP-Blob"
+                    />
+                    <button
+                      type="button"
+                      data-copy="result-blob"
+                      class="copy-btn rounded-md border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-800 dark:border-green-700 dark:text-green-300 dark:hover:bg-gray-700"
+                      aria-label="Copier le blob"
+                    >
+                      Copier
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-green-700 dark:text-green-300 mb-1">
+                    Exemple avec blob dans l'URL
                   </label>
                   <div class="flex gap-2">
                     <pre
@@ -352,6 +375,26 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                       data-copy="result-curl"
                       class="copy-btn self-start rounded-md border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-800 dark:border-green-700 dark:text-green-300 dark:hover:bg-gray-700"
                       aria-label="Copier la commande curl"
+                    >
+                      Copier
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-green-700 dark:text-green-300 mb-1">
+                    Exemple avec header (recommand&eacute;)
+                  </label>
+                  <div class="flex gap-2">
+                    <pre
+                      id="result-curl-header"
+                      class="flex-1 rounded-md border border-green-300 bg-white px-3 py-2 text-xs font-mono text-gray-800 overflow-x-auto whitespace-pre dark:bg-gray-800 dark:border-green-700 dark:text-gray-200"
+                    ></pre>
+                    <button
+                      type="button"
+                      data-copy="result-curl-header"
+                      class="copy-btn self-start rounded-md border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-800 dark:border-green-700 dark:text-green-300 dark:hover:bg-gray-700"
+                      aria-label="Copier la commande curl header mode"
                     >
                       Copier
                     </button>
@@ -407,6 +450,24 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                   est requis &agrave; chaque requ&ecirc;te. L'URL seule est inexploitable sans cette
                   cl&eacute;.
                 </p>
+
+                <div class="mt-4 rounded-md bg-fgp-50 dark:bg-fgp-900/20 border border-fgp-200 dark:border-fgp-800 p-3">
+                  <p class="text-xs font-semibold text-fgp-700 dark:text-fgp-300 mb-2">
+                    Mode header (recommand&eacute;)
+                  </p>
+                  <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-3 font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre">{`curl -H "X-FGP-Key: <clé>" \\
+  -H "X-FGP-Blob: <blob>" \\
+  <origin>/v1/apps`}</pre>
+                  <p class="mt-2 text-xs">
+                    Passez le blob via le header{" "}
+                    <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+                      X-FGP-Blob
+                    </code>{" "}
+                    plut&ocirc;t que dans l'URL. M&eacute;thode pr&eacute;f&eacute;r&eacute;e pour
+                    &eacute;viter les probl&egrave;mes de limite de 255 caract&egrave;res par
+                    segment d'URL impos&eacute;e par certains services.
+                  </p>
+                </div>
               </section>
 
               <hr class="border-gray-200 dark:border-gray-700" />

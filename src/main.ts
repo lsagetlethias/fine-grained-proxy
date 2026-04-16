@@ -2,12 +2,13 @@ import { Hono } from "hono";
 import { serveStatic } from "hono/deno";
 import { logger } from "hono/logger";
 
-import { proxyMiddleware } from "./middleware/proxy.ts";
+import { blobHeaderProxy, proxyMiddleware } from "./middleware/proxy.ts";
 import { uiRoutes } from "./routes/ui.tsx";
 
 const app = new Hono();
 
 app.use("*", logger());
+app.use("*", blobHeaderProxy());
 
 app.get("/healthz", (c) => c.json({ status: "ok" }));
 

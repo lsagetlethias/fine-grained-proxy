@@ -72,6 +72,7 @@ async function forwardRequest(
 
   const headers = new Headers(c.req.raw.headers);
   headers.delete("X-FGP-Key");
+  headers.delete("X-FGP-Blob");
   headers.delete("host");
 
   if (config.auth === "scalingo-exchange") {
@@ -126,6 +127,89 @@ function handleUpstreamResponse(
   });
 }
 
+async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Promise<Response> {
+  if (blobRaw.length > MAX_BLOB_LENGTH) {
+    return jsonError(c, 414, "blob_too_large", "Encrypted blob exceeds maximum size");
+  }
+
+  const clientKey = c.req.header("X-FGP-Key");
+  if (!clientKey) {
+    return jsonError(c, 401, "missing_key", "X-FGP-Key header is required");
+  }
+
+  const serverSalt = getServerSalt();
+
+  let config;
+  try {
+    config = await decryptBlob(blobRaw, clientKey, serverSalt);
+  } catch {
+    return jsonError(c, 401, "invalid_credentials", "Unable to decrypt token");
+  }
+
+  if (isExpired(config)) {
+    return jsonError(c, 410, "token_expired", "This token has expired");
+  }
+
+  const validAuthModes = ["bearer", "basic", "scalingo-exchange"];
+  if (
+    !validAuthModes.includes(config.auth) && !config.auth.startsWith("header:")
+  ) {
+    return jsonError(c, 400, "invalid_auth_mode", "Unsupported auth mode: " + config.auth);
+  }
+
+  const methodsWithBody = ["POST", "PUT", "PATCH"];
+  const hasBodyMethod = methodsWithBody.includes(c.req.method.toUpperCase());
+  const isJsonContent = (c.req.header("content-type") ?? "").includes("application/json");
+
+  const scopesHaveBodyFilters = config.scopes.some(
+    (s: Scope) => typeof s !== "string" && s.bodyFilters && s.bodyFilters.length > 0,
+  );
+
+  let parsedBody: unknown;
+  let rawBody: ArrayBuffer | undefined;
+
+  if (hasBodyMethod && scopesHaveBodyFilters) {
+    rawBody = await c.req.raw.clone().arrayBuffer();
+    if (isJsonContent) {
+      try {
+        parsedBody = JSON.parse(new TextDecoder().decode(rawBody));
+      } catch {
+        return jsonError(c, 400, "invalid_body", "Request body is not valid JSON");
+      }
+    } else {
+      return jsonError(
+        c,
+        403,
+        "scope_denied",
+        "Body filters require application/json content type",
+      );
+    }
+  }
+
+  if (!checkAccess(config.scopes, c.req.method, proxyPath, parsedBody)) {
+    return jsonError(c, 403, "scope_denied", "Insufficient permissions for this action");
+  }
+
+  let response;
+  try {
+    response = await forwardRequest(c, config, proxyPath);
+  } catch {
+    return jsonError(c, 502, "upstream_error", "Target API is unavailable");
+  }
+
+  return handleUpstreamResponse(c, response);
+}
+
+export function blobHeaderProxy(): MiddlewareHandler {
+  return (c, next) => {
+    const blobRaw = c.req.header("X-FGP-Blob");
+    if (!blobRaw) return next();
+    const url = new URL(c.req.url);
+    const proxyPath = url.pathname;
+    return handleProxy(c, blobRaw, proxyPath);
+  };
+}
+
 export function proxyMiddleware(): MiddlewareHandler {
   return async (c) => {
     const url = new URL(c.req.url);
@@ -137,76 +221,6 @@ export function proxyMiddleware(): MiddlewareHandler {
 
     const blobRaw = segments[0];
     const proxyPath = "/" + segments.slice(1).join("/");
-
-    if (blobRaw.length > MAX_BLOB_LENGTH) {
-      return jsonError(c, 414, "blob_too_large", "Encrypted blob exceeds maximum size");
-    }
-
-    const clientKey = c.req.header("X-FGP-Key");
-    if (!clientKey) {
-      return jsonError(c, 401, "missing_key", "X-FGP-Key header is required");
-    }
-
-    const serverSalt = getServerSalt();
-
-    let config;
-    try {
-      config = await decryptBlob(blobRaw, clientKey, serverSalt);
-    } catch {
-      return jsonError(c, 401, "invalid_credentials", "Unable to decrypt token");
-    }
-
-    if (isExpired(config)) {
-      return jsonError(c, 410, "token_expired", "This token has expired");
-    }
-
-    const validAuthModes = ["bearer", "basic", "scalingo-exchange"];
-    if (
-      !validAuthModes.includes(config.auth) && !config.auth.startsWith("header:")
-    ) {
-      return jsonError(c, 400, "invalid_auth_mode", "Unsupported auth mode: " + config.auth);
-    }
-
-    const methodsWithBody = ["POST", "PUT", "PATCH"];
-    const hasBodyMethod = methodsWithBody.includes(c.req.method.toUpperCase());
-    const isJsonContent = (c.req.header("content-type") ?? "").includes("application/json");
-
-    const scopesHaveBodyFilters = config.scopes.some(
-      (s: Scope) => typeof s !== "string" && s.bodyFilters && s.bodyFilters.length > 0,
-    );
-
-    let parsedBody: unknown;
-    let rawBody: ArrayBuffer | undefined;
-
-    if (hasBodyMethod && scopesHaveBodyFilters) {
-      rawBody = await c.req.raw.clone().arrayBuffer();
-      if (isJsonContent) {
-        try {
-          parsedBody = JSON.parse(new TextDecoder().decode(rawBody));
-        } catch {
-          return jsonError(c, 400, "invalid_body", "Request body is not valid JSON");
-        }
-      } else {
-        return jsonError(
-          c,
-          403,
-          "scope_denied",
-          "Body filters require application/json content type",
-        );
-      }
-    }
-
-    if (!checkAccess(config.scopes, c.req.method, proxyPath, parsedBody)) {
-      return jsonError(c, 403, "scope_denied", "Insufficient permissions for this action");
-    }
-
-    let response;
-    try {
-      response = await forwardRequest(c, config, proxyPath);
-    } catch {
-      return jsonError(c, 502, "upstream_error", "Target API is unavailable");
-    }
-
-    return handleUpstreamResponse(c, response);
+    return await handleProxy(c, blobRaw, proxyPath);
   };
 }

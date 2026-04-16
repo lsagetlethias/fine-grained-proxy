@@ -81,6 +81,10 @@ const GenerateBodySchema = z.object({
 const GenerateResponseSchema = z.object({
   url: z.string().openapi({ example: "https://fgp.example.com/eyJhbGci.../" }),
   key: z.string().openapi({ example: "a7f2c9d4-1234-5678-abcd-ef0123456789" }),
+  blob: z.string().openapi({
+    example: "eyJhbGci...",
+    description: "Raw encrypted blob, for use with X-FGP-Blob header mode",
+  }),
 }).openapi("GenerateResponse");
 
 const SaltResponseSchema = z.object({
@@ -285,7 +289,7 @@ uiRoutes.openapi(generateRoute, async (c) => {
   }
 
   const origin = getRequestOrigin(c);
-  return c.json({ url: `${origin}/${blob}/`, key: clientKey }, 200);
+  return c.json({ url: `${origin}/${blob}/`, key: clientKey, blob }, 200);
 });
 
 uiRoutes.openapi(listAppsRoute, async (c) => {
