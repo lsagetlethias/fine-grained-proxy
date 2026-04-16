@@ -591,6 +591,7 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                   role="tab"
                   aria-selected="false"
                   aria-controls="panel-examples"
+                  tabindex={-1}
                   class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   Exemples
@@ -601,6 +602,7 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                   role="tab"
                   aria-selected="false"
                   aria-controls="panel-changelog"
+                  tabindex={-1}
                   class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   Changelog
@@ -1204,6 +1206,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                 id="panel-examples"
                 role="tabpanel"
                 aria-labelledby="tab-examples"
+                aria-hidden="true"
                 class="hidden text-sm text-gray-600 dark:text-gray-400"
               >
                 <div class="space-y-6">
@@ -1316,6 +1319,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                 id="panel-changelog"
                 role="tabpanel"
                 aria-labelledby="tab-changelog"
+                aria-hidden="true"
                 class="hidden text-sm text-gray-600 dark:text-gray-400"
               >
                 <div class="space-y-6">
