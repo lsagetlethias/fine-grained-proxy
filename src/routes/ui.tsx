@@ -19,6 +19,7 @@ import {
 let commitHash = "dev";
 try {
   commitHash = Deno.readTextFileSync("static/version.txt").trim();
+  if (commitHash === "dev") throw new Error("fallback");
 } catch {
   try {
     const cmd = new Deno.Command("git", {
@@ -29,7 +30,8 @@ try {
     const out = cmd.outputSync();
     if (out.success) commitHash = new TextDecoder().decode(out.stdout).trim();
   } catch {
-    // no version file and no git — keep "dev"
+    const deployId = Deno.env.get("DENO_DEPLOYMENT_ID");
+    if (deployId) commitHash = deployId.slice(0, 7);
   }
 }
 
