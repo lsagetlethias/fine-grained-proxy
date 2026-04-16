@@ -3,7 +3,7 @@ import { assertElement } from "./elements.ts";
 import type { Elements } from "./elements.ts";
 import { getScopesWithFilters, parseScope } from "./scopes.ts";
 
-function buildScopes(
+export function buildScopes(
   scopesTextarea: HTMLTextAreaElement,
   bodyFiltersData: Record<string, FilterData[]>,
 ): SerializedScope[] {

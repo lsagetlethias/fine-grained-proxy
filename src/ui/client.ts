@@ -76,7 +76,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
   setupTtl(els);
   setupGenerate(els, state.bodyFiltersData, showError, hideError);
   setupClipboard();
-  setupTestScope();
+  setupTestScope(state.bodyFiltersData);
   setupImportConfig();
   setupTabs();
 

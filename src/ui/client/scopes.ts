@@ -16,7 +16,11 @@ export function parseScope(line: string): ParsedScope | null {
 
 export function isEligible(parsed: ParsedScope | null): boolean {
   if (!parsed) return false;
-  return ELIGIBLE_METHODS.indexOf(parsed.method) !== -1;
+  const methods = parsed.method.includes("|") ? parsed.method.split("|") : [parsed.method];
+  for (let i = 0; i < methods.length; i++) {
+    if (ELIGIBLE_METHODS.indexOf(methods[i].toUpperCase()) !== -1) return true;
+  }
+  return false;
 }
 
 export function getEligibleScopes(scopesTextarea: HTMLTextAreaElement): string[] {

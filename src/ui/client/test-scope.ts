@@ -1,64 +1,7 @@
 import { assertElement } from "./elements.ts";
-
-interface ParsedScope {
-  methods: string[];
-  pattern: string;
-}
-
-function parseScope(scope: string): ParsedScope {
-  const colonIdx = scope.indexOf(":");
-  if (colonIdx === -1) {
-    return { methods: ["*"], pattern: scope };
-  }
-  const methodPart = scope.slice(0, colonIdx);
-  const pattern = scope.slice(colonIdx + 1);
-  const methods = (methodPart.includes("|") ? methodPart.split("|") : [methodPart]).map((m) =>
-    m.toUpperCase()
-  );
-  return { methods, pattern };
-}
-
-function matchPath(pattern: string, path: string): boolean {
-  if (pattern === "*") return true;
-  if (!pattern.includes("*")) return pattern === path;
-
-  const segments = pattern.split("*");
-  let cursor = 0;
-
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
-
-    if (i === 0) {
-      if (!path.startsWith(seg)) return false;
-      cursor = seg.length;
-      continue;
-    }
-
-    const remaining = path.slice(cursor);
-    if (remaining.length === 0) return false;
-
-    if (i === segments.length - 1 && seg === "") {
-      return true;
-    }
-
-    const idx = remaining.indexOf(seg);
-    if (idx < 1) return false;
-
-    cursor += idx + seg.length;
-  }
-
-  if (segments[segments.length - 1] !== "") {
-    return cursor === path.length;
-  }
-
-  return true;
-}
-
-interface ScopeResult {
-  raw: string;
-  match: boolean;
-  bodyMatch?: boolean;
-}
+import { buildScopes } from "./generate.ts";
+import { checkAccess, type Scope } from "../../middleware/scopes.ts";
+import type { FilterData, SerializedScope } from "./types.ts";
 
 function clearElement(el: HTMLElement): void {
   while (el.firstChild) {
@@ -71,6 +14,16 @@ function readScopes(scopesTextarea: HTMLTextAreaElement): string[] {
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
+}
+
+function scopeLabel(scope: SerializedScope): string {
+  if (typeof scope === "string") return scope;
+  const methods = scope.methods.join("|");
+  let label = `${methods}:${scope.pattern}`;
+  if (scope.bodyFilters && scope.bodyFilters.length > 0) {
+    label += ` [${scope.bodyFilters.length} body filter(s)]`;
+  }
+  return label;
 }
 
 function createResultRow(match: boolean, text: string): HTMLDivElement {
@@ -91,56 +44,6 @@ function createResultRow(match: boolean, text: string): HTMLDivElement {
   return row;
 }
 
-function highlightScopes(
-  method: string,
-  path: string,
-  scopes: string[],
-  resultsContainer: HTMLElement,
-): boolean {
-  clearElement(resultsContainer);
-  if (scopes.length === 0 || path.length === 0) return false;
-
-  const upperMethod = method.toUpperCase();
-  let anyMatch = false;
-
-  for (const raw of scopes) {
-    const parsed = parseScope(raw);
-    const methodMatch = parsed.methods.includes("*") || parsed.methods.includes(upperMethod);
-    const pathMatch = matchPath(parsed.pattern, path);
-    const match = methodMatch && pathMatch;
-    if (match) anyMatch = true;
-
-    resultsContainer.appendChild(createResultRow(match, raw));
-  }
-
-  return anyMatch;
-}
-
-function renderResults(
-  results: ScopeResult[],
-  allowed: boolean,
-  resultsContainer: HTMLElement,
-  verdictSpan: HTMLElement,
-  jsonContainer: HTMLElement,
-): void {
-  clearElement(resultsContainer);
-
-  for (const r of results) {
-    let text = r.raw;
-    if (r.bodyMatch !== undefined) {
-      text += r.bodyMatch ? " (body OK)" : " (body refus\u00e9)";
-    }
-    resultsContainer.appendChild(createResultRow(r.match, text));
-  }
-
-  verdictSpan.textContent = allowed
-    ? "Proxy : acc\u00e8s autoris\u00e9"
-    : "Proxy : acc\u00e8s refus\u00e9";
-  verdictSpan.className = allowed
-    ? "text-sm font-medium text-green-600 dark:text-green-400"
-    : "text-sm font-medium text-red-600 dark:text-red-400";
-}
-
 const METHODS_WITH_BODY = ["POST", "PUT", "PATCH"];
 
 function debounce(fn: () => void, ms: number): () => void {
@@ -151,7 +54,17 @@ function debounce(fn: () => void, ms: number): () => void {
   };
 }
 
-export function setupTestScope(): void {
+function parseTestBody(bodyTextarea: HTMLTextAreaElement, method: string): unknown {
+  const bodyValue = bodyTextarea.value.trim();
+  if (bodyValue.length === 0 || !METHODS_WITH_BODY.includes(method)) return undefined;
+  try {
+    return JSON.parse(bodyValue);
+  } catch {
+    return undefined;
+  }
+}
+
+export function setupTestScope(bodyFiltersData: Record<string, FilterData[]>): void {
   const methodSelect = assertElement("test-method", HTMLSelectElement);
   const pathInput = assertElement("test-path", HTMLInputElement);
   const bodySection = assertElement("test-body-section", HTMLElement);
@@ -168,22 +81,36 @@ export function setupTestScope(): void {
   }
 
   function doHighlight(): void {
-    const scopes = readScopes(scopesTextarea);
+    const rawScopes = readScopes(scopesTextarea);
+    const method = methodSelect.value;
     const path = pathInput.value;
-    const anyMatch = highlightScopes(methodSelect.value, path, scopes, resultsContainer);
 
     jsonContainer.textContent = "";
     jsonContainer.classList.add("hidden");
 
-    if (scopes.length === 0 || path.length === 0) {
+    if (rawScopes.length === 0 || path.length === 0) {
+      clearElement(resultsContainer);
       btnTest.disabled = false;
       verdictSpan.textContent = "";
       return;
     }
 
+    const scopes = buildScopes(scopesTextarea, bodyFiltersData);
+    const body = parseTestBody(bodyTextarea, method);
+
+    clearElement(resultsContainer);
+    let anyMatch = false;
+
+    for (let i = 0; i < scopes.length; i++) {
+      const scope = scopes[i] as Scope;
+      const matched = checkAccess([scope], method.toUpperCase(), path, body);
+      if (matched) anyMatch = true;
+      resultsContainer.appendChild(createResultRow(matched, scopeLabel(scopes[i])));
+    }
+
     if (!anyMatch) {
       btnTest.disabled = true;
-      verdictSpan.textContent = "Proxy : acc\u00e8s refus\u00e9 (aucun scope ne matche)";
+      verdictSpan.textContent = "Proxy : acc\u00e8s refus\u00e9";
       verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
     } else {
       btnTest.disabled = false;
@@ -199,9 +126,10 @@ export function setupTestScope(): void {
   });
   pathInput.addEventListener("input", debouncedHighlight);
   scopesTextarea.addEventListener("input", debouncedHighlight);
+  bodyTextarea.addEventListener("input", debouncedHighlight);
 
   btnTest.addEventListener("click", async () => {
-    const scopes = readScopes(scopesTextarea);
+    const scopes = buildScopes(scopesTextarea, bodyFiltersData);
     const method = methodSelect.value;
     const path = pathInput.value;
     const tokenInput = document.getElementById("token") as HTMLInputElement | null;
