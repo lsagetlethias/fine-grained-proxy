@@ -26,7 +26,8 @@
 ## Scripts (deno task)
 - `deno task build:css` — compile `src/ui/tailwind.css` → `static/styles.css` (Tailwind CSS 3, minifié)
 - `deno task build:client` — compile `src/ui/client.ts` → `static/client.js` (esbuild, minifié)
-- `deno task build` — build:css + build:client (à lancer avant deploy)
+- `deno task build:version` — résout le SHA git du commit et l'écrit dans `static/version.txt`
+- `deno task build` — build:css + build:client + build:version (à lancer avant deploy)
 - `deno task dev` — watch parallèle CSS + client + server (concurrently)
 - `deno task start` — build + production
 - `deno task deploy` — build + deployctl vers Deno Deploy
@@ -90,6 +91,7 @@ Requête → extraire blob (header X-FGP-Blob prioritaire, sinon premier segment
 - `FGP_SALT` — salt serveur pour la dérivation de clé (requis)
 - `SCALINGO_API_URL` — URL de l'API Scalingo pour le helper list-apps (défaut: https://api.osc-fr1.scalingo.com)
 - `SCALINGO_AUTH_URL` — URL du service auth Scalingo pour le mode scalingo-exchange (défaut: https://auth.scalingo.com)
+- `FGP_GITHUB_REPO` — repo GitHub `owner/name` pour la résolution du SHA de build (défaut: auto-détecté via git remote ou `lsagetlethias/fine-grained-proxy`)
 
 ## Équipe multi-agent
 - **Référence complète** : `docs/ia-architecture-reference.md` — setup, rôles, skills, process type

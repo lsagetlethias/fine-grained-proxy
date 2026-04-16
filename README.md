@@ -22,6 +22,7 @@ Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de gen
 | `PORT` | non | Port du serveur | `8000` |
 | `SCALINGO_API_URL` | non | URL de l'API Scalingo | `https://api.osc-fr1.scalingo.com` |
 | `SCALINGO_AUTH_URL` | non | URL du service auth Scalingo | `https://auth.scalingo.com` |
+| `FGP_GITHUB_REPO` | non | Repo GitHub (`owner/name`) pour la resolution du SHA de build (utile pour les forks sans git) | auto-detecte via git remote ou `lsagetlethias/fine-grained-proxy` |
 
 ### Lancer en dev
 
@@ -182,7 +183,8 @@ Requete -> extraire blob (header X-FGP-Blob prioritaire, sinon premier segment U
 
 | Commande | Description |
 |----------|-------------|
-| `deno task build` | Build CSS (Tailwind) + client JS (esbuild) |
+| `deno task build` | Build CSS (Tailwind) + client JS (esbuild) + version (SHA git) |
+| `deno task build:version` | Resout le SHA git du commit courant et l'ecrit dans `static/version.txt` |
 | `deno task dev` | Watch parallele CSS + client + serveur |
 | `deno task start` | Build + production |
 | `deno task deploy` | Build + deploy Deno Deploy |

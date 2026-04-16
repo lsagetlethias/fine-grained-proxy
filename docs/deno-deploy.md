@@ -43,8 +43,11 @@ Configurer dans la console Deno Deploy ([console.deno.com](https://console.deno.
 | `FGP_SALT` | Oui | Salt serveur pour PBKDF2 |
 | `SCALINGO_API_URL` | Non | URL API Scalingo (defaut: `https://api.osc-fr1.scalingo.com`) |
 | `SCALINGO_AUTH_URL` | Non | URL auth Scalingo (defaut: `https://auth.scalingo.com`) |
+| `FGP_GITHUB_REPO` | Non | Repo GitHub `owner/name` pour le SHA de build (defaut: `lsagetlethias/fine-grained-proxy`) |
 
 `PORT` n'est pas necessaire (gere par Deno Deploy).
+
+> **SHA de build** : git n'est pas disponible sur Deno Deploy. Le script `build:version` fallback sur l'API GitHub pour resoudre le SHA du dernier commit. Si vous deployez un fork, positionnez `FGP_GITHUB_REPO` sur votre repo pour que le lien dans le footer pointe au bon endroit.
 
 ## Deployer via CLI
 

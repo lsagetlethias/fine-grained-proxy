@@ -162,6 +162,8 @@ Feedbacks clés accumulés :
 - Doc API non négociable
 - Lead doit review la qualité structurelle, pas juste "ça compile"
 - Solliciter l'utilisateur pour les arbitrages archi/specs
+- Suivre le process docs/ia-architecture-reference.md, ne pas court-circuiter les rôles (chaque agent fait ses devoirs : /verif, /sync-docs, etc.)
+- Toujours consulter l'équipe/l'utilisateur avant de clôturer une tâche ou commit
 
 ---
 
