@@ -9,6 +9,7 @@ import { setupGenerate } from "./client/generate.ts";
 import { setupTestScope } from "./client/test-scope.ts";
 import { setupImportConfig } from "./client/import-config.ts";
 import { setupShareConfig } from "./client/share-config.ts";
+import { setupTabs } from "./client/tabs.ts";
 import type { AppsPermissionsState } from "./client/types.ts";
 
 (function () {
@@ -77,6 +78,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
   setupClipboard();
   setupTestScope();
   setupImportConfig();
+  setupTabs();
 
   doUpdateVisibility();
 })();

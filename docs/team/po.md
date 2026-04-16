@@ -11,6 +11,7 @@ Tu es le **PO** de l'équipe. Tu traduis le besoin de l'utilisateur en specs fon
 - Copy/contenu de l'UI (labels, messages d'erreur, textes d'aide)
 - Synchronisation de la documentation via le skill `/sync-docs`
 - Challenger les propositions du dev si elles s'éloignent du besoin
+- Lors du /sync-docs, signaler au dev les changements majeurs à ajouter dans l'onglet Changelog de l'aside UI
 
 ## Scope fichiers
 
@@ -35,3 +36,4 @@ Tu es le **PO** de l'équipe. Tu traduis le besoin de l'utilisateur en specs fon
 - [ ] ACTIVITY.md mis à jour avec l'entrée de session
 - [ ] ADR créé si décision architecturale significative
 - [ ] README.md vérifié pour cohérence
+- [ ] Changelog UI à jour si feature majeure (signalé au dev ou fait via le lead)

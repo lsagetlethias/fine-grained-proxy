@@ -573,91 +573,662 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
             class="lg:col-span-2 lg:border-l lg:border-gray-200 lg:pl-8 dark:lg:border-gray-700 mt-8 lg:mt-0"
             aria-label="Documentation et aide"
           >
-            <nav class="sticky top-8 space-y-6 text-sm text-gray-600 dark:text-gray-400">
-              <section>
-                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                  Guide d'utilisation
-                </h3>
-                <ol class="list-decimal list-inside space-y-2">
-                  <li>Choisissez un preset ou configurez manuellement les champs.</li>
-                  <li>Renseignez le token API de votre service cible.</li>
-                  <li>
-                    D&eacute;finissez les scopes (permissions par route et m&eacute;thode HTTP).
-                  </li>
-                  <li>Configurez la dur&eacute;e de validit&eacute; (TTL) de l'URL.</li>
-                  <li>G&eacute;n&eacute;rez l'URL et la cl&eacute; client.</li>
-                </ol>
-              </section>
+            <div class="sticky top-8">
+              <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6" role="tablist">
+                <button
+                  type="button"
+                  id="tab-doc"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="panel-doc"
+                  class="px-4 py-2 text-sm font-medium border-b-2 border-fgp-600 text-fgp-700 dark:text-fgp-300 dark:border-fgp-400"
+                >
+                  Doc
+                </button>
+                <button
+                  type="button"
+                  id="tab-examples"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-examples"
+                  class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  Exemples
+                </button>
+                <button
+                  type="button"
+                  id="tab-changelog"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="panel-changelog"
+                  class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  Changelog
+                </button>
+              </div>
 
-              <hr class="border-gray-200 dark:border-gray-700" />
+              <div
+                id="panel-doc"
+                role="tabpanel"
+                aria-labelledby="tab-doc"
+                class="space-y-6 text-sm text-gray-600 dark:text-gray-400"
+              >
+                <section>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                    Guide d'utilisation
+                  </h3>
+                  <ol class="list-decimal list-inside space-y-2">
+                    <li>Choisissez un preset ou configurez manuellement les champs.</li>
+                    <li>Renseignez le token API de votre service cible.</li>
+                    <li>
+                      D&eacute;finissez les scopes (permissions par route et m&eacute;thode HTTP).
+                    </li>
+                    <li>Configurez la dur&eacute;e de validit&eacute; (TTL) de l'URL.</li>
+                    <li>G&eacute;n&eacute;rez l'URL et la cl&eacute; client.</li>
+                  </ol>
+                </section>
 
-              <section>
-                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                  Utilisation de l'URL
-                </h3>
-                <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-3 font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre">{`curl -H "X-FGP-Key: <clé>" \\
+                <hr class="border-gray-200 dark:border-gray-700" />
+
+                <section>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                    Utilisation de l'URL
+                  </h3>
+                  <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-3 font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre">{`curl -H "X-FGP-Key: <clé>" \\
   <url>/v1/apps`}</pre>
-                <p class="mt-2">
-                  Le header{" "}
-                  <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
-                    X-FGP-Key
-                  </code>{" "}
-                  est requis &agrave; chaque requ&ecirc;te. L'URL seule est inexploitable sans cette
-                  cl&eacute;.
-                </p>
-
-                <div class="mt-4 rounded-md bg-fgp-50 dark:bg-fgp-900/20 border border-fgp-200 dark:border-fgp-800 p-3">
-                  <p class="text-xs font-semibold text-fgp-700 dark:text-fgp-300 mb-2">
-                    Mode header (recommand&eacute;)
-                  </p>
-                  <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-3 font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre">{`curl -H "X-FGP-Key: <clé>" \\\n  -H "X-FGP-Blob: <blob>" \\\n  <origin>/v1/apps`}</pre>
-                  <p class="mt-2 text-xs">
-                    Passez le blob via le header{" "}
-                    <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
-                      X-FGP-Blob
+                  <p class="mt-2">
+                    Le header{" "}
+                    <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+                      X-FGP-Key
                     </code>{" "}
-                    plut&ocirc;t que dans l'URL. M&eacute;thode pr&eacute;f&eacute;r&eacute;e pour
-                    &eacute;viter les probl&egrave;mes de limite de 255 caract&egrave;res par
-                    segment d'URL impos&eacute;e par certains services.
+                    est requis &agrave; chaque requ&ecirc;te. L'URL seule est inexploitable sans
+                    cette cl&eacute;.
                   </p>
-                </div>
-              </section>
 
-              <hr class="border-gray-200 dark:border-gray-700" />
-
-              <section>
-                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                  Partage &amp; import
-                </h3>
-                <div class="space-y-3">
-                  <div>
-                    <p class="font-medium text-gray-800 dark:text-gray-200">
-                      URL de partage
+                  <div class="mt-4 rounded-md bg-fgp-50 dark:bg-fgp-900/20 border border-fgp-200 dark:border-fgp-800 p-3">
+                    <p class="text-xs font-semibold text-fgp-700 dark:text-fgp-300 mb-2">
+                      Mode header (recommand&eacute;)
                     </p>
-                    <p>
-                      L'URL dans la barre d'adresse se met &agrave; jour automatiquement avec un
-                      param&egrave;tre{" "}
-                      <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
-                        ?c=
+                    <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-3 font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre">{`curl -H "X-FGP-Key: <clé>" \\\n  -H "X-FGP-Blob: <blob>" \\\n  <origin>/v1/apps`}</pre>
+                    <p class="mt-2 text-xs">
+                      Passez le blob via le header{" "}
+                      <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+                        X-FGP-Blob
                       </code>{" "}
-                      qui encode la configuration (sans le token). Copiez-la pour partager un
-                      template de config &mdash; le destinataire n'aura qu'&agrave; fournir son
-                      propre token.
+                      plut&ocirc;t que dans l'URL. M&eacute;thode pr&eacute;f&eacute;r&eacute;e pour
+                      &eacute;viter les probl&egrave;mes de limite de 255 caract&egrave;res par
+                      segment d'URL impos&eacute;e par certains services.
                     </p>
                   </div>
-                  <div>
-                    <p class="font-medium text-gray-800 dark:text-gray-200 mb-1">
-                      Exemples pr&ecirc;ts &agrave; l'emploi
+                </section>
+
+                <hr class="border-gray-200 dark:border-gray-700" />
+
+                <section>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                    Partage &amp; import
+                  </h3>
+                  <div class="space-y-3">
+                    <div>
+                      <p class="font-medium text-gray-800 dark:text-gray-200">
+                        URL de partage
+                      </p>
+                      <p>
+                        L'URL dans la barre d'adresse se met &agrave; jour automatiquement avec un
+                        param&egrave;tre{" "}
+                        <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+                          ?c=
+                        </code>{" "}
+                        qui encode la configuration (sans le token). Copiez-la pour partager un
+                        template de config &mdash; le destinataire n'aura qu'&agrave; fournir son
+                        propre token.
+                      </p>
+                    </div>
+                    <div>
+                      <p class="font-medium text-gray-800 dark:text-gray-200">
+                        Importer une URL FGP
+                      </p>
+                      <p>
+                        Le bouton <strong>Importer</strong>{" "}
+                        dans les presets permet de d&eacute;coder une URL FGP existante (ou un blob
+                        brut) avec sa cl&eacute; client. La configuration est
+                        r&eacute;cup&eacute;r&eacute;e avec le token masqu&eacute; &mdash;
+                        fournissez le token manuellement pour g&eacute;n&eacute;rer ou tester.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <hr class="border-gray-200 dark:border-gray-700" />
+
+                <section>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                    Infos sur les champs
+                  </h3>
+                  <dl class="space-y-3">
+                    <div>
+                      <dt class="font-medium text-gray-800 dark:text-gray-200">URL cible</dt>
+                      <dd>
+                        L'URL de base de l'API que vous souhaitez proxifier.
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="font-medium text-gray-800 dark:text-gray-200">Mode d'auth</dt>
+                      <dd>
+                        Comment le proxy s'authentifie aupr&egrave;s de l'API cible.
+                      </dd>
+                      <dd class="mt-1">
+                        <ul class="list-disc list-inside space-y-0.5">
+                          <li>
+                            <code class="font-mono text-xs">bearer</code>{" "}
+                            &mdash; token envoy&eacute; dans{" "}
+                            <code class="font-mono text-xs">Authorization: Bearer</code>
+                          </li>
+                          <li>
+                            <code class="font-mono text-xs">basic</code> &mdash; Basic Auth
+                          </li>
+                          <li>
+                            <code class="font-mono text-xs">scalingo-exchange</code>{" "}
+                            &mdash; &eacute;change token Scalingo (tk-us-... &rarr; bearer)
+                          </li>
+                          <li>
+                            <code class="font-mono text-xs">header:X-Name</code>{" "}
+                            &mdash; header custom
+                          </li>
+                        </ul>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="font-medium text-gray-800 dark:text-gray-200">Scopes</dt>
+                      <dd>
+                        Patterns au format{" "}
+                        <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+                          METHOD:PATH
+                        </code>
+                        . Le wildcard{" "}
+                        <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+                          *
+                        </code>{" "}
+                        matche tout.
+                      </dd>
+                      <dd class="mt-1">
+                        <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-xs text-gray-800 dark:text-gray-200">{`GET:/v1/apps/*
+POST:/v1/apps/my-app/scale`}</pre>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="font-medium text-gray-800 dark:text-gray-200">Body filters</dt>
+                      <dd>
+                        Pour les scopes POST/PUT/PATCH, filtrez le contenu du body de la
+                        requ&ecirc;te (champs autoris&eacute;s, valeurs contraintes).
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="font-medium text-gray-800 dark:text-gray-200">
+                        Dur&eacute;e de validit&eacute; (TTL)
+                      </dt>
+                      <dd>
+                        Dur&eacute;e pendant laquelle l'URL g&eacute;n&eacute;r&eacute;e est
+                        utilisable. Pass&eacute; ce d&eacute;lai, le proxy refuse les
+                        requ&ecirc;tes.
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <hr class="border-gray-200 dark:border-gray-700" />
+
+                <section class="space-y-3">
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                    Exemples &amp; r&eacute;f&eacute;rences
+                  </h3>
+
+                  {/* Scopes — Exemples */}
+                  <details>
+                    <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
+                      Scopes &mdash; Exemples
+                    </summary>
+                    <div class="mt-2 text-xs space-y-4 text-gray-600 dark:text-gray-400">
+                      <div class="space-y-2">
+                        <p class="font-medium text-gray-700 dark:text-gray-300">Cas courants</p>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Lecture seule sur toutes les apps
+                          </p>
+                          <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET:/v1/apps/*</pre>
+                          <ul class="mt-1 space-y-0.5">
+                            <li>
+                              Autorise : <code class="font-mono">GET /v1/apps/my-app</code>,{" "}
+                              <code class="font-mono">GET /v1/apps/my-app/containers</code>
+                            </li>
+                            <li>
+                              Bloque : <code class="font-mono">POST /v1/apps/my-app/scale</code>,
+                              {" "}
+                              <code class="font-mono">DELETE /v1/apps/my-app</code>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Lecture + scale sur une app pr&eacute;cise
+                          </p>
+                          <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">{`GET:/v1/apps/my-app/*\nPOST:/v1/apps/my-app/scale`}</pre>
+                          <ul class="mt-1 space-y-0.5">
+                            <li>
+                              Autorise :{" "}
+                              <code class="font-mono">GET /v1/apps/my-app/containers</code>,{" "}
+                              <code class="font-mono">POST /v1/apps/my-app/scale</code>
+                            </li>
+                            <li>
+                              Bloque :{" "}
+                              <code class="font-mono">GET /v1/apps/other-app/containers</code>,{" "}
+                              <code class="font-mono">DELETE /v1/apps/my-app</code>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">Full access</p>
+                          <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">*:*</pre>
+                          <p class="mt-1">
+                            Autorise tout. R&eacute;server au debug ou tokens tr&egrave;s courts
+                            (TTL 1h).
+                          </p>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Multi-m&eacute;thodes avec pipe
+                          </p>
+                          <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET|POST:/v1/apps/*</pre>
+                          <ul class="mt-1 space-y-0.5">
+                            <li>
+                              Autorise : <code class="font-mono">GET /v1/apps/my-app</code>,{" "}
+                              <code class="font-mono">POST /v1/apps/my-app/deployments</code>
+                            </li>
+                            <li>
+                              Bloque : <code class="font-mono">DELETE /v1/apps/my-app</code>,{" "}
+                              <code class="font-mono">PATCH /v1/apps/my-app</code>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+
+                      <hr class="border-gray-200 dark:border-gray-700" />
+
+                      <div class="space-y-2">
+                        <p class="font-medium text-gray-700 dark:text-gray-300">Edge cases</p>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Wildcard mid-path
+                          </p>
+                          <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET:/v1/apps/*/containers</pre>
+                          <p class="mt-1">
+                            Matche tous les containers de toutes les apps, mais uniquement la route
+                            {" "}
+                            <code class="font-mono">/containers</code> exacte.
+                          </p>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Exact match (pas de wildcard)
+                          </p>
+                          <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET:/v1/apps/my-app</pre>
+                          <p class="mt-1">
+                            Matche uniquement cette route exacte, pas les sous-routes.
+                          </p>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Trailing wildcard
+                          </p>
+                          <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET:/v1/apps/*</pre>
+                          <p class="mt-1">
+                            Matche tout ce qui commence par <code class="font-mono">/v1/apps/</code>
+                            {" "}
+                            suivi d'au moins un caract&egrave;re. Bloque{" "}
+                            <code class="font-mono">GET /v1/apps</code>{" "}
+                            (pas de segment apr&egrave;s).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                  {/* Body filters — Exemples */}
+                  <details>
+                    <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
+                      Body filters &mdash; Exemples
+                    </summary>
+                    <div class="mt-2 text-xs space-y-4 text-gray-600 dark:text-gray-400">
+                      <p>
+                        Les body filters s'appliquent aux scopes POST, PUT, PATCH. Ils contraignent
+                        le contenu JSON du body.
+                      </p>
+
+                      <div class="space-y-2">
+                        <p class="font-medium text-gray-700 dark:text-gray-300">Cas courants</p>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            D&eacute;ploiement scop&eacute; par branche
+                          </p>
+                          <p>
+                            Scope : <code class="font-mono">POST:/v1/apps/my-app/deployments</code>
+                          </p>
+                          <p>
+                            Filtre : <code class="font-mono">deployment.git_ref</code> ={" "}
+                            <code class="font-mono">master</code> |{" "}
+                            <code class="font-mono">main</code>
+                          </p>
+                          <ul class="mt-1 space-y-0.5">
+                            <li>
+                              Autorise : body avec <code class="font-mono">git_ref: "main"</code>
+                            </li>
+                            <li>
+                              Bloque : body avec <code class="font-mono">git_ref: "develop"</code>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Source restreinte (wildcard string)
+                          </p>
+                          <p>
+                            Filtre : <code class="font-mono">deployment.source_url</code> ={" "}
+                            <code class="font-mono">https://github.com/my-org/*</code>
+                          </p>
+                          <ul class="mt-1 space-y-0.5">
+                            <li>
+                              Autorise : URL commen&ccedil;ant par{" "}
+                              <code class="font-mono">https://github.com/my-org/</code>
+                            </li>
+                            <li>
+                              Bloque :{" "}
+                              <code class="font-mono">https://github.com/hacker/malicious/...</code>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            V&eacute;rifier qu'un champ existe
+                          </p>
+                          <p>
+                            Filtre : <code class="font-mono">deployment.git_ref</code>{" "}
+                            = wildcard (type "exists")
+                          </p>
+                          <p class="mt-1">
+                            Autorise tout body contenant le champ, quelle que soit la valeur.
+                          </p>
+                        </div>
+                      </div>
+
+                      <hr class="border-gray-200 dark:border-gray-700" />
+
+                      <div class="space-y-2">
+                        <p class="font-medium text-gray-700 dark:text-gray-300">Edge cases</p>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Type exact (boolean)
+                          </p>
+                          <p>
+                            Filtre : <code class="font-mono">container.enabled</code> ={" "}
+                            <code class="font-mono">true</code> (type boolean)
+                          </p>
+                          <p class="mt-1">
+                            Match strict sur le type JSON. La string{" "}
+                            <code class="font-mono">"true"</code> ne matche pas le boolean{" "}
+                            <code class="font-mono">true</code>.
+                          </p>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Exclusion (NOT)
+                          </p>
+                          <p>
+                            Filtre : <code class="font-mono">deployment.git_ref</code> !={" "}
+                            <code class="font-mono">develop</code>
+                          </p>
+                          <ul class="mt-1 space-y-0.5">
+                            <li>
+                              Autorise : <code class="font-mono">"main"</code>,{" "}
+                              <code class="font-mono">"release/v2"</code>
+                            </li>
+                            <li>
+                              Bloque : <code class="font-mono">"develop"</code>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Combinaison AND
+                          </p>
+                          <p>
+                            Filtre : <code class="font-mono">deployment.git_ref</code>{" "}
+                            = AND(<code class="font-mono">release/*</code>, NOT{" "}
+                            <code class="font-mono">release/broken</code>)
+                          </p>
+                          <p class="mt-1">
+                            Toutes les conditions doivent &ecirc;tre vraies simultan&eacute;ment.
+                          </p>
+                        </div>
+
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Regex dans body filter
+                          </p>
+                          <p>
+                            Filtre : <code class="font-mono">deployment.git_ref</code> = regex{" "}
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                              {`^v\\d+\\.\\d+\\.\\d+$`}
+                            </code>
+                          </p>
+                          <p class="mt-1">
+                            Matche les tags semver (<code class="font-mono">v1.2.3</code>).
+                            Limit&eacute; &agrave; 200 caract&egrave;res, string uniquement.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                  {/* Auth modes — Quand utiliser quoi */}
+                  <details>
+                    <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
+                      Auth modes &mdash; Quand utiliser quoi
+                    </summary>
+                    <div class="mt-2 text-xs space-y-3 text-gray-600 dark:text-gray-400">
+                      <div>
+                        <p class="font-medium text-gray-700 dark:text-gray-300">
+                          <code class="font-mono">bearer</code>
+                        </p>
+                        <p>
+                          Envoie{" "}
+                          <code class="font-mono">Authorization: Bearer &lt;token&gt;</code>. La
+                          majorit&eacute; des APIs REST modernes (GitHub, Stripe, etc.).
+                        </p>
+                      </div>
+                      <div>
+                        <p class="font-medium text-gray-700 dark:text-gray-300">
+                          <code class="font-mono">basic</code>
+                        </p>
+                        <p>
+                          Envoie{" "}
+                          <code class="font-mono">Authorization: Basic &lt;base64&gt;</code>. APIs
+                          legacy, services internes, registries Docker.
+                        </p>
+                      </div>
+                      <div>
+                        <p class="font-medium text-gray-700 dark:text-gray-300">
+                          <code class="font-mono">scalingo-exchange</code>
+                        </p>
+                        <p>
+                          &Eacute;change le token API Scalingo (<code class="font-mono">
+                            tk-us-...
+                          </code>) contre un bearer temporaire (1h), cach&eacute; en m&eacute;moire
+                          chiffr&eacute;, renouvel&eacute; automatiquement. Exclusivement pour l'API
+                          Scalingo.
+                        </p>
+                      </div>
+                      <div>
+                        <p class="font-medium text-gray-700 dark:text-gray-300">
+                          <code class="font-mono">header:X-API-Key</code>
+                        </p>
+                        <p>
+                          Envoie le token dans un header custom. APIs qui n'utilisent pas{" "}
+                          <code class="font-mono">Authorization</code> (Algolia, SendGrid, etc.).
+                        </p>
+                      </div>
+                    </div>
+                  </details>
+
+                  {/* Regex — Mini-guide */}
+                  <details>
+                    <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
+                      Regex &mdash; Mini-guide
+                    </summary>
+                    <div class="mt-2 text-xs space-y-3 text-gray-600 dark:text-gray-400">
+                      <div class="space-y-1.5">
+                        <p class="font-medium text-gray-700 dark:text-gray-300">
+                          Patterns courants
+                        </p>
+                        <div class="space-y-1">
+                          <div class="flex items-baseline gap-2">
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
+                              {`^release/.*`}
+                            </code>
+                            <span>
+                              matche <code class="font-mono">release/v1</code>,{" "}
+                              <code class="font-mono">release/hotfix</code>
+                            </span>
+                          </div>
+                          <div class="flex items-baseline gap-2">
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
+                              {`v\\d+`}
+                            </code>
+                            <span>
+                              matche <code class="font-mono">v1</code>,{" "}
+                              <code class="font-mono">v12</code>,{" "}
+                              <code class="font-mono">release-v3</code>
+                            </span>
+                          </div>
+                          <div class="flex items-baseline gap-2">
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
+                              {`^(main|master)$`}
+                            </code>
+                            <span>
+                              matche <code class="font-mono">main</code> ou{" "}
+                              <code class="font-mono">master</code> exactement
+                            </span>
+                          </div>
+                          <div class="flex items-baseline gap-2">
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
+                              {`^v\\d+\\.\\d+\\.\\d+$`}
+                            </code>
+                            <span>
+                              matche semver (<code class="font-mono">v1.2.3</code>)
+                            </span>
+                          </div>
+                          <div class="flex items-baseline gap-2">
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
+                              {`.*-prod$`}
+                            </code>
+                            <span>
+                              matche <code class="font-mono">api-prod</code>,{" "}
+                              <code class="font-mono">web-prod</code>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <hr class="border-gray-200 dark:border-gray-700" />
+
+                      <div class="space-y-1.5">
+                        <p class="font-medium text-gray-700 dark:text-gray-300">
+                          Pi&egrave;ges fr&eacute;quents
+                        </p>
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Match partiel par d&eacute;faut
+                          </p>
+                          <p>
+                            Le pattern{" "}
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                              release
+                            </code>{" "}
+                            matche aussi{" "}
+                            <code class="font-mono">my-release-branch</code>. Pour un match exact :
+                            {" "}
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                              {`^release$`}
+                            </code>.
+                          </p>
+                        </div>
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">
+                            Pipe dans les regex
+                          </p>
+                          <p>
+                            Dans un regex,{" "}
+                            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                              main|master
+                            </code>{" "}
+                            = "main OU master". Dans le champ scopes, le pipe s&eacute;pare les
+                            m&eacute;thodes HTTP &mdash; deux contextes diff&eacute;rents.
+                          </p>
+                        </div>
+                        <div>
+                          <p class="font-medium text-gray-700 dark:text-gray-300">Limites</p>
+                          <p>
+                            Max 200 caract&egrave;res par pattern. Test&eacute; uniquement sur des
+                            valeurs string JSON (pas num&eacute;rique ni boolean).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                </section>
+              </div>
+
+              <div
+                id="panel-examples"
+                role="tabpanel"
+                aria-labelledby="tab-examples"
+                class="hidden text-sm text-gray-600 dark:text-gray-400"
+              >
+                <div class="space-y-6">
+                  <section>
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                      Configs pr&ecirc;tes &agrave; l'emploi
+                    </h3>
+                    <p class="mb-3">
+                      Cliquez sur un exemple pour pr&eacute;-remplir le formulaire. Ajoutez votre
+                      token pour g&eacute;n&eacute;rer l'URL.
                     </p>
-                    <ul class="space-y-1 text-xs">
+                    <ul class="space-y-2">
                       <li>
                         <a
                           href="/?c=H4sIAAAAAAAA_zSMwQqDMBAF_-UdiyZKoYe9l_5Ab6WHZUkTwZrgriKI_24uXmeG2WE8x2AgJLOi5D2XwWWV9jf3ToXHYYrZSf6jAS-WannRNmySeIqhKpVcgoI-eD3f5Ne-for6G74NzEbQ_dF1xwkAAP__AwDqbEqgbwAAAA"
                           class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
                         >
                           Scalingo &mdash; lecture seule
-                        </a>{" "}
-                        <span class="text-gray-500 dark:text-gray-400">(GET:/v1/apps/*, 1h)</span>
+                        </a>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                            GET:/v1/apps/*
+                          </code>{" "}
+                          &mdash; scalingo-exchange, 1h
+                        </p>
                       </li>
                       <li>
                         <a
@@ -665,547 +1236,153 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                           class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
                         >
                           Scalingo &mdash; deploy PR
-                        </a>{" "}
-                        <span class="text-gray-500 dark:text-gray-400">
-                          (list + read/create deployments, 24h)
-                        </span>
+                        </a>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                            GET:/v1/apps/my-app-pr*/deployments
+                          </code>{" "}
+                          +{" "}
+                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                            GET|POST:/v1/apps/my-app-pr*/deployments/*
+                          </code>{" "}
+                          &mdash; 24h
+                        </p>
                       </li>
                       <li>
                         <a
                           href="/?c=H4sIAAAAAAAA_wBSAK3_eyJ0YXJnZXQiOiJodHRwczovL2FwaS5leGFtcGxlLmNvbSIsImF1dGgiOiJiZWFyZXIiLCJzY29wZXMiOlsiR0VUOioiXSwidHRsIjozNjAwfQAAAP__AwDMbCW8UgAAAA"
                           class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
                         >
-                          API g&eacute;n&eacute;rique &mdash; lecture
-                        </a>{" "}
-                        <span class="text-gray-500 dark:text-gray-400">(GET:*, bearer, 1h)</span>
+                          API g&eacute;n&eacute;rique &mdash; lecture seule
+                        </a>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                            GET:*
+                          </code>{" "}
+                          &mdash; bearer, 1h
+                        </p>
                       </li>
                     </ul>
-                  </div>
+                  </section>
 
-                  <div>
-                    <p class="font-medium text-gray-800 dark:text-gray-200">
-                      Importer une URL FGP
-                    </p>
-                    <p>
-                      Le bouton <strong>Importer</strong>{" "}
-                      dans les presets permet de d&eacute;coder une URL FGP existante (ou un blob
-                      brut) avec sa cl&eacute; client. La configuration est
-                      r&eacute;cup&eacute;r&eacute;e avec le token masqu&eacute; &mdash; fournissez
-                      le token manuellement pour g&eacute;n&eacute;rer ou tester.
-                    </p>
-                  </div>
+                  <hr class="border-gray-200 dark:border-gray-700" />
+
+                  <section>
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                      R&eacute;f&eacute;rences
+                    </h3>
+                    <ul class="space-y-2">
+                      <li>
+                        <a
+                          href="/api/docs"
+                          class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
+                        >
+                          Swagger UI
+                        </a>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                          {" "}&mdash; documentation interactive de l'API
+                        </span>
+                      </li>
+                      <li>
+                        <a
+                          href="/api/openapi.json"
+                          class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
+                        >
+                          OpenAPI JSON
+                        </a>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                          {" "}&mdash; sp&eacute;cification OpenAPI 3.0
+                        </span>
+                      </li>
+                      <li>
+                        <a
+                          href="https://github.com/lsagetlethias/fine-grained-proxy"
+                          target="_blank"
+                          rel="noopener"
+                          class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
+                        >
+                          GitHub
+                        </a>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                          {" "}&mdash; code source, issues, ADR
+                        </span>
+                      </li>
+                    </ul>
+                  </section>
                 </div>
-              </section>
+              </div>
 
-              <hr class="border-gray-200 dark:border-gray-700" />
+              <div
+                id="panel-changelog"
+                role="tabpanel"
+                aria-labelledby="tab-changelog"
+                class="hidden text-sm text-gray-600 dark:text-gray-400"
+              >
+                <div class="space-y-6">
+                  <section>
+                    <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-wider">
+                      16 avril 2026
+                    </h3>
+                    <ul class="space-y-1.5 text-xs">
+                      <li>
+                        Blob en header{" "}
+                        <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                          X-FGP-Blob
+                        </code>{" "}
+                        (dual mode URL/header)
+                      </li>
+                      <li>
+                        Section &laquo; Tester un scope &raquo; avec highlight temps r&eacute;el
+                      </li>
+                      <li>
+                        Test end-to-end via{" "}
+                        <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                          POST /api/test-proxy
+                        </code>
+                      </li>
+                      <li>
+                        Partage de config via{" "}
+                        <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">?c=</code>
+                        {" "}
+                        (sans token)
+                      </li>
+                      <li>Import d'URL FGP existante avec token redact&eacute;</li>
+                      <li>API encode/decode pour URLs publiques</li>
+                    </ul>
+                  </section>
 
-              <section>
-                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                  Infos sur les champs
-                </h3>
-                <dl class="space-y-3">
-                  <div>
-                    <dt class="font-medium text-gray-800 dark:text-gray-200">URL cible</dt>
-                    <dd>
-                      L'URL de base de l'API que vous souhaitez proxifier.
-                    </dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-gray-800 dark:text-gray-200">Mode d'auth</dt>
-                    <dd>
-                      Comment le proxy s'authentifie aupr&egrave;s de l'API cible.
-                    </dd>
-                    <dd class="mt-1">
-                      <ul class="list-disc list-inside space-y-0.5">
-                        <li>
-                          <code class="font-mono text-xs">bearer</code>{" "}
-                          &mdash; token envoy&eacute; dans{" "}
-                          <code class="font-mono text-xs">Authorization: Bearer</code>
-                        </li>
-                        <li>
-                          <code class="font-mono text-xs">basic</code> &mdash; Basic Auth
-                        </li>
-                        <li>
-                          <code class="font-mono text-xs">scalingo-exchange</code>{" "}
-                          &mdash; &eacute;change token Scalingo (tk-us-... &rarr; bearer)
-                        </li>
-                        <li>
-                          <code class="font-mono text-xs">header:X-Name</code> &mdash; header custom
-                        </li>
-                      </ul>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-gray-800 dark:text-gray-200">Scopes</dt>
-                    <dd>
-                      Patterns au format{" "}
-                      <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
-                        METHOD:PATH
-                      </code>
-                      . Le wildcard{" "}
-                      <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
-                        *
-                      </code>{" "}
-                      matche tout.
-                    </dd>
-                    <dd class="mt-1">
-                      <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-xs text-gray-800 dark:text-gray-200">{`GET:/v1/apps/*
-POST:/v1/apps/my-app/scale`}</pre>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-gray-800 dark:text-gray-200">Body filters</dt>
-                    <dd>
-                      Pour les scopes POST/PUT/PATCH, filtrez le contenu du body de la requ&ecirc;te
-                      (champs autoris&eacute;s, valeurs contraintes).
-                    </dd>
-                  </div>
-                  <div>
-                    <dt class="font-medium text-gray-800 dark:text-gray-200">
-                      Dur&eacute;e de validit&eacute; (TTL)
-                    </dt>
-                    <dd>
-                      Dur&eacute;e pendant laquelle l'URL g&eacute;n&eacute;r&eacute;e est
-                      utilisable. Pass&eacute; ce d&eacute;lai, le proxy refuse les requ&ecirc;tes.
-                    </dd>
-                  </div>
-                </dl>
-              </section>
+                  <section>
+                    <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-wider">
+                      9 avril 2026
+                    </h3>
+                    <ul class="space-y-1.5 text-xs">
+                      <li>Body filters v3 : exact, wildcard, glob, regex, not, and</li>
+                      <li>Scopes structur&eacute;s (ScopeEntry) avec filtrage JSON body</li>
+                      <li>Tailwind CSS build-time (plus de CDN)</li>
+                      <li>Type regex dans les body filters</li>
+                      <li>Preset Scalingo enrichi (permissions par app, branches)</li>
+                      <li>Logo, SEO, palette fgp-*, dark mode media</li>
+                      <li>Extraction JS &rarr; modules TypeScript (esbuild)</li>
+                      <li>Migration Zod 4</li>
+                    </ul>
+                  </section>
 
-              <hr class="border-gray-200 dark:border-gray-700" />
-
-              <section class="space-y-3">
-                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                  Exemples &amp; r&eacute;f&eacute;rences
-                </h3>
-
-                {/* Scopes — Exemples */}
-                <details>
-                  <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
-                    Scopes &mdash; Exemples
-                  </summary>
-                  <div class="mt-2 text-xs space-y-4 text-gray-600 dark:text-gray-400">
-                    <div class="space-y-2">
-                      <p class="font-medium text-gray-700 dark:text-gray-300">Cas courants</p>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Lecture seule sur toutes les apps
-                        </p>
-                        <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET:/v1/apps/*</pre>
-                        <ul class="mt-1 space-y-0.5">
-                          <li>
-                            Autorise : <code class="font-mono">GET /v1/apps/my-app</code>,{" "}
-                            <code class="font-mono">GET /v1/apps/my-app/containers</code>
-                          </li>
-                          <li>
-                            Bloque : <code class="font-mono">POST /v1/apps/my-app/scale</code>,{" "}
-                            <code class="font-mono">DELETE /v1/apps/my-app</code>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Lecture + scale sur une app pr&eacute;cise
-                        </p>
-                        <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">{`GET:/v1/apps/my-app/*\nPOST:/v1/apps/my-app/scale`}</pre>
-                        <ul class="mt-1 space-y-0.5">
-                          <li>
-                            Autorise :{" "}
-                            <code class="font-mono">GET /v1/apps/my-app/containers</code>,{" "}
-                            <code class="font-mono">POST /v1/apps/my-app/scale</code>
-                          </li>
-                          <li>
-                            Bloque :{" "}
-                            <code class="font-mono">GET /v1/apps/other-app/containers</code>,{" "}
-                            <code class="font-mono">DELETE /v1/apps/my-app</code>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">Full access</p>
-                        <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">*:*</pre>
-                        <p class="mt-1">
-                          Autorise tout. R&eacute;server au debug ou tokens tr&egrave;s courts (TTL
-                          1h).
-                        </p>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Multi-m&eacute;thodes avec pipe
-                        </p>
-                        <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET|POST:/v1/apps/*</pre>
-                        <ul class="mt-1 space-y-0.5">
-                          <li>
-                            Autorise : <code class="font-mono">GET /v1/apps/my-app</code>,{" "}
-                            <code class="font-mono">POST /v1/apps/my-app/deployments</code>
-                          </li>
-                          <li>
-                            Bloque : <code class="font-mono">DELETE /v1/apps/my-app</code>,{" "}
-                            <code class="font-mono">PATCH /v1/apps/my-app</code>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-
-                    <hr class="border-gray-200 dark:border-gray-700" />
-
-                    <div class="space-y-2">
-                      <p class="font-medium text-gray-700 dark:text-gray-300">Edge cases</p>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Wildcard mid-path
-                        </p>
-                        <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET:/v1/apps/*/containers</pre>
-                        <p class="mt-1">
-                          Matche tous les containers de toutes les apps, mais uniquement la route
-                          {" "}
-                          <code class="font-mono">/containers</code> exacte.
-                        </p>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Exact match (pas de wildcard)
-                        </p>
-                        <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET:/v1/apps/my-app</pre>
-                        <p class="mt-1">
-                          Matche uniquement cette route exacte, pas les sous-routes.
-                        </p>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Trailing wildcard
-                        </p>
-                        <pre class="rounded-md bg-gray-100 dark:bg-gray-800/50 p-2 font-mono text-gray-800 dark:text-gray-200 mt-1">GET:/v1/apps/*</pre>
-                        <p class="mt-1">
-                          Matche tout ce qui commence par <code class="font-mono">/v1/apps/</code>
-                          {" "}
-                          suivi d'au moins un caract&egrave;re. Bloque{" "}
-                          <code class="font-mono">GET /v1/apps</code> (pas de segment apr&egrave;s).
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-
-                {/* Body filters — Exemples */}
-                <details>
-                  <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
-                    Body filters &mdash; Exemples
-                  </summary>
-                  <div class="mt-2 text-xs space-y-4 text-gray-600 dark:text-gray-400">
-                    <p>
-                      Les body filters s'appliquent aux scopes POST, PUT, PATCH. Ils contraignent le
-                      contenu JSON du body.
-                    </p>
-
-                    <div class="space-y-2">
-                      <p class="font-medium text-gray-700 dark:text-gray-300">Cas courants</p>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          D&eacute;ploiement scop&eacute; par branche
-                        </p>
-                        <p>
-                          Scope : <code class="font-mono">POST:/v1/apps/my-app/deployments</code>
-                        </p>
-                        <p>
-                          Filtre : <code class="font-mono">deployment.git_ref</code> ={" "}
-                          <code class="font-mono">master</code> |{" "}
-                          <code class="font-mono">main</code>
-                        </p>
-                        <ul class="mt-1 space-y-0.5">
-                          <li>
-                            Autorise : body avec <code class="font-mono">git_ref: "main"</code>
-                          </li>
-                          <li>
-                            Bloque : body avec <code class="font-mono">git_ref: "develop"</code>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Source restreinte (wildcard string)
-                        </p>
-                        <p>
-                          Filtre : <code class="font-mono">deployment.source_url</code> ={" "}
-                          <code class="font-mono">https://github.com/my-org/*</code>
-                        </p>
-                        <ul class="mt-1 space-y-0.5">
-                          <li>
-                            Autorise : URL commen&ccedil;ant par{" "}
-                            <code class="font-mono">https://github.com/my-org/</code>
-                          </li>
-                          <li>
-                            Bloque :{" "}
-                            <code class="font-mono">https://github.com/hacker/malicious/...</code>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          V&eacute;rifier qu'un champ existe
-                        </p>
-                        <p>
-                          Filtre : <code class="font-mono">deployment.git_ref</code>{" "}
-                          = wildcard (type "exists")
-                        </p>
-                        <p class="mt-1">
-                          Autorise tout body contenant le champ, quelle que soit la valeur.
-                        </p>
-                      </div>
-                    </div>
-
-                    <hr class="border-gray-200 dark:border-gray-700" />
-
-                    <div class="space-y-2">
-                      <p class="font-medium text-gray-700 dark:text-gray-300">Edge cases</p>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Type exact (boolean)
-                        </p>
-                        <p>
-                          Filtre : <code class="font-mono">container.enabled</code> ={" "}
-                          <code class="font-mono">true</code> (type boolean)
-                        </p>
-                        <p class="mt-1">
-                          Match strict sur le type JSON. La string{" "}
-                          <code class="font-mono">"true"</code> ne matche pas le boolean{" "}
-                          <code class="font-mono">true</code>.
-                        </p>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">Exclusion (NOT)</p>
-                        <p>
-                          Filtre : <code class="font-mono">deployment.git_ref</code> !={" "}
-                          <code class="font-mono">develop</code>
-                        </p>
-                        <ul class="mt-1 space-y-0.5">
-                          <li>
-                            Autorise : <code class="font-mono">"main"</code>,{" "}
-                            <code class="font-mono">"release/v2"</code>
-                          </li>
-                          <li>
-                            Bloque : <code class="font-mono">"develop"</code>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">Combinaison AND</p>
-                        <p>
-                          Filtre : <code class="font-mono">deployment.git_ref</code>{" "}
-                          = AND(<code class="font-mono">release/*</code>, NOT{" "}
-                          <code class="font-mono">release/broken</code>)
-                        </p>
-                        <p class="mt-1">
-                          Toutes les conditions doivent &ecirc;tre vraies simultan&eacute;ment.
-                        </p>
-                      </div>
-
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Regex dans body filter
-                        </p>
-                        <p>
-                          Filtre : <code class="font-mono">deployment.git_ref</code> = regex{" "}
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                            {`^v\\d+\\.\\d+\\.\\d+$`}
-                          </code>
-                        </p>
-                        <p class="mt-1">
-                          Matche les tags semver (<code class="font-mono">v1.2.3</code>).
-                          Limit&eacute; &agrave; 200 caract&egrave;res, string uniquement.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-
-                {/* Auth modes — Quand utiliser quoi */}
-                <details>
-                  <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
-                    Auth modes &mdash; Quand utiliser quoi
-                  </summary>
-                  <div class="mt-2 text-xs space-y-3 text-gray-600 dark:text-gray-400">
-                    <div>
-                      <p class="font-medium text-gray-700 dark:text-gray-300">
-                        <code class="font-mono">bearer</code>
-                      </p>
-                      <p>
-                        Envoie{" "}
-                        <code class="font-mono">Authorization: Bearer &lt;token&gt;</code>. La
-                        majorit&eacute; des APIs REST modernes (GitHub, Stripe, etc.).
-                      </p>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-700 dark:text-gray-300">
-                        <code class="font-mono">basic</code>
-                      </p>
-                      <p>
-                        Envoie{" "}
-                        <code class="font-mono">Authorization: Basic &lt;base64&gt;</code>. APIs
-                        legacy, services internes, registries Docker.
-                      </p>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-700 dark:text-gray-300">
-                        <code class="font-mono">scalingo-exchange</code>
-                      </p>
-                      <p>
-                        &Eacute;change le token API Scalingo (<code class="font-mono">
-                          tk-us-...
-                        </code>) contre un bearer temporaire (1h), cach&eacute; en m&eacute;moire
-                        chiffr&eacute;, renouvel&eacute; automatiquement. Exclusivement pour l'API
-                        Scalingo.
-                      </p>
-                    </div>
-                    <div>
-                      <p class="font-medium text-gray-700 dark:text-gray-300">
-                        <code class="font-mono">header:X-API-Key</code>
-                      </p>
-                      <p>
-                        Envoie le token dans un header custom. APIs qui n'utilisent pas{" "}
-                        <code class="font-mono">Authorization</code> (Algolia, SendGrid, etc.).
-                      </p>
-                    </div>
-                  </div>
-                </details>
-
-                {/* Regex — Mini-guide */}
-                <details>
-                  <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
-                    Regex &mdash; Mini-guide
-                  </summary>
-                  <div class="mt-2 text-xs space-y-3 text-gray-600 dark:text-gray-400">
-                    <div class="space-y-1.5">
-                      <p class="font-medium text-gray-700 dark:text-gray-300">Patterns courants</p>
-                      <div class="space-y-1">
-                        <div class="flex items-baseline gap-2">
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
-                            {`^release/.*`}
-                          </code>
-                          <span>
-                            matche <code class="font-mono">release/v1</code>,{" "}
-                            <code class="font-mono">release/hotfix</code>
-                          </span>
-                        </div>
-                        <div class="flex items-baseline gap-2">
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
-                            {`v\\d+`}
-                          </code>
-                          <span>
-                            matche <code class="font-mono">v1</code>,{" "}
-                            <code class="font-mono">v12</code>,{" "}
-                            <code class="font-mono">release-v3</code>
-                          </span>
-                        </div>
-                        <div class="flex items-baseline gap-2">
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
-                            {`^(main|master)$`}
-                          </code>
-                          <span>
-                            matche <code class="font-mono">main</code> ou{" "}
-                            <code class="font-mono">master</code> exactement
-                          </span>
-                        </div>
-                        <div class="flex items-baseline gap-2">
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
-                            {`^v\\d+\\.\\d+\\.\\d+$`}
-                          </code>
-                          <span>
-                            matche semver (<code class="font-mono">v1.2.3</code>)
-                          </span>
-                        </div>
-                        <div class="flex items-baseline gap-2">
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded shrink-0">
-                            {`.*-prod$`}
-                          </code>
-                          <span>
-                            matche <code class="font-mono">api-prod</code>,{" "}
-                            <code class="font-mono">web-prod</code>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <hr class="border-gray-200 dark:border-gray-700" />
-
-                    <div class="space-y-1.5">
-                      <p class="font-medium text-gray-700 dark:text-gray-300">
-                        Pi&egrave;ges fr&eacute;quents
-                      </p>
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Match partiel par d&eacute;faut
-                        </p>
-                        <p>
-                          Le pattern{" "}
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                            release
-                          </code>{" "}
-                          matche aussi{" "}
-                          <code class="font-mono">my-release-branch</code>. Pour un match exact :
-                          {" "}
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                            {`^release$`}
-                          </code>.
-                        </p>
-                      </div>
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">
-                          Pipe dans les regex
-                        </p>
-                        <p>
-                          Dans un regex,{" "}
-                          <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                            main|master
-                          </code>{" "}
-                          = "main OU master". Dans le champ scopes, le pipe s&eacute;pare les
-                          m&eacute;thodes HTTP &mdash; deux contextes diff&eacute;rents.
-                        </p>
-                      </div>
-                      <div>
-                        <p class="font-medium text-gray-700 dark:text-gray-300">Limites</p>
-                        <p>
-                          Max 200 caract&egrave;res par pattern. Test&eacute; uniquement sur des
-                          valeurs string JSON (pas num&eacute;rique ni boolean).
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              </section>
-
-              <hr class="border-gray-200 dark:border-gray-700" />
-
-              <section>
-                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                  Documentation API
-                </h3>
-                <p>
-                  La sp&eacute;cification OpenAPI et le Swagger UI interactif sont disponibles sur
-                  {" "}
-                  <a
-                    href="/api/docs"
-                    class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
-                  >
-                    /api/docs
-                  </a>
-                  .
-                </p>
-              </section>
-            </nav>
+                  <section>
+                    <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-wider">
+                      8 avril 2026
+                    </h3>
+                    <ul class="space-y-1.5 text-xs">
+                      <li>Premi&egrave;re version : proxy stateless + double cl&eacute;</li>
+                      <li>Chiffrement AES-256-GCM + PBKDF2 (Web Crypto)</li>
+                      <li>4 modes d'auth : bearer, basic, scalingo-exchange, header custom</li>
+                      <li>Scopes METHOD:PATH avec wildcard</li>
+                      <li>UI de configuration (Hono JSX)</li>
+                      <li>OpenAPI 3.0 + Swagger UI</li>
+                    </ul>
+                  </section>
+                </div>
+              </div>
+            </div>
           </aside>
         </div>
       </main>
