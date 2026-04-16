@@ -6,6 +6,9 @@ import { setupApps } from "./client/apps.ts";
 import { setupTtl } from "./client/ttl.ts";
 import { setupClipboard } from "./client/clipboard.ts";
 import { setupGenerate } from "./client/generate.ts";
+import { setupTestScope } from "./client/test-scope.ts";
+import { setupImportConfig } from "./client/import-config.ts";
+import { setupShareConfig } from "./client/share-config.ts";
 import type { AppsPermissionsState } from "./client/types.ts";
 
 (function () {
@@ -56,6 +59,8 @@ import type { AppsPermissionsState } from "./client/types.ts";
     els.bodyFiltersPanel.classList.add("hidden");
   });
 
+  setupShareConfig();
+
   els.authSelect.addEventListener("change", function () {
     if (els.authSelect.value === "header:") {
       els.authHeaderName.classList.remove("hidden");
@@ -70,6 +75,8 @@ import type { AppsPermissionsState } from "./client/types.ts";
   setupTtl(els);
   setupGenerate(els, state.bodyFiltersData, showError, hideError);
   setupClipboard();
+  setupTestScope();
+  setupImportConfig();
 
   doUpdateVisibility();
 })();

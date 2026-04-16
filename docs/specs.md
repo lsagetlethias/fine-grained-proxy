@@ -132,7 +132,7 @@ Un ScopeEntry permet d'attacher des body filters à un scope. Sans `bodyFilters`
 
 - Les scopes sont **additifs** : plusieurs patterns peuvent être combinés (OR entre scopes).
 - Le matching est case-insensitive sur la méthode (`get` == `GET`).
-- Le wildcard `*` en path matche tout chemin commençant par le préfixe avant le `*`.
+- Le wildcard `*` en path matche tout chemin commençant par le préfixe avant le `*`. Le wildcard doit matcher **au moins un caractère**. Par exemple, `GET:/v1/apps/*` ne matche PAS `/v1/apps/` (trailing slash sans rien après), mais matche `/v1/apps/a`.
 - **Deny-all par défaut** : toute requête qui ne matche aucun scope est refusée avec 403 (`scope_denied`). Le proxy est une allowlist.
 - Un scope string sans `:` est interprété comme `*:{pattern}` (wildcard sur la méthode).
 
@@ -457,6 +457,7 @@ Pour le mode `scalingo-exchange`, l'exchange token → bearer compte dans le rat
 | `/api/salt` | GET | Retourne le salt serveur (`{"salt": "..."}`) |
 | `/api/generate` | POST | Génération d'URL FGP (chiffrement serveur) |
 | `/api/list-apps` | POST | Helper Scalingo : listing des apps via token exchange |
+| `/api/test-scope` | POST | Test de scopes : vérifie si une requête (méthode + path + body) est autorisée par un jeu de scopes |
 | `/api/openapi.json` | GET | Spec OpenAPI 3.0 (auto-générée depuis les schemas Zod) |
 | `/api/docs` | GET | Swagger UI (documentation interactive) |
 | `/{blob}/{path...}` | * | Proxy principal vers l'API cible |
@@ -559,7 +560,61 @@ Types de filtres disponibles dans l'UI :
 
 Pour `not` et `and`, l'UI propose des sous-types (exact, glob, existe) pour composer les conditions.
 
-### 12.5 Sécurité de l'UI
+### 12.5 Test de scopes (UI)
+
+L'UI propose une section dépliable "Tester un scope" sous les body filters. Elle permet de vérifier en temps réel si une requête (méthode + path + body optionnel) est autorisée par les scopes configurés.
+
+#### Fonctionnement
+
+1. **Highlight temps réel** : à mesure que l'utilisateur tape un path et sélectionne une méthode, les scopes matchant sont mis en surbrillance visuellement (indicateurs ✓/✗ par scope).
+2. **Run** : un bouton "Tester" envoie la requête de test à l'API `POST /api/test-scope` pour un résultat détaillé incluant les body filters.
+3. **Body JSON** : un textarea JSON optionnel (affiché pour POST/PUT/PATCH) permet de tester les body filters.
+
+#### API `POST /api/test-scope`
+
+**Input** :
+
+```json
+{
+  "method": "string",
+  "path": "string",
+  "scopes": "Scope[]",
+  "body": "unknown (optionnel)"
+}
+```
+
+**Output** :
+
+```json
+{
+  "allowed": "boolean",
+  "results": [
+    {
+      "index": "number",
+      "scope": "Scope",
+      "matched": "boolean",
+      "methodMatch": "boolean",
+      "pathMatch": "boolean",
+      "bodyMatch": "boolean | null"
+    }
+  ]
+}
+```
+
+#### Labels UI (copy)
+
+| Élément | Texte |
+|---------|-------|
+| Titre section | "Tester un scope" |
+| Label méthode | "Méthode" |
+| Label path | "Chemin de test" |
+| Placeholder path | `/v1/apps/my-app` |
+| Label body | "Body JSON (optionnel)" |
+| Bouton | "Tester" |
+| Résultat autorisé | "Accès autorisé" (vert) |
+| Résultat refusé | "Accès refusé" (rouge) |
+
+### 12.6 Sécurité de l'UI
 
 - Le token est envoyé au serveur FGP via POST HTTPS pour le chiffrement. Le serveur ne stocke jamais le token.
 - La clé client est générée côté serveur et retournée au client. Elle n'est jamais stockée.

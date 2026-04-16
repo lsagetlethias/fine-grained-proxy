@@ -51,9 +51,9 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
               {/* Preset */}
               <section>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Charger un preset
+                  Preset
                 </label>
-                <div class="flex gap-2">
+                <div class="flex items-center gap-3">
                   <button
                     type="button"
                     id="btn-preset-scalingo"
@@ -64,7 +64,7 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                   <button
                     type="button"
                     id="btn-preset-clear"
-                    class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus:ring-offset-gray-900"
+                    class="text-sm text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 focus:outline-none focus:underline"
                   >
                     R&eacute;initialiser
                   </button>
@@ -73,6 +73,78 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                   Pr&eacute;-remplit le formulaire. Le bouton &laquo; Charger les apps &raquo; est
                   disponible avec le mode d'auth Scalingo exchange.
                 </p>
+
+                <details id="import-details" class="mt-3 group">
+                  <summary
+                    id="btn-preset-import"
+                    class="cursor-pointer text-sm font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline select-none list-none [&::-webkit-details-marker]:hidden"
+                  >
+                    <span class="inline-flex items-center gap-1.5">
+                      <svg
+                        class="h-3.5 w-3.5 transition-transform duration-150 group-open:rotate-90"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                      Importer une config existante
+                    </span>
+                  </summary>
+                  <div
+                    id="import-section"
+                    class="mt-2 rounded-md border border-gray-200 dark:border-gray-700 p-3 space-y-3"
+                  >
+                    <div>
+                      <label
+                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                        for="import-blob"
+                      >
+                        URL FGP ou blob
+                      </label>
+                      <input
+                        type="text"
+                        id="import-blob"
+                        placeholder="https://fgp.example.com/eyJhbGci.../ ou eyJhbGci..."
+                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                        for="import-key"
+                      >
+                        Cl&eacute; client (X-FGP-Key)
+                      </label>
+                      <input
+                        type="text"
+                        id="import-key"
+                        placeholder="a7f2c9d4-1234-5678-..."
+                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400"
+                      />
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <button
+                        type="button"
+                        id="btn-import-decode"
+                        class="rounded-md bg-fgp-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
+                      >
+                        D&eacute;coder
+                      </button>
+                      <span
+                        id="import-status"
+                        class="text-sm font-medium"
+                        aria-live="polite"
+                        role="status"
+                      >
+                      </span>
+                    </div>
+                  </div>
+                </details>
               </section>
 
               {/* Target */}
@@ -278,6 +350,89 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                   Générer l'URL
                 </button>
               </section>
+
+              {/* Test scope */}
+              <details class="mt-6 rounded-md border border-gray-200 dark:border-gray-700">
+                <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
+                  Tester un scope
+                </summary>
+                <div class="px-4 pb-4 pt-2 space-y-3">
+                  <div class="grid grid-cols-4 gap-3">
+                    <div>
+                      <label
+                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                        for="test-method"
+                      >
+                        M&eacute;thode
+                      </label>
+                      <select
+                        id="test-method"
+                        class="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+                      >
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="DELETE">DELETE</option>
+                      </select>
+                    </div>
+                    <div class="col-span-3">
+                      <label
+                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                        for="test-path"
+                      >
+                        Chemin de test
+                      </label>
+                      <input
+                        type="text"
+                        id="test-path"
+                        placeholder="/v1/apps/my-app"
+                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div id="test-body-section" class="hidden">
+                    <label
+                      class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                      for="test-body"
+                    >
+                      Body JSON (optionnel)
+                    </label>
+                    <textarea
+                      id="test-body"
+                      rows={3}
+                      placeholder='{"deployment": {"git_ref": "main"}}'
+                      class="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+                    >
+                    </textarea>
+                  </div>
+
+                  <div id="test-scope-results" class="space-y-1" aria-live="polite"></div>
+
+                  <div class="flex items-center gap-3">
+                    <button
+                      type="button"
+                      id="btn-test-scope"
+                      class="rounded-md bg-fgp-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
+                    >
+                      Tester
+                    </button>
+                    <span
+                      id="test-scope-verdict"
+                      class="text-sm font-medium"
+                      aria-live="polite"
+                      role="status"
+                    >
+                    </span>
+                  </div>
+                  <pre
+                    id="test-scope-json"
+                    class="hidden mt-3 rounded-md bg-gray-100 dark:bg-gray-800/50 p-3 font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre max-h-48 overflow-y-auto"
+                  >
+                  </pre>
+                </div>
+              </details>
             </form>
 
             {/* Result */}
@@ -465,6 +620,80 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                     &eacute;viter les probl&egrave;mes de limite de 255 caract&egrave;res par
                     segment d'URL impos&eacute;e par certains services.
                   </p>
+                </div>
+              </section>
+
+              <hr class="border-gray-200 dark:border-gray-700" />
+
+              <section>
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                  Partage &amp; import
+                </h3>
+                <div class="space-y-3">
+                  <div>
+                    <p class="font-medium text-gray-800 dark:text-gray-200">
+                      URL de partage
+                    </p>
+                    <p>
+                      L'URL dans la barre d'adresse se met &agrave; jour automatiquement avec un
+                      param&egrave;tre{" "}
+                      <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+                        ?c=
+                      </code>{" "}
+                      qui encode la configuration (sans le token). Copiez-la pour partager un
+                      template de config &mdash; le destinataire n'aura qu'&agrave; fournir son
+                      propre token.
+                    </p>
+                  </div>
+                  <div>
+                    <p class="font-medium text-gray-800 dark:text-gray-200 mb-1">
+                      Exemples pr&ecirc;ts &agrave; l'emploi
+                    </p>
+                    <ul class="space-y-1 text-xs">
+                      <li>
+                        <a
+                          href="/?c=H4sIAAAAAAAA_zSMwQqDMBAF_-UdiyZKoYe9l_5Ab6WHZUkTwZrgriKI_24uXmeG2WE8x2AgJLOi5D2XwWWV9jf3ToXHYYrZSf6jAS-WannRNmySeIqhKpVcgoI-eD3f5Ne-for6G74NzEbQ_dF1xwkAAP__AwDqbEqgbwAAAA"
+                          class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
+                        >
+                          Scalingo &mdash; lecture seule
+                        </a>{" "}
+                        <span class="text-gray-500 dark:text-gray-400">(GET:/v1/apps/*, 1h)</span>
+                      </li>
+                      <li>
+                        <a
+                          href="/?c=H4sIAAAAAAAA_4TMvQoCMRAE4HfZ8rhc7kBE0oulgnZiEWJMDvKzZFfxUN_dbaytBmY-5gVsW_AMBiIzktHa4jxUcurWpoGcTXMJdXA1Qw_2zlHkr1X-6aItwctErqInMGfYbU9GPyb5QdJ5UZIKW6evHlNdsi9M4kW9D_vjX6o7uPTAnMBs1qtx_HwBAAD__wMA_H5GBrIAAAA"
+                          class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
+                        >
+                          Scalingo &mdash; deploy PR
+                        </a>{" "}
+                        <span class="text-gray-500 dark:text-gray-400">
+                          (list + read/create deployments, 24h)
+                        </span>
+                      </li>
+                      <li>
+                        <a
+                          href="/?c=H4sIAAAAAAAA_wBSAK3_eyJ0YXJnZXQiOiJodHRwczovL2FwaS5leGFtcGxlLmNvbSIsImF1dGgiOiJiZWFyZXIiLCJzY29wZXMiOlsiR0VUOioiXSwidHRsIjozNjAwfQAAAP__AwDMbCW8UgAAAA"
+                          class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
+                        >
+                          API g&eacute;n&eacute;rique &mdash; lecture
+                        </a>{" "}
+                        <span class="text-gray-500 dark:text-gray-400">(GET:*, bearer, 1h)</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p class="font-medium text-gray-800 dark:text-gray-200">
+                      Importer une URL FGP
+                    </p>
+                    <p>
+                      Le bouton <strong>Importer</strong>{" "}
+                      dans les presets permet de d&eacute;coder une URL FGP existante (ou un blob
+                      brut) avec sa cl&eacute; client. La configuration est
+                      r&eacute;cup&eacute;r&eacute;e avec le token masqu&eacute; &mdash; fournissez
+                      le token manuellement pour g&eacute;n&eacute;rer ou tester.
+                    </p>
+                  </div>
                 </div>
               </section>
 

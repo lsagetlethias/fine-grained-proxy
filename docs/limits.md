@@ -128,3 +128,9 @@ Un AND sur zero conditions est trivialement vrai (vacuous truth). Ca revient a u
 | `and` a 1 element | interdit | `isValidObjectValue` |
 
 Toutes les limites sont validees au moment du dechiffrement du blob (`decryptBlob`). Un blob qui depasse une limite est rejete avec une erreur `malformed BlobConfig`. L'UI doit aussi valider ces limites a la creation pour donner un feedback clair a l'utilisateur.
+
+---
+
+## 8. Wildcard `*` — minimum 1 caractère
+
+Le wildcard `*` dans un pattern de scope doit matcher au moins un caractère. `GET:/v1/apps/*` matche `/v1/apps/my-app` mais pas `/v1/apps/`. Cela évite les faux positifs sur des paths vides ou des trailing slashes.
