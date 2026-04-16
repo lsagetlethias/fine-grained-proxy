@@ -39,6 +39,8 @@ export function setupPresets(
       delete appsPerms[keys[i]];
     }
 
+    history.replaceState(null, "", window.location.pathname);
+
     updateVisibility();
   });
 }
