@@ -25,8 +25,10 @@ Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de gen
 
 ### Lancer en dev
 
+Copier `.env.example` en `.env` et renseigner les valeurs :
+
 ```bash
-export FGP_SALT="mon-salt-secret"
+cp .env.example .env
 deno task dev
 ```
 
@@ -79,6 +81,22 @@ curl http://localhost:8000/eyJhbGci.../v1/apps \
 
 Le mode header est prefere pour eviter les problemes de limite de 255 caracteres par segment d'URL imposes par certains services. Le proxy dechiffre le blob, verifie le TTL et les scopes, puis forward la requete vers l'API cible avec le mode d'auth configure.
 
+### 3. Partager une configuration
+
+L'UI genere automatiquement une URL partageable avec le parametre `?c=` contenant la configuration (target, auth, scopes, TTL) compressee en gzip + base64url. Le token n'est jamais inclus dans l'URL partagee. Ouvrir cette URL pre-remplit le formulaire.
+
+### 4. Importer depuis un blob existant
+
+Via l'UI (bouton "Importer" dans les presets) ou via curl :
+
+```bash
+curl -X POST http://localhost:8000/api/decode \
+  -H "Content-Type: application/json" \
+  -d '{"blob": "eyJhbGci...", "key": "a7f2c9d4-1234-5678-abcd-ef0123456789"}'
+```
+
+Retourne la configuration complete avec le token redacte. Utile pour inspecter ou dupliquer une configuration existante.
+
 ## API
 
 | Endpoint | Methode | Description |
@@ -88,6 +106,9 @@ Le mode header est prefere pour eviter les problemes de limite de 255 caracteres
 | `/api/salt` | GET | Salt serveur (public) |
 | `/api/generate` | POST | Generation d'URL FGP |
 | `/api/list-apps` | POST | Helper Scalingo : listing des apps |
+| `/api/test-scope` | POST | Test scope matching : verifie si methode + path + body est autorise par des scopes |
+| `/api/test-proxy` | POST | Test end-to-end : appel reel vers l'API cible avec verification scopes et body filters |
+| `/api/decode` | POST | Decode un blob chiffre avec sa cle, retourne la config (token redacte) |
 | `/api/openapi.json` | GET | Spec OpenAPI 3.0 |
 | `/api/docs` | GET | Swagger UI |
 | `/{blob}/{path...}` | * | Proxy vers l'API cible |

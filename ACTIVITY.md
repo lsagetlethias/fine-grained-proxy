@@ -131,6 +131,52 @@
   - ADR-0005 : Dual mode blob URL/header — header prioritaire, URL en fallback
   - Catch-all middleware (`*`) pour le header mode plutôt qu'une route dédiée
   - Pas de breaking change : mode URL inchangé, champ `blob` additionnel dans la réponse API
+
+## 2026-04-16 — Section "Tester un scope" (UI + API)
+
+- **Changements** :
+  - Nouvel endpoint `POST /api/test-scope` (Zod/OpenAPI) : vérifie si une requête (méthode + path + body) est autorisée par un jeu de scopes
+  - Module client `src/ui/client/test-scope.ts` : matching client-side (matchPath, parseScope), debounce 150ms, appel API pour body filters
+  - Section `<details>` dans le formulaire : méthode, path, body JSON, indicateurs ✓/✗ temps réel par scope, bouton Tester
+  - Doc wildcard "minimum 1 caractère" dans specs.md + limits.md
+  - Specs section test-scope dans specs.md (highlight temps réel, run API, body JSON)
+  - 10 tests d'intégration AC-15.1 à AC-15.9
+  - Fiches de poste par rôle dans `docs/team/` (lead, dev, po, testeur, designer)
+- **Décisions** :
+  - Pas d'ADR : outil de debug UI, pas structurant
+  - Matching client-side pour le temps réel (debounce) + appel API uniquement pour les body filters (besoin serveur)
+
+## 2026-04-16 — URL publique `?c=` (config sharing)
+
+- **Changements** :
+  - Partage de configuration via paramètre URL `?c=` : gzip + base64url de `{target, auth, scopes, ttl}` (sans token)
+  - Auto-update temps réel dans la barre d'adresse via `history.replaceState`
+  - Decode au chargement : pré-remplissage automatique du formulaire
+  - Module client `src/ui/client/share-config.ts`
+  - Suppression de la section share-url (doublon avec la barre d'adresse)
+  - Reset du formulaire vide le paramètre `?c=`
+- **Décisions** :
+  - Pas d'ADR : encoding standard, pas de décision structurante
+  - Pas de token dans l'URL partagée (sécurité)
+
+## 2026-04-16 — Import FGP (decode blob)
+
+- **Changements** :
+  - Nouvel endpoint `POST /api/decode` : déchiffre un blob avec sa clé client, retourne la config complète avec token redacté
+  - Module client `src/ui/client/import-config.ts` : bouton "Importer" dans les presets, extraction blob depuis URL ou brut
+  - Pré-remplissage du formulaire après import, token laissé vide (redacté affiché en status)
+  - 7 tests d'intégration AC-16
+- **Décisions** :
+  - Token toujours redacté dans la réponse decode (sécurité, jamais renvoyé en clair)
+
+## 2026-04-16 — Fiches de poste, .env, doc
+
+- **Changements** :
+  - Fiches de poste par rôle dans `docs/team/` : lead, dev, po, testeur, designer
+  - `.env.example` + `.env` + `--env-file` dans deno.json
+  - Doc aside "Partage & import" dans l'UI
+  - Nouvel endpoint `POST /api/test-proxy` : test end-to-end avec vrai appel API cible
+  - 312 tests, 0 failed
 - **Prochaines étapes** :
   - Premier déploiement Deno Deploy
   - Test e2e avec un vrai token Scalingo
