@@ -50,7 +50,7 @@ src/
   crypto/           — chiffrement/déchiffrement blob, dérivation clé, gzip
   auth/             — client auth (Scalingo exchange), cache bearer, singleflight
   ui/               — pages JSX (config-page, layout, logo/SEO)
-  ui/client/        — modules TS client (presets, body-filters, apps, generate, ttl, clipboard, scopes, test-scope, share-config, import-config)
+  ui/client/        — modules TS client (presets, body-filters, apps, generate, ttl, clipboard, scopes, test-scope, share-config, import-config, tabs, elements, types)
   ui/tailwind.css   — source Tailwind (build-time → static/styles.css)
 tailwind.config.js  — config Tailwind (couleurs fgp, dark mode media)
 static/             — assets compilés (client.js, styles.css) — gitignored

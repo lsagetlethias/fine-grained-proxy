@@ -169,13 +169,20 @@
 - **Décisions** :
   - Token toujours redacté dans la réponse decode (sécurité, jamais renvoyé en clair)
 
-## 2026-04-16 — Fiches de poste, .env, doc
+## 2026-04-16 — Fiches de poste, .env, doc, UX polish
 
 - **Changements** :
   - Fiches de poste par rôle dans `docs/team/` : lead, dev, po, testeur, designer
   - `.env.example` + `.env` + `--env-file` dans deno.json
   - Doc aside "Partage & import" dans l'UI
   - Nouvel endpoint `POST /api/test-proxy` : test end-to-end avec vrai appel API cible
+  - Endpoints `POST /api/share/encode` et `POST /api/share/decode` pour URLs publiques
+  - Champ "Nom de la configuration" dans le formulaire (cosmétique, inclus dans `?c=`)
+  - Body filters inclus dans l'URL publique `?c=`
+  - Presets réorganisés en `<details>/<summary>` (accordéons)
+  - Fix pipe methods (`GET|POST`) dans le scope matching
+  - `version.txt` build-time pour le SHA git dans le footer
+  - Onglets Doc / Exemples / Changelog dans l'aside UI (module `tabs.ts`)
   - 312 tests, 0 failed
 - **Prochaines étapes** :
   - Premier déploiement Deno Deploy

@@ -84,7 +84,7 @@ Le mode header est prefere pour eviter les problemes de limite de 255 caracteres
 
 ### 3. Partager une configuration
 
-L'UI genere automatiquement une URL partageable avec le parametre `?c=` contenant la configuration (target, auth, scopes, TTL) compressee en gzip + base64url. Le token n'est jamais inclus dans l'URL partagee. Ouvrir cette URL pre-remplit le formulaire.
+L'UI genere automatiquement une URL partageable avec le parametre `?c=` contenant la configuration (nom, target, auth, scopes, body filters, TTL) compressee en gzip + base64url. Le token n'est jamais inclus dans l'URL partagee. Ouvrir cette URL pre-remplit le formulaire. Le champ "Nom" est optionnel et sert a identifier la configuration dans l'URL partagee.
 
 ### 4. Importer depuis un blob existant
 
@@ -110,6 +110,8 @@ Retourne la configuration complete avec le token redacte. Utile pour inspecter o
 | `/api/test-scope` | POST | Test scope matching : verifie si methode + path + body est autorise par des scopes |
 | `/api/test-proxy` | POST | Test end-to-end : appel reel vers l'API cible avec verification scopes et body filters |
 | `/api/decode` | POST | Decode un blob chiffre avec sa cle, retourne la config (token redacte) |
+| `/api/share/encode` | POST | Encode une config (target, auth, scopes, TTL, body filters) en string gzip+base64url pour partage |
+| `/api/share/decode` | POST | Decode une config partagee depuis un string gzip+base64url |
 | `/api/openapi.json` | GET | Spec OpenAPI 3.0 |
 | `/api/docs` | GET | Swagger UI |
 | `/{blob}/{path...}` | * | Proxy vers l'API cible |
