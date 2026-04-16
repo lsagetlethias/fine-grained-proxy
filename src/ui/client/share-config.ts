@@ -1,65 +1,8 @@
-interface PublicConfig {
-  target: string;
-  auth: string;
-  scopes: string[];
-  ttl: number;
-}
-
-function base64UrlEncode(data: Uint8Array): string {
-  const base64 = btoa(String.fromCharCode(...data));
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function base64UrlDecode(str: string): Uint8Array {
-  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
-}
-
-async function compressConfig(config: PublicConfig): Promise<string> {
-  const json = new TextEncoder().encode(JSON.stringify(config));
-  const cs = new CompressionStream("gzip");
-  const writer = cs.writable.getWriter();
-  writer.write(json);
-  writer.close();
-  const reader = cs.readable.getReader();
-  const chunks: Uint8Array[] = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  const compressed = new Uint8Array(chunks.reduce((acc, c) => acc + c.length, 0));
-  let offset = 0;
-  for (const chunk of chunks) {
-    compressed.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return base64UrlEncode(compressed);
-}
-
-async function decompressConfig(encoded: string): Promise<PublicConfig> {
-  const compressed = base64UrlDecode(encoded);
-  const ds = new DecompressionStream("gzip");
-  const writer = ds.writable.getWriter();
-  writer.write(compressed);
-  writer.close();
-  const reader = ds.readable.getReader();
-  const chunks: Uint8Array[] = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  const decompressed = new Uint8Array(chunks.reduce((acc, c) => acc + c.length, 0));
-  let offset = 0;
-  for (const chunk of chunks) {
-    decompressed.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return JSON.parse(new TextDecoder().decode(decompressed));
-}
+import {
+  decodePublicConfig,
+  encodePublicConfig,
+  type PublicConfig,
+} from "../../crypto/share.ts";
 
 function readCurrentConfig(): PublicConfig | null {
   const target = (document.getElementById("target") as HTMLInputElement | null)?.value ?? "";
@@ -144,7 +87,7 @@ async function updateShareUrl(): Promise<void> {
     return;
   }
 
-  const encoded = await compressConfig(config);
+  const encoded = await encodePublicConfig(config);
   const url = new URL(window.location.href);
   url.searchParams.set("c", encoded);
   history.replaceState(null, "", url.toString());
@@ -154,7 +97,7 @@ export function setupShareConfig(): void {
   const params = new URLSearchParams(window.location.search);
   const encoded = params.get("c");
   if (encoded) {
-    decompressConfig(encoded).then((config) => {
+    decodePublicConfig(encoded).then((config) => {
       applyConfig(config);
     }).catch(() => {
       // noop
