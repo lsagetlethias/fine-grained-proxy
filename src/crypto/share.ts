@@ -1,8 +1,13 @@
 export interface PublicConfig {
   target: string;
   auth: string;
-  scopes: string[];
+  scopes: unknown[];
   ttl: number;
+  test?: {
+    method: string;
+    path: string;
+    body?: string;
+  };
 }
 
 function base64UrlEncode(data: Uint8Array): string {

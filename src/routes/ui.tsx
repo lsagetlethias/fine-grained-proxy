@@ -177,8 +177,13 @@ const DecodeResponseSchema = z.object({
 const ShareEncodeBodySchema = z.object({
   target: z.string().min(1).openapi({ example: "https://api.osc-fr1.scalingo.com" }),
   auth: z.string().min(1).openapi({ example: "scalingo-exchange" }),
-  scopes: z.array(z.string()).min(1).openapi({ example: ["GET:/v1/apps/*"] }),
+  scopes: z.array(ScopeSchema).min(1).openapi({ example: ["GET:/v1/apps/*"] }),
   ttl: z.number().openapi({ example: 3600 }),
+  test: z.object({
+    method: z.string(),
+    path: z.string(),
+    body: z.string().optional(),
+  }).optional(),
 }).openapi("ShareEncodeBody");
 
 const ShareEncodeResponseSchema = z.object({
@@ -193,8 +198,13 @@ const ShareDecodeBodySchema = z.object({
 const ShareDecodeResponseSchema = z.object({
   target: z.string(),
   auth: z.string(),
-  scopes: z.array(z.string()),
+  scopes: z.array(z.unknown()),
   ttl: z.number(),
+  test: z.object({
+    method: z.string(),
+    path: z.string(),
+    body: z.string().optional(),
+  }).optional(),
 }).openapi("ShareDecodeResponse");
 
 // --- Route definitions ---

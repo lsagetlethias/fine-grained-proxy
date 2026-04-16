@@ -3,8 +3,10 @@ import {
   encodePublicConfig,
   type PublicConfig,
 } from "../../crypto/share.ts";
+import { buildScopes } from "./generate.ts";
+import type { FilterData } from "./types.ts";
 
-function readCurrentConfig(): PublicConfig | null {
+function readCurrentConfig(bodyFiltersData: Record<string, FilterData[]>): PublicConfig | null {
   const target = (document.getElementById("target") as HTMLInputElement | null)?.value ?? "";
   const authSelect = (document.getElementById("auth") as HTMLSelectElement | null)?.value ?? "";
   const authHeaderName =
@@ -12,8 +14,10 @@ function readCurrentConfig(): PublicConfig | null {
   const auth = authSelect === "header:" && authHeaderName
     ? `header:${authHeaderName}`
     : authSelect;
-  const scopesRaw = (document.getElementById("scopes") as HTMLTextAreaElement | null)?.value ?? "";
-  const scopes = scopesRaw.split("\n").filter((l) => l.trim() !== "");
+
+  const scopesTextarea = document.getElementById("scopes") as HTMLTextAreaElement | null;
+  const rawLines = scopesTextarea?.value.split("\n").filter((l) => l.trim() !== "") ?? [];
+  const scopes = scopesTextarea ? buildScopes(scopesTextarea, bodyFiltersData) : [];
 
   const ttlRadio = document.querySelector<HTMLInputElement>("input[name=ttl]:checked");
   let ttl = 86400;
@@ -26,9 +30,26 @@ function readCurrentConfig(): PublicConfig | null {
     }
   }
 
-  if (!target && scopes.length === 0) return null;
+  if (!target && rawLines.length === 0) return null;
 
-  return { target, auth, scopes, ttl };
+  const testMethod = (document.getElementById("test-method") as HTMLSelectElement | null)?.value;
+  const testPath = (document.getElementById("test-path") as HTMLInputElement | null)?.value;
+  const testBody = (document.getElementById("test-body") as HTMLTextAreaElement | null)?.value;
+
+  const test = testPath
+    ? { method: testMethod ?? "GET", path: testPath, body: testBody || undefined }
+    : undefined;
+
+  return { target, auth, scopes, ttl, test };
+}
+
+function scopeToLine(scope: unknown): string {
+  if (typeof scope === "string") return scope;
+  const entry = scope as { methods?: string[]; pattern?: string };
+  if (entry.methods && entry.pattern) {
+    return `${entry.methods.join("|")}:${entry.pattern}`;
+  }
+  return String(scope);
 }
 
 function applyConfig(config: PublicConfig): void {
@@ -53,7 +74,7 @@ function applyConfig(config: PublicConfig): void {
 
   const scopesTextarea = document.getElementById("scopes") as HTMLTextAreaElement | null;
   if (scopesTextarea) {
-    scopesTextarea.value = config.scopes.join("\n");
+    scopesTextarea.value = config.scopes.map(scopeToLine).join("\n");
     scopesTextarea.dispatchEvent(new Event("input"));
   }
 
@@ -76,10 +97,19 @@ function applyConfig(config: PublicConfig): void {
       if (customInput) customInput.value = ttlValue;
     }
   }
+
+  if (config.test) {
+    const testMethod = document.getElementById("test-method") as HTMLSelectElement | null;
+    const testPath = document.getElementById("test-path") as HTMLInputElement | null;
+    const testBody = document.getElementById("test-body") as HTMLTextAreaElement | null;
+    if (testMethod) testMethod.value = config.test.method;
+    if (testPath) testPath.value = config.test.path;
+    if (testBody && config.test.body) testBody.value = config.test.body;
+  }
 }
 
-async function updateShareUrl(): Promise<void> {
-  const config = readCurrentConfig();
+async function updateShareUrl(bodyFiltersData: Record<string, FilterData[]>): Promise<void> {
+  const config = readCurrentConfig(bodyFiltersData);
   if (!config) {
     const url = new URL(window.location.href);
     url.searchParams.delete("c");
@@ -93,7 +123,7 @@ async function updateShareUrl(): Promise<void> {
   history.replaceState(null, "", url.toString());
 }
 
-export function setupShareConfig(): void {
+export function setupShareConfig(bodyFiltersData: Record<string, FilterData[]>): void {
   const params = new URLSearchParams(window.location.search);
   const encoded = params.get("c");
   if (encoded) {
@@ -108,11 +138,14 @@ export function setupShareConfig(): void {
   function scheduleUpdate(): void {
     if (debounceTimer !== null) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      updateShareUrl();
+      updateShareUrl(bodyFiltersData);
     }, 500);
   }
 
-  const fields = ["target", "auth", "auth-header-name", "scopes", "custom-ttl"];
+  const fields = [
+    "target", "auth", "auth-header-name", "scopes", "custom-ttl",
+    "test-method", "test-path", "test-body",
+  ];
   for (const id of fields) {
     const el = document.getElementById(id);
     if (el) {

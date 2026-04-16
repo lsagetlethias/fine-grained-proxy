@@ -155,7 +155,9 @@ export function buildScopes(
       }
     }
     if (serializedFilters.length > 0) {
-      const methods = parsed.method === "*" ? ["*"] : [parsed.method];
+      const methods = parsed.method === "*"
+        ? ["*"]
+        : (parsed.method.includes("|") ? parsed.method.split("|") : [parsed.method]);
       result.push({
         methods: methods,
         pattern: parsed.path,

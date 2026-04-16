@@ -60,7 +60,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
     els.bodyFiltersPanel.classList.add("hidden");
   });
 
-  setupShareConfig();
+  setupShareConfig(state.bodyFiltersData);
 
   els.authSelect.addEventListener("change", function () {
     if (els.authSelect.value === "header:") {
