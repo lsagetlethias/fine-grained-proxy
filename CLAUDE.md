@@ -6,8 +6,9 @@
 
 ## Projet
 - **Fine-Grained Proxy** : proxy HTTP stateless et API-agnostique qui ajoute des tokens fine-grained (scoping par méthode HTTP, chemin, et contenu du body) devant n'importe quelle API.
-- **Zero storage** : aucune base de données. Le token + cible + auth + scopes + TTL sont chiffrés (gzip + AES-256-GCM) dans l'URL elle-même.
-- **Double clé** : le blob URL est déchiffrable uniquement avec une clé client (header `X-FGP-Key`) + un salt serveur. L'URL seule est inexploitable.
+- **Zero storage** : aucune base de données. Le token + cible + auth + scopes + TTL sont chiffrés (gzip + AES-256-GCM) dans un blob.
+- **Dual mode blob** : le blob peut être dans l'URL (`/{blob}/path`) ou en header (`X-FGP-Blob`). Le mode header est recommandé pour éviter les limites de 255 chars par segment d'URL.
+- **Double clé** : le blob est déchiffrable uniquement avec une clé client (header `X-FGP-Key`) + un salt serveur. Le blob seul est inexploitable.
 - **TTL** : expiration encodée dans le blob, vérifiée à chaque requête.
 - **4 modes d'auth** : bearer, basic, scalingo-exchange, header custom. Scalingo est un cas d'usage parmi d'autres.
 - **Blob v2/v3** : v2 = scopes string METHOD:PATH, v3 = scopes mixtes string + ScopeEntry avec body filters.
@@ -58,6 +59,7 @@ tests/
   teste2e/          — tests e2e
 docs/
   adr/              — Architecture Decision Records
+  team/             — fiches de poste par rôle (dev, po, testeur, designer, lead)
   specs.md          — spécifications fonctionnelles v3
   limits.md         — limites fonctionnelles body filters
 ```
@@ -72,13 +74,14 @@ docs/
 
 ## Flow proxy
 ```
-Requête → valider path → vérifier taille blob → extraire X-FGP-Key
+Requête → extraire blob (header X-FGP-Blob prioritaire, sinon premier segment URL)
+  → vérifier taille blob → extraire X-FGP-Key
   → PBKDF2(client_key + server_salt) → déchiffrer blob (gunzip + AES-256-GCM)
   → valider auth mode → vérifier TTL
   → parser body si body filters requis (POST/PUT/PATCH + JSON)
   → vérifier scopes vs méthode/path/body
   → auth (bearer direct, basic, header custom, ou scalingo-exchange avec cache)
-  → forward vers config.target avec auth headers
+  → forward vers config.target avec auth headers (X-FGP-Key et X-FGP-Blob strippés)
   → renvoyer réponse (filtrage Set-Cookie)
 ```
 
@@ -87,6 +90,16 @@ Requête → valider path → vérifier taille blob → extraire X-FGP-Key
 - `FGP_SALT` — salt serveur pour la dérivation de clé (requis)
 - `SCALINGO_API_URL` — URL de l'API Scalingo pour le helper list-apps (défaut: https://api.osc-fr1.scalingo.com)
 - `SCALINGO_AUTH_URL` — URL du service auth Scalingo pour le mode scalingo-exchange (défaut: https://auth.scalingo.com)
+
+## Équipe multi-agent
+- **Référence complète** : `docs/ia-architecture-reference.md` — setup, rôles, skills, process type
+- **Fiches de poste** dans `docs/team/` — une fiche par rôle avec responsabilités, scope, skills, checklist
+  - `lead.md` — orga, review structurelle, copilotage archi, commit
+  - `dev.md` — implémentation, /verif obligatoire, self-review
+  - `po.md` — specs, copy/contenu, /sync-docs obligatoire
+  - `testeur.md` — challenge specs, AC Given/When/Then, /add-tests, /verif
+  - `designer.md` — specs UI/UX dans docs/design/, review a11y, PAS d'intégration
+- **Avant de dispatcher** : lire la fiche du rôle correspondant et l'inclure dans le brief de l'agent
 
 ## Documentation
 - **OpenAPI** : `GET /api/openapi.json` — spec OpenAPI 3.0 auto-générée depuis le code (schemas Zod)

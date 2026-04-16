@@ -52,14 +52,16 @@ Si tu vois un problème ou une amélioration possible, tu le dis sans hésiter.
 
 ### Rôles
 
-| Rôle | Responsabilité | Scope fichiers |
-|------|---------------|----------------|
-| **Lead dev** (Claude principal) | Orga, review, intégration, recadrage, copilotage archi avec l'utilisateur | Tous (intégration) |
-| **Dev** | Code, implémentation, corrections, /verif de lui-même | `src/`, `tests/` |
-| **PO** | Expression de besoin → specs, mapping fonctionnel, copy/contenu, sync-docs | `docs/`, `*.md` |
-| **Designer** | Specs UI/UX (wireframes, classes, structure JSX), review a11y/design — **PAS d'intégration** | `docs/design/` (specs uniquement) |
-| **Testeur** | QA + dev de tests, challenge les specs du PO, recette, matrice AC | `tests/`, `docs/review/` |
-| **SEO** (ponctuel) | Meta, logo, HTML sémantique, liens — **a le droit de coder** | `src/ui/layout.tsx`, `src/ui/config-page.tsx` |
+Chaque rôle a une **fiche de poste détaillée** dans `docs/team/` (responsabilités, scope fichiers, skills, checklist fin de tâche). Le lead DOIT lire la fiche avant de spawner l'agent correspondant.
+
+| Rôle | Fiche | Responsabilité | Scope fichiers |
+|------|-------|---------------|----------------|
+| **Lead dev** (Claude principal) | [`docs/team/lead.md`](team/lead.md) | Orga, review, intégration, recadrage, copilotage archi avec l'utilisateur | Tous (intégration) |
+| **Dev** | [`docs/team/dev.md`](team/dev.md) | Code, implémentation, corrections, /verif de lui-même | `src/`, `tests/` |
+| **PO** | [`docs/team/po.md`](team/po.md) | Expression de besoin → specs, mapping fonctionnel, copy/contenu, /sync-docs | `docs/`, `*.md` |
+| **Designer** | [`docs/team/designer.md`](team/designer.md) | Specs UI/UX (wireframes, classes, structure JSX), review a11y/design — **PAS d'intégration** | `docs/design/` (specs uniquement) |
+| **Testeur** | [`docs/team/testeur.md`](team/testeur.md) | QA + dev de tests, challenge les specs du PO, recette, matrice AC | `tests/`, `docs/review/` |
+| **SEO** (ponctuel) | — | Meta, logo, HTML sémantique, liens — **a le droit de coder** | `src/ui/layout.tsx`, `src/ui/config-page.tsx` |
 
 ### Règles d'organisation
 

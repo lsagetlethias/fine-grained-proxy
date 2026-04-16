@@ -114,3 +114,23 @@
 - **Prochaines étapes** :
   - Premier déploiement Deno Deploy
   - Test e2e avec un vrai token Scalingo
+
+## 2026-04-16 — Dual mode blob : header X-FGP-Blob
+
+- **Changements** :
+  - Nouveau middleware `blobHeaderProxy()` monté en catch-all avant toutes les routes
+  - Factorisation logique proxy dans `handleProxy(c, blobRaw, proxyPath)` (plus de duplication)
+  - `proxyMiddleware()` simplifié, délègue à `handleProxy`
+  - Header `X-FGP-Blob` strippé avant forward (comme `X-FGP-Key`)
+  - API `/api/generate` retourne `{ url, key, blob }` (champ `blob` ajouté)
+  - UI : champ blob copiable dans les résultats, double exemple curl (URL + header mode)
+  - Doc aside : encart "Mode header (recommandé)" avec mention limite 255 chars
+  - 8 tests d'intégration AC-14.1 à AC-14.8 (header mode, fallback URL, strip headers, erreurs, query string)
+  - 295 tests, 0 failed
+- **Décisions** :
+  - ADR-0005 : Dual mode blob URL/header — header prioritaire, URL en fallback
+  - Catch-all middleware (`*`) pour le header mode plutôt qu'une route dédiée
+  - Pas de breaking change : mode URL inchangé, champ `blob` additionnel dans la réponse API
+- **Prochaines étapes** :
+  - Premier déploiement Deno Deploy
+  - Test e2e avec un vrai token Scalingo

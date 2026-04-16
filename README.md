@@ -2,7 +2,7 @@
 
 # Fine-Grained Proxy (FGP)
 
-Proxy HTTP stateless et API-agnostique qui ajoute des tokens fine-grained (scoping par methode HTTP, chemin et contenu du body) devant n'importe quelle API. Zero storage, double cle, scopes `METHOD:PATH` avec body filters optionnels.
+Proxy HTTP stateless et API-agnostique qui ajoute des tokens fine-grained (scoping par methode HTTP, chemin et contenu du body) devant n'importe quelle API. Zero storage, double cle, scopes `METHOD:PATH` avec body filters optionnels. Le blob chiffre peut etre dans l'URL ou en header `X-FGP-Blob`.
 
 ## Pourquoi
 
@@ -55,18 +55,29 @@ Reponse :
 ```json
 {
   "url": "http://localhost:8000/eyJhbGci.../",
-  "key": "a7f2c9d4-1234-5678-abcd-ef0123456789"
+  "key": "a7f2c9d4-1234-5678-abcd-ef0123456789",
+  "blob": "eyJhbGci..."
 }
 ```
 
 ### 2. Utiliser l'URL generee pour proxifier
+
+**Mode header (recommande)** — le blob passe en header, l'URL reste propre :
+
+```bash
+curl http://localhost:8000/v1/apps \
+  -H "X-FGP-Key: a7f2c9d4-1234-5678-abcd-ef0123456789" \
+  -H "X-FGP-Blob: eyJhbGci..."
+```
+
+**Mode URL** — le blob est dans l'URL (compatibilite) :
 
 ```bash
 curl http://localhost:8000/eyJhbGci.../v1/apps \
   -H "X-FGP-Key: a7f2c9d4-1234-5678-abcd-ef0123456789"
 ```
 
-Le proxy dechiffre le blob, verifie le TTL et les scopes, puis forward la requete vers l'API cible avec le mode d'auth configure.
+Le mode header est prefere pour eviter les problemes de limite de 255 caracteres par segment d'URL imposes par certains services. Le proxy dechiffre le blob, verifie le TTL et les scopes, puis forward la requete vers l'API cible avec le mode d'auth configure.
 
 ## API
 
@@ -85,9 +96,9 @@ Documentation OpenAPI complete : [Swagger UI](/api/docs)
 
 ## Architecture
 
-### Blob chiffre dans l'URL
+### Blob chiffre (URL ou header)
 
-Toute la config (token, cible, auth, scopes, body filters, TTL) est serializee en JSON, compressee (gzip), puis chiffree avec AES-256-GCM. La cle de chiffrement est derivee via PBKDF2 a partir de deux composants :
+Toute la config (token, cible, auth, scopes, body filters, TTL) est serializee en JSON, compressee (gzip), puis chiffree avec AES-256-GCM. Le blob peut etre transmis dans l'URL (`/{blob}/path`) ou via le header `X-FGP-Blob` (recommande). La cle de chiffrement est derivee via PBKDF2 a partir de deux composants :
 
 - **Cle client** (`X-FGP-Key`) : generee a la creation, transmise au client, jamais stockee sur le serveur
 - **Salt serveur** (`FGP_SALT`) : configure sur le serveur, inutile sans la cle client
@@ -135,13 +146,15 @@ Types de body filters : `any` (exact match), `wildcard` (champ existe), `stringw
 ### Flow d'une requete proxy
 
 ```
-Requete -> valider path -> verifier taille blob -> extraire X-FGP-Key
+Requete -> extraire blob (header X-FGP-Blob prioritaire, sinon premier segment URL)
+  -> verifier taille blob -> extraire X-FGP-Key
   -> PBKDF2(client_key + server_salt) -> dechiffrer blob (gunzip + AES-256-GCM)
   -> valider auth mode -> verifier TTL
   -> parser body si body filters requis (POST/PUT/PATCH + JSON)
   -> verifier scopes vs methode/path/body
   -> auth (bearer, basic, header custom, ou scalingo-exchange avec cache)
-  -> forward vers config.target -> renvoyer reponse
+  -> forward vers config.target (X-FGP-Key et X-FGP-Blob strippes)
+  -> renvoyer reponse
 ```
 
 ## Scripts
