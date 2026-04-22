@@ -4,6 +4,9 @@ import { logger } from "hono/logger";
 
 import { blobHeaderProxy, proxyMiddleware } from "./middleware/proxy.ts";
 import { uiRoutes } from "./routes/ui.tsx";
+import { logsRoutes } from "./routes/logs.tsx";
+import { logsEnabled } from "./logs/config.ts";
+import { purge } from "./logs/store.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "./constants.ts";
 
 const app = new Hono();
@@ -36,9 +39,20 @@ app.get(
 
 app.get("/static/*", (c) => c.json({ error: "not_found", message: "Static file not found" }, 404));
 
+app.route("/", logsRoutes);
 app.route("/", uiRoutes);
 
 app.all("/api/*", (c) => c.json({ error: "not_found", message: "Endpoint not found" }, 404));
+
+if (logsEnabled()) {
+  setInterval(() => {
+    try {
+      purge();
+    } catch (err) {
+      console.error("[fgp] logs purge failed:", err);
+    }
+  }, 60_000);
+}
 
 app.use("/:blob/*", proxyMiddleware());
 

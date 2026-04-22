@@ -503,6 +503,9 @@ Pour le mode `scalingo-exchange`, l'exchange token → bearer compte dans le rat
 | `/api/test-scope` | POST | Test de scopes : vérifie si une requête (méthode + path + body) est autorisée par un jeu de scopes |
 | `/api/openapi.json` | GET | Spec OpenAPI 3.0 (auto-générée depuis les schemas Zod) |
 | `/api/docs` | GET | Swagger UI (documentation interactive) |
+| `/logs` | GET | UI de consultation des logs par blob (feature `/logs`, cf. §14) |
+| `/logs/health` | GET | Indique si la feature logs est activée côté serveur (`{"enabled": true\|false}`). Toujours 200, même avec `FGP_LOGS_ENABLED=0`. |
+| `/logs/stream` | GET | Stream SSE des events d'un blob (headers `X-FGP-Blob` + `X-FGP-Key` requis, cf. §14.9) |
 | `/{blob}/{path...}` | * | Proxy principal vers l'API cible |
 
 Tout autre path sous `/api/*` renvoie 404 (`{"error": "not_found", "message": "Endpoint not found"}`).
@@ -681,3 +684,336 @@ L'UI propose une section dépliable "Tester un scope" sous les body filters. Ell
 - **Cache bearer uniquement pour Scalingo** : le cache du bearer (singleflight) est spécifique au mode `scalingo-exchange`. Les autres modes ne cachent rien.
 - **Body filters JSON uniquement** : seul le JSON est supporté pour le filtrage du body. Les form-data, multipart, etc. ne sont pas filtrés.
 - **Body filter `regex`** : le type `regex` est implémenté via `new RegExp(value).test(bodyValue)`. La regex est validée au déchiffrement du blob (regex invalide = blob rejeté).
+
+---
+
+## 14. Logs par blob (feature `/logs`)
+
+### 14.1 Vue d'ensemble
+
+La feature `/logs` permet à un opérateur de consulter les requêtes passées par un blob FGP donné, en stream live et avec un court historique. C'est une feature **UI uniquement** : il n'existe aucun endpoint JSON public équivalent, et aucune entrée de log n'est jamais persistée.
+
+**Principes** :
+- **Zero storage strict** : les logs vivent exclusivement en mémoire, dans l'isolate qui a capturé la requête. Pas de DB, pas de fichier, pas de bus externe.
+- **Opt-in** : aucune capture n'a lieu tant que le blob ne l'autorise pas explicitement et que le kill switch global n'est pas activé.
+- **Scoping strict par blob** : les logs sont isolés par blob via un hash SHA-256 tronqué. Un opérateur ne peut voir que les logs du blob dont il possède la clé client.
+- **Zero-trust serveur pour le body** : quand le mode `detailed` est activé, le body request est chiffré côté client avant d'être stocké en mémoire. Le serveur FGP ne peut pas lire le contenu en clair, même en dump mémoire.
+- **Agnostique infra** : pas de dépendance à une feature PaaS spécifique. La visibilité est limitée à l'isolate qui a capturé la requête (per-isolate), ce qui est une conséquence assumée du choix zero storage.
+
+### 14.2 Scope et non-goals
+
+**Inclus** :
+- Page UI `/logs` avec formulaire d'auth (blob + clé client) et vue stream live.
+- Onglet « Logs » dans la page de configuration d'un blob pour activer/désactiver la capture.
+- Deux niveaux de capture : `network` (toujours actif quand logs opt-in) et `detailed` (opt-in supplémentaire, body request chiffré).
+- Ring buffer court par blob + purge sur inactivité.
+- Stream SSE avec heartbeat et cursor de reconnect.
+
+**Non-goals v1** :
+- Pas d'équivalent API JSON exposé (pas de `/api/logs/*` public).
+- Pas de capture des headers de requête (risque de fuite cookies/tokens).
+- Pas de capture du body de réponse de l'upstream (hors scope, coût mémoire prohibitif).
+- Pas de capture du `target` upstream dans les entries (sensible, structure API interne).
+- Pas d'export, pas de recherche plein texte, pas de filtres avancés.
+- Pas de rate limit par IP (IP spoofable) : la protection se fait via « 1 stream max par blob ».
+
+### 14.3 Feature gating
+
+La capture s'active uniquement si **les trois conditions** sont réunies :
+
+1. **Kill switch global serveur** : la variable d'environnement `FGP_LOGS_ENABLED` vaut `1`. Si absente ou égale à `0`, aucune route `/logs*` n'existe (elles renvoient 404), aucune capture n'a lieu, aucun buffer n'est alloué.
+2. **Flag `logs.enabled` dans le blob** : le blob contient `logs: { enabled: true, ... }`.
+3. **Pour `detailed`** : le blob contient en plus `logs: { enabled: true, detailed: true }`.
+
+Tableau de vérité de la capture :
+
+| `FGP_LOGS_ENABLED` | `blob.logs.enabled` | `blob.logs.detailed` | Network capturé | Detailed capturé |
+|--------------------|---------------------|----------------------|-----------------|------------------|
+| `0` ou absent      | *                   | *                    | Non             | Non              |
+| `1`                | `false` ou absent   | *                    | Non             | Non              |
+| `1`                | `true`              | `false` ou absent    | Oui             | Non              |
+| `1`                | `true`              | `true`               | Oui             | Oui              |
+
+### 14.4 Schéma blob — ajout du champ `logs`
+
+Ajout d'un champ optionnel `logs` au `BlobConfig`, **sans bump de version** (v3 reste v3) :
+
+```typescript
+interface BlobConfig {
+  v: 2 | 3;
+  token: string;
+  target: string;
+  auth: string;
+  scopes: Scope[];
+  ttl: number;
+  createdAt: number;
+  name?: string;
+  logs?: {
+    enabled: boolean;
+    detailed: boolean;
+  };
+}
+```
+
+Le champ `name` (optionnel, introduit antérieurement avec le champ « Nom de la configuration » de l'UI) est lu côté client dans la vue stream `/logs` pour afficher un identifiant humain au lieu du seul `blobId` (cf. §14.10).
+
+**Règles de compatibilité** :
+
+- Le champ est **strictement optionnel** : un blob v2 ou v3 existant sans `logs` reste valide et continue de fonctionner à l'identique.
+- Un blob avec `logs` absent ou `logs.enabled !== true` est traité comme « logs désactivés », pas comme un blob malformé.
+- Les anciennes versions du proxy qui ne connaissent pas ce champ l'ignorent gracieusement (Deno `JSON.parse` ne plante pas sur un champ supplémentaire, et la validation `decryptBlob` actuelle ne rejette pas les champs extra).
+- Aucun bump de version de blob : v3 reste v3. Le champ `logs` est un **additif non-cassant** décorrélé du versioning du format.
+- À la génération d'un blob depuis l'UI, le champ `logs` n'est inclus que si l'utilisateur a explicitement coché une case dans l'onglet « Logs ». Sinon il est omis (blob identique à aujourd'hui).
+
+### 14.5 Identification serveur d'un blob
+
+Le serveur a besoin de scoper les buffers et les streams par blob, sans être capable de reconstruire le blob ou son contenu. Clé utilisée :
+
+```
+blobId = SHA-256(blob_base64url).slice(0, 16)   // 16 chars hex = 64 bits
+```
+
+Cette empreinte est calculée à partir du blob chiffré brut (le ciphertext base64url), pas du contenu déchiffré. Elle est non réversible et identique entre deux requêtes portant le même blob — suffisant pour router un ring buffer et un topic pub/sub, insuffisant pour retrouver la clé client ou le contenu.
+
+### 14.6 Types de logs et contenu
+
+Le schéma des events est discriminé par le champ `type`.
+
+**Event `network`** — capturé pour chaque requête proxy quand `logs.enabled` :
+
+```json
+{
+  "type": "network",
+  "ts": 1713787200123,
+  "method": "GET",
+  "path": "/v1/apps/my-app/containers",
+  "status": 200,
+  "durationMs": 142,
+  "ipPrefix": "203.0.113.0/24"
+}
+```
+
+| Champ | Description |
+|-------|-------------|
+| `ts` | Timestamp Unix en millisecondes (temps serveur au moment du capture) |
+| `method` | Méthode HTTP de la requête entrante |
+| `path` | Path entrant, normalisé (sans le segment blob en mode URL) |
+| `status` | Status HTTP renvoyé au client (peut être FGP ou upstream) |
+| `durationMs` | Durée totale du traitement proxy, depuis l'entrée jusqu'à l'envoi de la réponse |
+| `ipPrefix` | IP client tronquée au /24 (IPv4) ou /48 (IPv6). Respect vie privée + infos debug. |
+
+Le `target` upstream n'est **pas** inclus dans les entries network.
+
+**Event `detailed`** — capturé en plus du network, uniquement si `logs.detailed` et content-type JSON non-multipart :
+
+```json
+{
+  "type": "detailed",
+  "ts": 1713787200123,
+  "method": "POST",
+  "path": "/v1/apps/my-app/deployments",
+  "bodyEncrypted": "AES-GCM ciphertext base64url",
+  "truncated": false
+}
+```
+
+| Champ | Description |
+|-------|-------------|
+| `bodyEncrypted` | Body request chiffré AES-256-GCM avec la clé client dérivée (cf. 14.8). Stocké gzippé avant chiffrement. **Absent du JSON** (pas de chaîne vide) si `truncated: true`. |
+| `truncated` | `true` si le body gzippé dépasse `FGP_LOGS_DETAILED_MAX_KB` — le body est alors **entièrement omis** (pas de troncature partielle, qui fausserait un déchiffrement), le champ `bodyEncrypted` est omis et seul le flag `truncated: true` subsiste. |
+
+Les events `network` et `detailed` partagent le même `ts` quand les deux sont émis pour la même requête. Le client UI les corrèle par timestamp.
+
+### 14.7 Ring buffer et purge
+
+**Ring buffer par blob** :
+
+- Deux ring buffers indépendants par blob : un pour `network` (défaut 50 entries), un pour `detailed` (défaut 10 entries).
+- Taille configurable via `FGP_LOGS_BUFFER_NETWORK` et `FGP_LOGS_BUFFER_DETAILED`.
+- FIFO strict : nouvelle entry quand plein → éviction de la plus ancienne.
+- Le ring buffer sert à alimenter les reconnects courts (historique immédiat) : à la connexion SSE, le serveur flush les entries du buffer filtrées par `since`, puis bascule en stream live.
+
+**Purge sur inactivité** :
+
+- Si aucun event n'est ajouté au buffer d'un blob pendant `FGP_LOGS_INACTIVITY_MIN` minutes (défaut 10), le buffer + le topic pub/sub sont libérés.
+- La purge se fait à la prochaine opération (accès paresseux) ou via un timer périodique global.
+- Une connexion SSE active **pour ce blob** ne compte pas comme inactivité : le buffer reste vivant tant qu'un consommateur est branché.
+
+### 14.8 Chiffrement client-side du body detailed
+
+Objectif : même en cas de dump mémoire du serveur FGP, le contenu des bodies capturés reste illisible sans la clé client.
+
+**Flux de chiffrement (côté serveur au moment du capture)** :
+
+1. Le proxy lit le body request (déjà disponible pour le matching body filters — cf. section 11.5).
+2. Le body est compressé (gzip).
+3. Si la taille compressée dépasse `FGP_LOGS_DETAILED_MAX_KB` → entry marquée `truncated: true`, body omis, on passe à l'étape suivante avec un body vide.
+4. Sinon, le body compressé est chiffré AES-256-GCM avec la **même clé dérivée** que le blob (`PBKDF2(client_key + server_salt)`), IV 12 bytes aléatoire.
+5. Le résultat (IV || ciphertext || tag) est encodé en base64url et stocké dans `bodyEncrypted`.
+
+**Flux de déchiffrement (côté client dans le JS de `/logs`)** :
+
+1. Le client a déjà renseigné la clé client pour ouvrir le stream SSE (cf. 14.10).
+2. À la réception d'un event `detailed`, le JS dérive la même clé avec PBKDF2(client_key + server_salt), où `server_salt` est obtenu via `GET /api/salt` (même endpoint que le flow de génération).
+3. Le client décode le base64url, extrait l'IV, déchiffre AES-256-GCM, décompresse gzip, affiche le body en JSON.
+4. Si le déchiffrement échoue → l'event est affiché avec un indicateur d'erreur, sans bloquer le reste du stream.
+
+**Conséquences** :
+
+- Le serveur ne voit **jamais** le body detailed en clair en dehors de la fenêtre de capture immédiate (le temps de chiffrer). Après chiffrement, la version plain text est libérée.
+- Le serveur ne peut pas servir un endpoint de recherche ou d'analyse sur les bodies detailed : il n'a que du ciphertext.
+- Si la clé client est perdue, les bodies detailed encore en buffer sont définitivement illisibles. C'est conforme à la philo zero-trust FGP.
+
+### 14.9 Stream SSE
+
+**Endpoint** : `GET /logs/stream`
+
+**Authentification** (au choix, cf. 14.10) :
+- Header `X-FGP-Blob` : blob chiffré.
+- Header `X-FGP-Key` : clé client.
+
+Le serveur déchiffre le blob pour valider l'auth et lire `logs.enabled`. Les codes d'erreur réutilisent la convention du proxy principal (§8) pour cohérence (`missing_key`, `invalid_credentials`, `token_expired`, `blob_too_large`). Les codes nouveaux introduits par `/logs/stream` (`invalid_request`, `logs_not_enabled`, `logs_stream_conflict`) sont spécifiques à cette route.
+
+| Status | Code erreur (shape `{error, message}`) | Condition |
+|--------|----------------------------------------|-----------|
+| 400 | `invalid_request` | Paramètre `since` présent mais non parsable en integer positif |
+| 401 | `missing_key` | Header `X-FGP-Blob` ou `X-FGP-Key` manquant |
+| 401 | `invalid_credentials` | Déchiffrement du blob échoué (clé invalide, blob corrompu, ou `FGP_SALT` absent côté serveur) |
+| 403 | `logs_not_enabled` | Blob valide mais `logs.enabled !== true` |
+| 404 | (pas de shape erreur, route inexistante) | `FGP_LOGS_ENABLED=0` ou absent |
+| 409 | `logs_stream_conflict` | Un autre stream est déjà ouvert pour ce `blobId` |
+| 410 | `token_expired` | Blob valide mais TTL dépassé |
+| 414 | `blob_too_large` | `X-FGP-Blob` > 4 KB (cohérent avec §8) |
+
+Toutes les erreurs portent `X-FGP-Source: proxy`.
+
+**Query string** :
+- `since=<ts>` (optionnel) : timestamp en millisecondes, integer positif. Le serveur flush depuis le ring buffer uniquement les entries avec `ts > since`, puis bascule en stream live. Sans `since`, le serveur flush tout le buffer courant. Si `since` est présent mais non parsable → 400 `invalid_request`.
+
+**Format** :
+
+```
+event: log
+data: {"type":"network","ts":1713787200123, ...}
+
+event: log
+data: {"type":"detailed","ts":1713787200123, ...}
+
+event: ping
+data: {}
+
+```
+
+- Event `log` : une entry de log (network ou detailed).
+- Event `ping` : heartbeat envoyé toutes les 15 secondes pour éviter les idle kills de reverse proxies (Deno Deploy, Cloudflare, nginx). Payload `{}` ignoré par le client, il suffit de maintenir la connexion.
+- Le client track le `ts` du dernier event `log` reçu. En cas de déconnexion (réseau, idle kill malgré le heartbeat), il reconnecte avec `?since=<lastTs>`.
+
+**Pourquoi `fetch` streaming plutôt que `EventSource`** : l'API `EventSource` ne permet pas d'envoyer des headers custom (pas de moyen de passer `X-FGP-Blob` + `X-FGP-Key`). Le client utilise donc `fetch` en mode streaming et parse le flux SSE à la main.
+
+### 14.10 Flow UI
+
+**Page `/logs` — formulaire d'auth initial** :
+
+1. L'utilisateur arrive sur `/logs` sans contexte. L'UI affiche un formulaire avec deux champs : blob et clé client (le champ clé a un bouton œil pour révéler/masquer, cohérent avec la page `/`).
+2. Soumission → le client tente un `fetch` streaming vers `/logs/stream` avec les headers.
+3. Si succès (stream ouvert) → l'UI bascule sur la vue stream.
+4. Blob et clé sont conservés en `sessionStorage` pour la durée de l'onglet uniquement (pas de `localStorage` → pas de persistence après fermeture). Cela permet de survivre à un F5 sans re-saisir.
+5. **Auto-reconnect au chargement** : si sessionStorage contient un blob et une clé valides à l'ouverture de `/logs`, le client tente automatiquement la connexion SSE (état visuel « Connexion en cours... »). En cas d'échec (blob expiré, kill switch off, etc.), l'UI rebascule sur le formulaire avec le message d'erreur et les champs pré-remplis.
+
+**Identification visuelle du blob consulté** :
+
+- Après déchiffrement réussi côté client, l'UI extrait le champ `name` du blob (« Nom de la configuration ») et l'affiche en en-tête de la vue stream, suivi du `blobId` tronqué à 8 chars hex. Le `title` attribute porte les 16 chars complets pour les utilisateurs qui veulent l'identifiant de debug.
+- Format : `<Nom de config> · <blobId 8 chars>`.
+- Si le blob n'a pas de `name` (blob ancien), fallback sur `blobId 8 chars` seul.
+
+**Vue stream** :
+
+- Deux colonnes ou deux sections : liste des events network en continu, section dépliable pour les events detailed (avec body déchiffré).
+- Indicateur de statut : « Connecté » / « Reconnexion... » / « Erreur ».
+- Bouton « Se déconnecter » qui ferme le stream et efface le `sessionStorage`.
+
+**Onglet « Logs » dans la page de configuration** :
+
+- Dans la page de génération d'un blob (`/`), un nouvel onglet « Logs » rejoint les onglets existants (Doc / Exemples / Changelog).
+- Contenu : description de la feature, case à cocher « Activer les logs pour ce blob » (pilote `logs.enabled`), case à cocher conditionnelle « Capturer les bodies détaillés » (pilote `logs.detailed`, grisée tant que `enabled` n'est pas coché).
+- Warning visible quand `detailed` est coché : rappel que le body est chiffré mais peut contenir des données sensibles, que le buffer est court, et que multipart est exclu.
+- Lien direct vers `/logs` pour tester la consultation.
+
+### 14.11 Exclusions et limitations
+
+- **Multipart non capturé** : si le content-type est `multipart/*`, aucune entry `detailed` n'est produite (même si `logs.detailed` actif). L'entry `network` reste émise normalement. Raison : body potentiellement binaire volumineux (upload de fichier).
+- **Headers non capturés** : aucun header de requête n'est inclus dans les entries, ni network ni detailed. Raison : risque de fuite cookies, tokens tiers, X-API-Key de l'appelant.
+- **Target upstream non exposé** : les entries ne contiennent pas `target`. Un opérateur qui consulte `/logs` voit seulement le path entrant, jamais l'URL de destination réelle.
+- **Response body non capturé** : seul le status et la durée sont tracés. Le corps de la réponse upstream n'est jamais loggé (coût mémoire + potentiel sensible).
+- **1 stream par blob** : le serveur refuse un second `GET /logs/stream` pour un `blobId` déjà connecté (HTTP 409). Évite les abus et simplifie le modèle mémoire.
+- **Pas de backfill long** : le ring buffer est volontairement court. La feature sert le monitoring en temps quasi-réel, pas l'audit rétrospectif.
+
+### 14.12 Variables d'environnement
+
+| Variable | Défaut | Effet |
+|----------|--------|-------|
+| `FGP_LOGS_ENABLED` | `0` | Kill switch global. Si `0` ou absent, les routes `/logs` et `/logs/stream` répondent 404, aucune capture n'a lieu, aucun buffer n'est alloué. `/logs/health` reste disponible et répond `{"enabled": false}` pour que l'UI config puisse informer l'utilisateur. Redémarrage serveur requis pour changer d'état. |
+| `FGP_LOGS_BUFFER_NETWORK` | `50` | Taille du ring buffer network par blob. |
+| `FGP_LOGS_BUFFER_DETAILED` | `10` | Taille du ring buffer detailed par blob. |
+| `FGP_LOGS_INACTIVITY_MIN` | `10` | Minutes sans nouvel event → libération du buffer et du topic pub/sub pour ce blob. |
+| `FGP_LOGS_DETAILED_MAX_KB` | `32` | Taille max en KB du body compressé par entry detailed. Au-delà, entry `truncated: true` sans body. |
+
+**Estime RAM** (worst case, configuration par défaut) : ~330 KB par blob actif (50 network × 200 B + 10 detailed × 32 KB). 100 blobs actifs = ~33 MB. Marge confortable vs 512 MB d'un isolate Deno Deploy.
+
+### 14.13 Copy UI `/logs`
+
+**Formulaire d'auth (page `/logs` initiale)** :
+
+| Élément | Texte |
+|---------|-------|
+| Titre page | « Logs d'un blob » |
+| Sous-titre | « Consultez en direct les requêtes passées par votre blob FGP. Saisissez votre blob et votre clé client pour ouvrir le flux. » |
+| Label champ blob | « Blob chiffré » |
+| Placeholder blob | « Collez le blob base64url ici » |
+| Label champ clé | « Clé client (X-FGP-Key) » |
+| Placeholder clé | « La clé retournée à la génération » |
+| Bouton soumission | « Connecter » |
+| État chargement | « Connexion en cours... » |
+| État connecté | « Connecté — en attente d'événements » |
+| Bouton déconnexion | « Se déconnecter » |
+
+**Vue stream** :
+
+| Élément | Texte |
+|---------|-------|
+| Section network | « Requêtes » |
+| Section detailed | « Bodies détaillés » |
+| Badge reconnexion | « Reconnexion... » |
+| Info buffer vide | « Aucun événement pour l'instant. Les requêtes apparaîtront ici en direct. » |
+| Info detailed non activé | « Les bodies détaillés ne sont pas activés pour ce blob. Activez-les dans l'onglet Logs de votre configuration. » |
+| Indicateur truncated | « Body trop volumineux — non stocké » |
+| Erreur déchiffrement body | « Déchiffrement impossible — vérifiez votre clé » |
+
+**Onglet « Logs » dans la page de configuration** :
+
+| Élément | Texte |
+|---------|-------|
+| Titre onglet | « Logs » |
+| Intro | « Activez la capture in-memory des requêtes passant par ce blob. Les logs sont visibles uniquement via `/logs` et ne sont jamais persistés. » |
+| Toggle principal | « Activer les logs pour ce blob » |
+| Aide toggle principal | « Chaque requête est journalisée en mémoire (méthode, chemin, status, durée, IP tronquée) pendant quelques minutes. » |
+| Toggle detailed | « Capturer aussi les bodies détaillés (POST/PUT/PATCH JSON) » |
+| Aide toggle detailed | « Le body request est compressé puis chiffré avec votre clé client avant d'être stocké. Le serveur ne peut pas le lire. Multipart exclu. » |
+| Warning detailed | « Activez uniquement si vous avez besoin d'inspecter les payloads. Le body peut contenir des informations sensibles — n'ouvrez `/logs` que sur un poste de confiance. » |
+| Lien vers /logs | « Ouvrir la console `/logs` » |
+| Feature off globalement | « Les logs sont désactivés sur cette instance FGP. Contactez l'administrateur pour activer `FGP_LOGS_ENABLED`. » |
+
+**Messages d'erreur SSE** (réponses `X-FGP-Source: proxy` côté `/logs/stream`, shape `{error, message}`) :
+
+| Status | `error` | Condition | Message UI |
+|--------|---------|-----------|------------|
+| 400 | `invalid_request` | `since` présent mais non parsable | « Paramètre de reconnexion invalide. » |
+| 401 | `missing_key` | Header `X-FGP-Blob` ou `X-FGP-Key` manquant | « Blob ou clé absent — veuillez ressaisir. » |
+| 401 | `invalid_credentials` | Déchiffrement du blob échoué | « Blob ou clé invalide — impossible de déchiffrer. » |
+| 403 | `logs_not_enabled` | Blob valide mais `logs.enabled !== true` | « Les logs ne sont pas activés pour ce blob. Activez-les dans la configuration avant de réessayer. » |
+| 404 | (route absente) | `FGP_LOGS_ENABLED` off ou absent | « Les logs sont désactivés sur cette instance. » |
+| 409 | `logs_stream_conflict` | Un autre stream est déjà ouvert pour ce blob | « Un flux de logs est déjà actif pour ce blob. Fermez l'autre onglet avant de réessayer. » |
+| 410 | `token_expired` | TTL du blob dépassé | « Ce blob est expiré. » |
+| 414 | `blob_too_large` | Blob > 4 KB | « Blob trop volumineux. » |
+
+L'UI lit `error` pour router l'affichage.

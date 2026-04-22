@@ -4,12 +4,12 @@
   "exports": "./src/main.ts",
   "tasks": {
     "build:css": "deno run -A npm:tailwindcss@3 -i src/ui/tailwind.css -o static/styles.css --minify",
-    "build:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --minify --target=es2020",
+    "build:client": "deno run -A npm:esbuild src/ui/client.ts src/ui/logs-client.ts --bundle --outdir=static --format=iife --minify --target=es2020",
     "build:version": "deno run --allow-run --allow-write --allow-net --allow-env=FGP_GITHUB_REPO scripts/version.ts",
     "build:changelog": "deno run --allow-read=docs --allow-write=src/ui/changelog-data.ts scripts/changelog.ts",
     "build": "deno task build:css && deno task build:client && deno task build:version && deno task build:changelog",
     "dev:css": "deno run -A npm:tailwindcss@3 -i src/ui/tailwind.css -o static/styles.css --watch",
-    "dev:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --watch",
+    "dev:client": "deno run -A npm:esbuild src/ui/client.ts src/ui/logs-client.ts --bundle --outdir=static --format=iife --watch",
     "dev:server": "deno serve --watch --env-file --allow-net --allow-env --allow-read src/main.ts",
     "dev": "deno run -A npm:concurrently --names css,client,server --prefix-colors yellow,blue,green 'deno task dev:css' 'deno task dev:client' 'deno task dev:server'",
     "start": "deno task build && deno serve --env-file --allow-net --allow-env --allow-read src/main.ts",
@@ -21,7 +21,7 @@
     "lint": "deno lint",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
-    "check": "deno check src/main.ts src/middleware/*.ts src/crypto/*.ts src/auth/*.ts src/routes/*.tsx src/ui/*.tsx tests/**/*.ts",
+    "check": "deno check src/main.ts src/middleware/*.ts src/crypto/*.ts src/auth/*.ts src/routes/*.tsx src/ui/*.tsx src/logs/*.ts tests/**/*.ts",
     "verify": "deno task lint && deno task fmt:check && deno task check && deno task test"
   },
   "imports": {
@@ -49,6 +49,7 @@
       "static/",
       "src/ui/client.ts",
       "src/ui/client/",
+      "src/ui/logs-client.ts",
       "src/ui/changelog-data.ts",
       "tailwind.config.*"
     ]
@@ -66,6 +67,7 @@
       "tailwind.config.*",
       "src/ui/client.ts",
       "src/ui/client/",
+      "src/ui/logs-client.ts",
       "src/ui/changelog-data.ts"
     ]
   },

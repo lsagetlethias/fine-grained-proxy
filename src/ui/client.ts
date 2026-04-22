@@ -10,6 +10,7 @@ import { setupTestScope } from "./client/test-scope.ts";
 import { setupImportConfig } from "./client/import-config.ts";
 import { setupShareConfig } from "./client/share-config.ts";
 import { setupTabs } from "./client/tabs.ts";
+import { setupLogsTab } from "./client/logs-tab.ts";
 import type { AppsPermissionsState } from "./client/types.ts";
 
 (function () {
@@ -74,7 +75,8 @@ import type { AppsPermissionsState } from "./client/types.ts";
   setupPresets(els, state, appsPerms, doUpdateVisibility);
   setupApps(els, state, appsPerms, showError, hideError, doUpdateVisibility);
   setupTtl(els);
-  setupGenerate(els, state.bodyFiltersData, showError, hideError);
+  const getLogsConfig = setupLogsTab();
+  setupGenerate(els, state.bodyFiltersData, showError, hideError, getLogsConfig);
   setupClipboard();
   setupTestScope(state.bodyFiltersData);
   setupImportConfig();

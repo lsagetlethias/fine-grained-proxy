@@ -906,6 +906,784 @@
 
 ---
 
+## AC-18 — Feature `/logs` (stream logs par blob, opt-in)
+
+> **Ref specs** : `docs/specs.md` §14. **Ref ADR** : `docs/adr/0007-logs-stream-in-memory-opt-in.md`.
+>
+> **Convention** : toutes les reponses d'erreur des routes `/logs*` suivent la shape FGP `{error, message}` avec `X-FGP-Source: proxy` (cf. AC-17).
+
+### AC-18.1 Kill switch off — route `/logs` renvoie 404
+
+**Given** la variable d'environnement `FGP_LOGS_ENABLED` est absente ou egale a `0`
+**When** un client fait `GET /logs`
+**Then** le serveur repond `404` avec `{"error": "not_found", "message": "Endpoint not found"}` et header `X-FGP-Source: proxy`
+
+### AC-18.2 Kill switch off — route `/logs/stream` renvoie 404
+
+**Given** `FGP_LOGS_ENABLED` absente ou `0`
+**When** un client fait `GET /logs/stream` avec des headers `X-FGP-Blob` et `X-FGP-Key` valides
+**Then** le serveur repond `404` sans tenter le dechiffrement du blob, header `X-FGP-Source: proxy`
+
+### AC-18.3 Kill switch off — aucune capture ni allocation buffer
+
+**Given** `FGP_LOGS_ENABLED` absente ou `0` et un blob avec `logs.enabled: true`
+**When** une requete proxy passe par FGP
+**Then** aucune entry network ni detailed n'est capturee, aucun ring buffer n'est cree pour ce blob (verifiable via inspection de la Map interne)
+
+### AC-18.4 Kill switch on + blob sans champ `logs` — pas de capture
+
+**Given** `FGP_LOGS_ENABLED=1` et un blob v2 ou v3 sans champ `logs`
+**When** une requete proxy passe par FGP
+**Then** aucune entry n'est capturee, aucun buffer n'est alloue pour ce blob
+
+### AC-18.5 Kill switch on + `logs.enabled: true` — capture network
+
+**Given** `FGP_LOGS_ENABLED=1` et un blob avec `logs: { enabled: true, detailed: false }`
+**When** une requete proxy `GET /v1/apps/my-app` passe par FGP
+**Then** une entry network est ajoutee au ring buffer du `blobId` correspondant
+
+### AC-18.6 `detailed: true` sans `enabled: true` — traite comme logs off
+
+**Given** `FGP_LOGS_ENABLED=1` et un blob avec `logs: { enabled: false, detailed: true }`
+**When** une requete proxy POST JSON passe par FGP
+**Then** aucune entry (ni network ni detailed) n'est capturee (defensive : `detailed` requiert `enabled: true`)
+
+### AC-18.7 Blob v3 existant sans `logs` — pas de regression proxy
+
+**Given** un blob v3 existant genere avant la feature, sans champ `logs`
+**When** une requete proxy passe par FGP (scopes ok)
+**Then** la requete est forwardee normalement, la reponse upstream est renvoyee telle quelle, et aucune capture n'a lieu
+
+### AC-18.8 Blob v2 sans `logs` — pas de regression proxy
+
+**Given** un blob v2 genere avant la feature
+**When** une requete proxy passe par FGP
+**Then** meme comportement qu'AC-18.7 : forward transparent, aucune capture
+
+---
+
+## AC-19 — Capture network
+
+### AC-19.1 Schema strict network entry
+
+**Given** `FGP_LOGS_ENABLED=1` et `logs.enabled: true`
+**When** une requete proxy est capturee
+**Then** l'entry network publiee contient exactement les champs `{type: "network", ts, method, path, status, durationMs, ipPrefix}` et aucun autre champ
+
+### AC-19.2 Target upstream absent des entries network
+
+**Given** un blob avec `target: "https://api.upstream.internal"` et `logs.enabled: true`
+**When** une requete est capturee
+**Then** ni le `target`, ni aucun fragment de l'URL upstream, n'apparaissent dans l'entry network (ni en clair, ni en header, ni dans un champ supplementaire)
+
+### AC-19.3 Headers de la requete absents de l'entry network
+
+**Given** une requete proxy avec headers `Authorization`, `Cookie`, `X-API-Key-Client`
+**When** l'entry network est construite
+**Then** aucun de ces headers ni leurs valeurs n'apparaissent dans l'entry
+
+### AC-19.4 IP client IPv4 tronquee /24
+
+**Given** une requete cliente depuis `203.0.113.42`
+**When** l'entry network est emise
+**Then** `ipPrefix` vaut `"203.0.113.0/24"` (dernier octet zerote, suffixe `/24`)
+
+### AC-19.5 IP client IPv6 tronquee /48
+
+**Given** une requete cliente depuis `2001:db8:abcd:1234::1`
+**When** l'entry network est emise
+**Then** `ipPrefix` vaut `"2001:db8:abcd::/48"` (seuls les 3 premiers groupes preserves, suffixe `/48`)
+
+### AC-19.6 Path normalise — mode URL
+
+**Given** une requete `GET /{blob}/v1/apps/my-app?page=2` (mode blob URL)
+**When** l'entry network est capturee
+**Then** `path` vaut `/v1/apps/my-app` (segment blob retire, query string retiree de `path`)
+
+### AC-19.7 Path normalise — mode header
+
+**Given** une requete `GET /v1/apps/my-app` avec header `X-FGP-Blob`
+**When** l'entry network est capturee
+**Then** `path` vaut `/v1/apps/my-app`
+
+### AC-19.8 Status reflete la reponse effective au client
+
+**Given** un forward upstream qui renvoie `401` (AC-17.2)
+**When** l'entry network est emise
+**Then** `status: 401`, identique au status renvoye au client par FGP
+
+### AC-19.9 Status FGP capture
+
+**Given** une requete rejetee par FGP avec `403 scope_denied`
+**When** l'entry network est emise
+**Then** `status: 403` (status FGP, pas upstream)
+
+### AC-19.10 `durationMs` >= 0
+
+**Given** une requete proxy quelconque
+**When** l'entry network est emise
+**Then** `durationMs` est un entier >= 0 representant la duree totale de traitement (entree request → envoi response)
+
+### AC-19.11 Token upstream jamais dans l'entry
+
+**Given** un blob avec `auth: "bearer"`, `token: "secret-upstream-xyz"` et capture activee
+**When** la requete est forwardee et l'entry network publiee
+**Then** la chaine `"secret-upstream-xyz"` n'apparait nulle part dans l'entry (aucun champ, ni metadata interne)
+
+### AC-19.12 Cle client jamais dans l'entry
+
+**Given** une requete avec `X-FGP-Key: client-key-abc`
+**When** l'entry network est emise
+**Then** la chaine `"client-key-abc"` n'apparait nulle part dans l'entry
+
+---
+
+## AC-20 — Capture detailed
+
+### AC-20.1 POST JSON avec `detailed: true` — entry emise
+
+**Given** `FGP_LOGS_ENABLED=1`, `logs: { enabled: true, detailed: true }`
+**When** une requete `POST /deploy` avec `Content-Type: application/json` et body `{"branch":"main"}`
+**Then** une entry detailed est ajoutee au ring buffer detailed en plus de l'entry network
+
+### AC-20.2 PUT JSON — entry emise
+
+**Given** meme config qu'AC-20.1
+**When** une requete `PUT /v1/apps/my-app/env` avec body JSON
+**Then** une entry detailed est emise
+
+### AC-20.3 PATCH JSON — entry emise
+
+**Given** meme config qu'AC-20.1
+**When** une requete `PATCH /v1/apps/my-app` avec body JSON
+**Then** une entry detailed est emise
+
+### AC-20.4 GET — jamais de detailed
+
+**Given** meme config qu'AC-20.1
+**When** une requete `GET /v1/apps/my-app` arrive
+**Then** l'entry network est emise mais aucune entry detailed n'est produite
+
+### AC-20.5 DELETE — jamais de detailed
+
+**Given** meme config qu'AC-20.1
+**When** une requete `DELETE /v1/apps/my-app`
+**Then** aucune entry detailed n'est produite
+
+### AC-20.6 HEAD — jamais de detailed
+
+**Given** meme config qu'AC-20.1
+**When** une requete `HEAD /v1/apps/my-app`
+**Then** aucune entry detailed n'est produite
+
+### AC-20.7 Content-Type multipart — detailed skippe
+
+**Given** meme config qu'AC-20.1
+**When** une requete `POST /upload` avec `Content-Type: multipart/form-data; boundary=xxx`
+**Then** l'entry network est emise mais aucune entry detailed (multipart exclu)
+
+### AC-20.8 Schema strict detailed entry
+
+**Given** une capture detailed reussie
+**When** l'entry est publiee
+**Then** elle contient exactement `{type: "detailed", ts, method, path, bodyEncrypted, truncated}` et aucun autre champ
+
+### AC-20.9 Body chiffre AES-256-GCM avec cle derivee
+
+**Given** un blob dont la cle derivee est `K = PBKDF2(client_key, server_salt)`
+**When** un body est capture en detailed
+**Then** `bodyEncrypted` est le resultat base64url de `IV (12 bytes) || AES-GCM_K(gzip(body))` (incluant le tag d'authentification GCM)
+
+### AC-20.10 Round-trip chiffrement/dechiffrement body
+
+**Given** un body request `{"branch":"main","env":"prod"}` capture en detailed
+**When** le client UI `/logs` dechiffre `bodyEncrypted` avec `PBKDF2(client_key, server_salt)` + gunzip
+**Then** le JSON obtenu est byte-identique au body envoye par le client initial
+
+### AC-20.11 Body > `FGP_LOGS_DETAILED_MAX_KB` compresse — truncated
+
+**Given** `FGP_LOGS_DETAILED_MAX_KB=32` et un body dont la version gzippee fait 40 KB
+**When** l'entry detailed est construite
+**Then** l'entry est emise avec `truncated: true` et le champ `bodyEncrypted` **absent** du JSON (pas de chaine vide, pas de troncature partielle)
+
+### AC-20.12 Body juste sous la limite — non truncated
+
+**Given** `FGP_LOGS_DETAILED_MAX_KB=32` et un body gzippe de 31 KB
+**When** l'entry detailed est construite
+**Then** l'entry contient `truncated: false` et `bodyEncrypted` non vide
+
+### AC-20.13 Body juste au-dessus de la limite — truncated
+
+**Given** `FGP_LOGS_DETAILED_MAX_KB=32` et un body gzippe de 33 KB
+**When** l'entry detailed est construite
+**Then** `truncated: true`, body omis integralement
+
+### AC-20.14 `ts` partage entre network et detailed
+
+**Given** une requete POST JSON qui declenche les deux captures
+**When** les entries network et detailed sont emises
+**Then** les deux entries portent le meme `ts` (timestamp unique pour la requete)
+
+### AC-20.15 `method` et `path` coherents entre network et detailed
+
+**Given** meme requete qu'AC-20.14
+**When** les deux entries sont emises
+**Then** `method` et `path` sont identiques entre les deux entries
+
+### AC-20.16 IV unique par entry detailed
+
+**Given** deux requetes identiques avec meme body capturees en detailed
+**When** on compare les `bodyEncrypted` des deux entries
+**Then** les ciphertexts sont differents (IV aleatoire 12 bytes a chaque chiffrement)
+
+### AC-20.17 Body plain text libere apres chiffrement
+
+**Given** une requete POST JSON capturee en detailed
+**When** la capture est terminee
+**Then** aucune reference au body en clair n'est conservee dans la struct de l'entry ou du ring buffer (verifiable par inspection memoire : seul `bodyEncrypted` subsiste)
+
+---
+
+## AC-21 — Ring buffer
+
+### AC-21.1 Cap network par defaut
+
+**Given** `FGP_LOGS_BUFFER_NETWORK=50` (defaut) et un blob en capture active
+**When** 60 requetes consecutives sont capturees
+**Then** le ring buffer network ne contient que les 50 entries les plus recentes (FIFO, eviction des 10 plus anciennes)
+
+### AC-21.2 Cap detailed par defaut
+
+**Given** `FGP_LOGS_BUFFER_DETAILED=10` (defaut) et un blob avec `detailed: true`
+**When** 15 requetes POST JSON sont capturees
+**Then** le ring buffer detailed ne contient que les 10 entries les plus recentes
+
+### AC-21.3 Cap network configurable
+
+**Given** `FGP_LOGS_BUFFER_NETWORK=5`
+**When** 10 requetes sont capturees
+**Then** le ring buffer ne contient que 5 entries
+
+### AC-21.4 Cap detailed configurable
+
+**Given** `FGP_LOGS_BUFFER_DETAILED=3`
+**When** 5 entries detailed sont produites
+**Then** le ring buffer detailed ne contient que 3 entries
+
+### AC-21.5 Isolation stricte entre deux blobs
+
+**Given** deux blobs A et B avec `logs.enabled: true`
+**When** des requetes sont capturees en parallele sur les deux blobs
+**Then** les entries du blob A ne se retrouvent jamais dans le ring buffer du blob B, et inversement (verification par `blobId` distinct)
+
+### AC-21.6 Isolation — stream A ne voit que les logs A
+
+**Given** deux blobs A et B actifs, stream SSE ouvert pour A
+**When** une requete sur B est capturee
+**Then** aucun event n'est publie sur le stream A
+
+### AC-21.7 FIFO ordre preserve
+
+**Given** un ring buffer network de taille 3, avec 3 entries (t1 < t2 < t3)
+**When** une 4e entry t4 arrive
+**Then** le buffer contient `[t2, t3, t4]` dans cet ordre (t1 evincee, plus ancienne en tete)
+
+---
+
+## AC-22 — Purge sur inactivite
+
+### AC-22.1 Buffer libere apres inactivite
+
+**Given** `FGP_LOGS_INACTIVITY_MIN=10` et un blob dont le dernier event date de 11 minutes
+**When** le timer de purge (ou un acces paresseux) s'execute
+**Then** le ring buffer et le topic pub/sub du blob sont liberes (Map interne ne contient plus le `blobId`)
+
+### AC-22.2 Stream actif empeche la purge
+
+**Given** un blob avec buffer actif et une connexion SSE ouverte, aucun event nouveau depuis 15 minutes
+**When** la purge d'inactivite s'execute
+**Then** le buffer et le topic restent alloues tant que le stream SSE est connecte
+
+### AC-22.3 Nouvel event reset le timer
+
+**Given** un blob avec buffer actif, dernier event il y a 9 minutes (`FGP_LOGS_INACTIVITY_MIN=10`)
+**When** une nouvelle requete est capturee et ajoutee au buffer
+**Then** le compteur d'inactivite redemarre depuis le nouvel event, le buffer n'est pas purge
+
+### AC-22.4 Reconnect apres purge — buffer vide
+
+**Given** un blob dont le buffer vient d'etre purge pour inactivite
+**When** un nouveau stream SSE est ouvert sans `since`
+**Then** le stream ouvre avec un buffer vide (pas d'historique), puis bascule en live des qu'une nouvelle requete est capturee
+
+---
+
+## AC-23 — Stream SSE
+
+### AC-23.1 Headers manquants — 401
+
+**Given** `FGP_LOGS_ENABLED=1`
+**When** `GET /logs/stream` sans header `X-FGP-Blob` ni `X-FGP-Key`
+**Then** le serveur repond `401` avec `{"error": "missing_key", ...}` et `X-FGP-Source: proxy`
+
+### AC-23.2 Dechiffrement blob echoue — 401
+
+**Given** `GET /logs/stream` avec `X-FGP-Blob` et `X-FGP-Key` mais la cle est incorrecte
+**When** le serveur tente de dechiffrer
+**Then** reponse `401` avec `{"error": "invalid_credentials", ...}` et `X-FGP-Source: proxy`
+
+### AC-23.3 Blob valide sans `logs.enabled` — 403
+
+**Given** `GET /logs/stream` avec blob valide dont `logs.enabled !== true` (absent, false, ou objet absent)
+**When** le serveur inspecte la config
+**Then** reponse `403` avec `{"error": "logs_not_enabled", ...}` et `X-FGP-Source: proxy`
+
+### AC-23.4 Blob valide avec `logs.enabled` + kill switch off — 404
+
+**Given** blob avec `logs.enabled: true` mais `FGP_LOGS_ENABLED=0`
+**When** `GET /logs/stream`
+**Then** reponse `404` (cf. AC-18.2), le kill switch court-circuite avant toute verification blob
+
+### AC-23.5 Blob expire — 410
+
+**Given** `GET /logs/stream` avec blob valide dont le TTL est expire
+**When** le serveur verifie le TTL
+**Then** reponse `410` avec `{"error": "token_expired", ...}` et `X-FGP-Source: proxy`
+
+### AC-23.6 Deux connexions simultanees — 409 sur la seconde
+
+**Given** un stream SSE deja ouvert pour le `blobId` X
+**When** un second `GET /logs/stream` arrive avec le meme blob+cle
+**Then** le second est refuse avec `409` et `{"error": "logs_stream_conflict", ...}`, `X-FGP-Source: proxy`, le premier reste actif
+
+### AC-23.7 Cloture premiere connexion libere le slot
+
+**Given** un stream SSE ouvert puis ferme cote client (abort/disconnect)
+**When** un nouveau `GET /logs/stream` arrive pour le meme blob
+**Then** la nouvelle connexion est acceptee (slot libere)
+
+### AC-23.8 Flush initial du ring buffer
+
+**Given** un ring buffer network contenant 3 entries (t1, t2, t3) et aucun `since` en query
+**When** un client ouvre le stream
+**Then** les 3 entries sont envoyees en events `log` dans l'ordre chronologique (t1, t2, t3) avant tout event live
+
+### AC-23.9 Stream live apres flush
+
+**Given** stream ouvert et flush initial termine
+**When** une nouvelle requete est capturee
+**Then** l'entry correspondante est publiee immediatement sur le stream en `event: log`
+
+### AC-23.10 Heartbeat ping toutes les 15s
+
+**Given** stream ouvert sans nouvel event
+**When** 15 secondes s'ecoulent
+**Then** le serveur emet `event: ping\ndata: {}\n\n` (heartbeat periodique, payload vide `{}`)
+
+### AC-23.11 Format SSE strict — event log
+
+**Given** une entry a publier
+**When** le serveur l'ecrit sur le stream
+**Then** le flux contient exactement `event: log\ndata: <json>\n\n` (double newline de terminaison, pas de champ `id` ni `retry`)
+
+### AC-23.12 Format SSE strict — event ping
+
+**Given** un heartbeat
+**When** le serveur l'emet
+**Then** le flux contient exactement `event: ping\ndata: {}\n\n`
+
+### AC-23.13 Content-Type SSE
+
+**Given** un stream SSE ouvert avec succes
+**When** le client lit les headers de reponse
+**Then** `Content-Type: text/event-stream` et `X-FGP-Source: proxy` sont presents
+
+### AC-23.14 Blob trop volumineux — 414
+
+**Given** `GET /logs/stream` avec `X-FGP-Blob` > 4 KB
+**When** le serveur inspecte la taille
+**Then** reponse `414` avec `{"error": "blob_too_large", ...}` et `X-FGP-Source: proxy`, cohérent avec §8 du proxy principal
+
+---
+
+## AC-24 — Cursor reconnect
+
+### AC-24.1 Flush filtre par `since`
+
+**Given** un ring buffer avec entries a ts=100, 200, 300, 400
+**When** le client ouvre le stream avec `?since=250`
+**Then** le flush initial n'envoie que les entries a ts=300 et ts=400 (strict `ts > since`)
+
+### AC-24.2 Sans `since` — flush complet
+
+**Given** un ring buffer non vide
+**When** le client ouvre le stream sans query `since`
+**Then** toutes les entries actuelles du buffer sont envoyees dans l'ordre chronologique
+
+### AC-24.3 `since` > dernier ts — flush vide
+
+**Given** un ring buffer avec dernier event ts=500
+**When** client ouvre avec `?since=600`
+**Then** aucune entry n'est envoyee au flush, le stream attend les events live
+
+### AC-24.4 `since` non entier — ignore ou 400
+
+**Given** `?since=foo` (non parsable en nombre)
+**When** le serveur ouvre le stream
+**Then** le serveur repond `400` avec `{"error": "invalid_request", ...}` et `X-FGP-Source: proxy` (cursor invalide)
+
+### AC-24.5 Reconnect sans doublons
+
+**Given** un client a recu les entries ts=100, 200, 300, puis deconnecte
+**When** il reconnecte avec `?since=300`
+**Then** le serveur n'envoie pas l'entry ts=300 (strict `>`), et envoie les entries posterieures eventuellement presentes
+
+### AC-24.6 Reconnect sans perte tant que dans le buffer
+
+**Given** un client a recu jusqu'a ts=300, ring buffer contient maintenant ts=300, 400, 500
+**When** il reconnecte avec `?since=300`
+**Then** les entries ts=400 et ts=500 sont envoyees au flush, aucune perte
+
+### AC-24.7 Reconnect apres eviction — perte partielle acceptee
+
+**Given** ring buffer de taille 50, le client avait recu jusqu'a ts=100 mais les 100 entries suivantes ont evince les entries <= 100
+**When** client reconnecte avec `?since=100`
+**Then** le flush envoie les 50 entries actuelles (toutes avec ts > 100), pas de garantie de completude au-dela de la capacite du ring buffer
+
+---
+
+## AC-25 — Schema JSON des events
+
+### AC-25.1 Discriminator `type: "network"`
+
+**Given** un event network parse en JSON par le client
+**When** il lit le champ `type`
+**Then** la valeur est strictement `"network"`, et les champs `{ts, method, path, status, durationMs, ipPrefix}` sont tous presents et typés (number/string)
+
+### AC-25.2 Discriminator `type: "detailed"`
+
+**Given** un event detailed parse en JSON par le client
+**When** il lit `type`
+**Then** la valeur est strictement `"detailed"`, et les champs `{ts, method, path, truncated}` sont presents. `bodyEncrypted` est present si et seulement si `truncated === false` (discriminated union secondaire)
+
+### AC-25.3 Schema network — aucun champ supplementaire
+
+**Given** un event network serialise
+**When** on liste les cles du JSON
+**Then** l'ensemble est exactement `{type, ts, method, path, status, durationMs, ipPrefix}` (pas de `target`, pas de `headers`, pas de `body`, pas d'`ip` complete)
+
+### AC-25.4 Schema detailed — aucun champ supplementaire
+
+**Given** un event detailed serialise
+**When** on liste les cles du JSON
+**Then** l'ensemble est `{type, ts, method, path, truncated}` + eventuellement `bodyEncrypted` (present uniquement si `truncated === false`). Aucune autre cle (pas de `headers`, pas de `target`, pas de `body`)
+
+### AC-25.5 Types stricts
+
+**Given** un event quelconque
+**When** on type-check les valeurs
+**Then** `ts: number`, `method: string`, `path: string`, `status: number`, `durationMs: number`, `ipPrefix: string`, `truncated: boolean`. `bodyEncrypted` quand present : `string` (base64url non vide)
+
+---
+
+## AC-26 — UI `/logs` et formulaire
+
+### AC-26.1 Page `/logs` sans blob en sessionStorage — formulaire
+
+**Given** `FGP_LOGS_ENABLED=1` et `sessionStorage` vide
+**When** l'utilisateur charge `GET /logs`
+**Then** la page affiche le formulaire d'auth (champ blob + champ cle + bouton « Connecter ») comme decrit en §14.13
+
+### AC-26.2 Soumission blob+cle valides — stream ouvert
+
+**Given** formulaire affiche avec `FGP_LOGS_ENABLED=1` et un blob+cle correspondant a un blob `logs.enabled: true`
+**When** l'utilisateur clique « Connecter »
+**Then** le JS client fait `fetch` streaming vers `/logs/stream` avec les headers, le stream s'ouvre et l'UI bascule sur la vue stream (statut « Connecte »)
+
+### AC-26.3 Soumission blob invalide — message d'erreur
+
+**Given** formulaire affiche, utilisateur saisit un blob corrompu ou une cle incorrecte
+**When** il clique « Connecter »
+**Then** l'UI affiche le message « Blob ou cle invalide — impossible de dechiffrer. » (cf. §14.13), reste sur le formulaire
+
+### AC-26.4 Soumission blob sans `logs.enabled` — message 403
+
+**Given** blob+cle valides mais blob dont `logs.enabled !== true`
+**When** utilisateur se connecte
+**Then** UI affiche « Les logs ne sont pas actives pour ce blob. Activez-les dans la configuration avant de reessayer. »
+
+### AC-26.5 sessionStorage — pas localStorage
+
+**Given** soumission reussie du formulaire
+**When** le client persiste blob+cle
+**Then** les valeurs sont dans `sessionStorage`, pas dans `localStorage` (verifiable via DevTools ou inspection explicite du code client)
+
+### AC-26.6 F5 — re-ouvre le stream depuis sessionStorage
+
+**Given** session stream ouverte, blob+cle en sessionStorage
+**When** l'utilisateur rafraichit la page (F5)
+**Then** la page lit le sessionStorage et re-ouvre automatiquement le stream sans re-saisie
+
+### AC-26.7 Fermeture onglet — perte du contexte
+
+**Given** session active, blob+cle en sessionStorage
+**When** l'utilisateur ferme l'onglet puis rouvre `/logs`
+**Then** sessionStorage est vide, le formulaire est affiche a nouveau
+
+### AC-26.8 Bouton « Se deconnecter » — clear + close
+
+**Given** stream ouvert
+**When** utilisateur clique « Se deconnecter »
+**Then** le stream SSE est ferme cote client, sessionStorage est vide, le formulaire est affiche
+
+### AC-26.9 Kill switch off — page `/logs` renvoie 404
+
+**Given** `FGP_LOGS_ENABLED=0`
+**When** utilisateur charge `GET /logs`
+**Then** reponse `404` (cf. AC-18.1), aucune page rendue
+
+### AC-26.10 Detailed affiche le body dechiffre
+
+**Given** stream ouvert avec blob `logs.detailed: true`, entry detailed recue
+**When** le JS client dechiffre `bodyEncrypted` avec succes
+**Then** la section « Bodies detailles » affiche le JSON dechiffre et decompresse
+
+### AC-26.11 Detailed — echec dechiffrement affiche indicateur
+
+**Given** stream ouvert, entry detailed recue dont le dechiffrement echoue cote client (par ex. cle incorrecte)
+**When** l'UI traite l'event
+**Then** l'entry est affichee avec l'indicateur « Dechiffrement impossible — verifiez votre cle » (§14.13), le stream continue sans bloquer
+
+### AC-26.12 Detailed truncated — affichage dedie
+
+**Given** un event detailed avec `truncated: true`
+**When** l'UI rend l'entry
+**Then** elle affiche « Body trop volumineux — non stocke » a la place du body
+
+---
+
+## AC-27 — Onglet « Logs » dans la page de configuration
+
+### AC-27.1 Onglet visible quand kill switch on
+
+**Given** `FGP_LOGS_ENABLED=1` et utilisateur sur la page `/` de generation
+**When** la page rend les onglets
+**Then** un onglet « Logs » est present a cote des onglets existants (Doc / Exemples / Changelog)
+
+### AC-27.2 Onglet affiche message feature off quand kill switch off
+
+**Given** `FGP_LOGS_ENABLED=0`
+**When** utilisateur ouvre l'onglet « Logs » (si affiche)
+**Then** le contenu affiche « Les logs sont desactives sur cette instance FGP. Contactez l'administrateur pour activer `FGP_LOGS_ENABLED`. »
+
+### AC-27.3 Toggle principal pilote `logs.enabled`
+
+**Given** onglet Logs ouvert, toggle « Activer les logs pour ce blob » decoche
+**When** utilisateur coche puis genere le blob
+**Then** le blob genere contient `logs: { enabled: true, detailed: false }`
+
+### AC-27.4 Toggle detailed grise tant que enabled off
+
+**Given** onglet Logs ouvert, toggle principal decoche
+**When** utilisateur inspecte le toggle « Capturer aussi les bodies detailles »
+**Then** ce toggle est disabled (grise) et ne peut pas etre coche
+
+### AC-27.5 Toggle detailed actif quand enabled on
+
+**Given** toggle principal coche
+**When** utilisateur inspecte le toggle detailed
+**Then** il devient interactif (pas grise)
+
+### AC-27.6 Les deux toggles — blob contient `detailed: true`
+
+**Given** les deux toggles coches
+**When** utilisateur genere le blob
+**Then** le blob contient `logs: { enabled: true, detailed: true }`
+
+### AC-27.7 Aucun toggle coche — pas de champ `logs` dans le blob
+
+**Given** onglet Logs ouvert avec aucun toggle coche
+**When** utilisateur genere le blob
+**Then** le blob genere est identique au comportement d'avant la feature : pas de champ `logs` (omis), pas de bump de version
+
+### AC-27.8 Decocher detailed puis regenerer — detailed disparait
+
+**Given** blob precedent avec detailed: true, utilisateur decoche `detailed`
+**When** il regenere
+**Then** le nouveau blob a `logs: { enabled: true, detailed: false }`
+
+### AC-27.9 Warning visible sur detailed coche
+
+**Given** toggle detailed coche
+**When** utilisateur inspecte l'onglet
+**Then** le warning « Activez uniquement si vous avez besoin d'inspecter les payloads... » (§14.13) est visible
+
+### AC-27.10 Lien vers `/logs` present
+
+**Given** onglet Logs ouvert, kill switch on
+**When** utilisateur cherche comment consulter les logs
+**Then** un lien « Ouvrir la console `/logs` » est affiche et pointe vers `/logs`
+
+---
+
+## AC-28 — Compatibilite blob et non-regression
+
+### AC-28.1 Blob v3 sans `logs` — comportement identique a avant
+
+**Given** un blob v3 existant (genere avant la feature, sans champ `logs`)
+**When** il passe par le proxy FGP nouvelle version
+**Then** la requete est forwardee, scopes verifies, auth appliquee, reponse renvoyee — comportement byte-identique a la version precedente
+
+### AC-28.2 Blob v2 — comportement identique
+
+**Given** un blob v2 existant
+**When** il passe par le proxy
+**Then** comportement identique, aucune capture, pas d'erreur de parsing
+
+### AC-28.3 Blob avec `logs` present mais fausse valeur — gracieux
+
+**Given** un blob avec `logs: { enabled: "true" }` (string au lieu de bool, malformation legere)
+**When** le proxy lit la config
+**Then** le proxy traite comme `logs.enabled !== true` (strict boolean check), pas de capture, pas d'erreur 500
+
+### AC-28.4 Pas de bump de version — `v` reste 2 ou 3
+
+**Given** un blob genere avec toggles logs coches
+**When** on inspecte la version dans le blob dechiffre
+**Then** `v` vaut 2 ou 3 selon la structure des scopes (cf. AC-13.5), jamais 4
+
+### AC-28.5 Ancien proxy + blob recent avec `logs` — ignore gracieusement
+
+**Given** un blob avec champ `logs` present, deploye sur une version du proxy qui ne connait pas la feature
+**When** le proxy dechiffre et valide
+**Then** la validation reussit (champ extra ignore par le parsing), le proxy fonctionne normalement sans capturer de logs
+
+---
+
+## AC-29 — Securite zero-trust
+
+### AC-29.1 Dump memoire — aucun body en clair
+
+**Given** un blob avec detailed actif et plusieurs entries capturees
+**When** on inspecte le contenu du ring buffer (simulation de dump memoire via acces direct a la Map)
+**Then** aucun body en clair n'est trouve ; seul du ciphertext `bodyEncrypted` est present
+
+### AC-29.2 Dump memoire — pas de cle client
+
+**Given** meme scenario qu'AC-29.1
+**When** on inspecte les structures liees au blob
+**Then** la cle client n'est trouvee nulle part dans le ring buffer, le topic, ou les entries (elle n'a jamais ete stockee)
+
+### AC-29.3 Dump memoire — pas de token upstream
+
+**Given** meme scenario
+**When** on inspecte
+**Then** le token upstream (bearer, basic, etc.) n'apparait pas dans les entries ou les structures de logs (il n'est utilise qu'au forward, jamais stocke dans la surface logs)
+
+### AC-29.4 Endpoint `/api/salt` public suffit au dechiffrement client
+
+**Given** le salt serveur public, la cle client, et un `bodyEncrypted` recu par SSE
+**When** le JS client fait `PBKDF2(client_key, salt)` puis AES-GCM decrypt + gunzip
+**Then** le body en clair est obtenu (le salt public n'est pas un secret, la cle client l'est)
+
+---
+
+## AC-30 — Endpoint `/logs/health`
+
+### AC-30.1 Health expose `{enabled: true}` quand kill switch on
+
+**Given** `FGP_LOGS_ENABLED=1`
+**When** `GET /logs/health`
+**Then** status 200, body `{"enabled": true}`, `X-FGP-Source: proxy`
+
+### AC-30.2 Health expose `{enabled: false}` quand kill switch off
+
+**Given** `FGP_LOGS_ENABLED=0` ou absent
+**When** `GET /logs/health`
+**Then** status 200, body `{"enabled": false}`. La route reste disponible pour permettre a l'UI config d'informer l'utilisateur. Aucune autre route `/logs*` ne repond (toutes en 404).
+
+### AC-30.3 Health ne demande aucun header
+
+**Given** `FGP_LOGS_ENABLED=1`
+**When** `GET /logs/health` sans `X-FGP-Blob` ni `X-FGP-Key`
+**Then** status 200, body `{"enabled": true}`. Endpoint public, pas d'auth.
+
+## AC-31 — Auto-reconnect UI avec sessionStorage
+
+### AC-31.1 Page `/logs` charge avec sessionStorage vide → formulaire
+
+**Given** sessionStorage ne contient ni blob ni cle
+**When** l'utilisateur charge `/logs`
+**Then** le formulaire d'auth est affiche, aucun fetch vers `/logs/stream` n'est tente
+
+### AC-31.2 Page `/logs` charge avec sessionStorage valide → auto-connect
+
+**Given** sessionStorage contient un blob et une cle valides
+**When** l'utilisateur charge `/logs`
+**Then** l'UI affiche un etat « Connexion en cours... », tente `fetch /logs/stream`, bascule sur la vue stream en cas de succes
+
+### AC-31.3 Auto-connect echoue → retour formulaire pre-rempli
+
+**Given** sessionStorage contient un blob expire (ou tout autre cas d'erreur)
+**When** l'UI tente auto-connect
+**Then** l'UI rebascule sur le formulaire avec les champs pre-remplis et le message d'erreur approprie affiche
+
+### AC-31.4 sessionStorage uniquement (pas localStorage)
+
+**Given** l'utilisateur se connecte, ferme l'onglet, reouvre `/logs` dans un nouvel onglet
+**When** la page charge
+**Then** le formulaire est affiche vierge (sessionStorage est par onglet, pas persiste entre onglets)
+
+## AC-32 — Identification visuelle du blob dans la vue stream
+
+### AC-32.1 Affichage `<Nom> · <blobId 8>` apres dechiffrement
+
+**Given** un blob avec champ `name: "Production Scalingo"`, connexion reussie
+**When** l'UI dechiffre le blob et bascule sur la vue stream
+**Then** l'en-tete affiche « Production Scalingo · abcd1234 » (blobId tronque a 8 chars hex)
+
+### AC-32.2 `title` attribute porte le blobId 16 chars
+
+**Given** meme scenario
+**When** l'utilisateur survole l'identifiant affiche
+**Then** le `title` attribute contient les 16 chars hex complets du `blobId`
+
+### AC-32.3 Blob sans `name` → fallback sur blobId seul
+
+**Given** un blob sans champ `name` (ancien blob)
+**When** l'UI bascule sur la vue stream
+**Then** l'en-tete affiche uniquement « abcd1234 » (pas de prefixe ni de separateur)
+
+## AC-33 — Bouton revelation cle sur formulaire
+
+### AC-33.1 Bouton œil masque → revelation
+
+**Given** le formulaire `/logs` avec une cle saisie (input type="password" par defaut)
+**When** l'utilisateur clique sur l'icone œil
+**Then** l'input passe en type="text", la cle est visible, l'icone change d'etat
+
+### AC-33.2 Bouton œil revelation → masque
+
+**Given** l'input en type="text" (cle revelee)
+**When** l'utilisateur reclique sur l'icone
+**Then** l'input repasse en type="password", la cle est masquee
+
+---
+
+## Assumptions — proprietes cryptographiques non directement testables
+
+Les enonces suivants decrivent des proprietes valides **par construction cryptographique** et non par un test d'integration direct. Ils sont maintenus ici pour documenter l'intention de securite, sans polluer la matrice de couverture AC.
+
+### Assumption AC-crypto.1 Serveur ne peut pas dechiffrer sans cle client
+
+Le server_salt et le `bodyEncrypted` seuls ne permettent pas de retrouver le body en clair. PBKDF2 requiert `client_key + server_salt`. En pratique : impossible cote serveur sans exfiltration de la cle cliente, ce qui sort du modele de menace FGP. Valide par la robustesse du PBKDF2-AES-256-GCM standard.
+
+### Assumption AC-crypto.2 `blobId` non reversible
+
+Le `blobId` (SHA-256 tronque a 16 chars hex = 64 bits) ne permet pas de retrouver le blob chiffre, ni a fortiori son contenu. Valide par irreversibilite SHA-256. Collisions negligeables a l'echelle d'un blob actif (2^-32 sur 2^32 blobs actifs simultanes).
+
+---
+
 ## Remarques
 
 - **Backward compat** : le proxy supporte les blobs v2 (scopes string uniquement) et v3 (scopes mixtes). Un blob v2 n'a jamais de body filters.

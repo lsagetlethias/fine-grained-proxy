@@ -14,11 +14,13 @@ export function setupTabs(): void {
     assertElement("tab-doc", HTMLButtonElement),
     assertElement("tab-examples", HTMLButtonElement),
     assertElement("tab-changelog", HTMLButtonElement),
+    assertElement("tab-logs", HTMLButtonElement),
   ];
   const panels = [
     assertElement("panel-doc", HTMLElement),
     assertElement("panel-examples", HTMLElement),
     assertElement("panel-changelog", HTMLElement),
+    assertElement("panel-logs", HTMLElement),
   ];
 
   function activate(index: number): void {

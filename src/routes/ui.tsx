@@ -97,6 +97,11 @@ const ScopeEntrySchema = z.object({
 
 const ScopeSchema = z.union([z.string(), ScopeEntrySchema]);
 
+const LogsConfigSchema = z.object({
+  enabled: z.boolean(),
+  detailed: z.boolean(),
+}).openapi("LogsConfig");
+
 const GenerateBodySchema = z.object({
   token: z.string().min(1).openapi({ example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx" }),
   target: z.string().min(1).openapi({ example: "https://api.osc-fr1.scalingo.com" }),
@@ -111,6 +116,13 @@ const GenerateBodySchema = z.object({
   ttl: z.number().openapi({
     example: 3600,
     description: "Validity duration in seconds. 0 = no expiration",
+  }),
+  name: z.string().optional().openapi({
+    example: "Production Scalingo",
+    description: "Human-readable configuration name stored in the blob (optional)",
+  }),
+  logs: LogsConfigSchema.optional().openapi({
+    description: "Enable in-memory logs capture for this blob (optional)",
   }),
 }).openapi("GenerateBody");
 
@@ -589,7 +601,17 @@ uiRoutes.openapi(generateRoute, async (c) => {
   }
 
   const hasStructuredScope = scopes.some((s) => typeof s !== "string");
-  const config = {
+  const config: {
+    v: number;
+    token: string;
+    target: string;
+    auth: string;
+    scopes: Scope[];
+    ttl: number;
+    createdAt: number;
+    name?: string;
+    logs?: { enabled: boolean; detailed: boolean };
+  } = {
     v: hasStructuredScope ? 3 : 2,
     token: body.token,
     target: body.target,
@@ -598,6 +620,10 @@ uiRoutes.openapi(generateRoute, async (c) => {
     ttl: body.ttl,
     createdAt: Math.floor(Date.now() / 1000),
   };
+  if (body.name && body.name.trim().length > 0) config.name = body.name.trim();
+  if (body.logs && body.logs.enabled === true) {
+    config.logs = { enabled: true, detailed: body.logs.detailed === true };
+  }
 
   const blob = await encryptBlob(config, clientKey, serverSalt);
 

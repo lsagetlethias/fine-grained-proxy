@@ -1,6 +1,6 @@
 import { Context, MiddlewareHandler } from "hono";
 
-import { BlobConfig, decryptBlob, isExpired } from "../crypto/blob.ts";
+import { BlobConfig, decryptBlob, deriveKey, isExpired } from "../crypto/blob.ts";
 import { exchangeToken } from "../auth/client.ts";
 import {
   clearExpired,
@@ -13,6 +13,10 @@ import {
 } from "../auth/cache.ts";
 import { checkAccess, type Scope } from "./scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY, FGP_SOURCE_UPSTREAM } from "../constants.ts";
+import { logsEnabled } from "../logs/config.ts";
+import { computeBlobId } from "../logs/blob-id.ts";
+import { captureDetailed, captureNetwork } from "../logs/capture.ts";
+import { truncateIp } from "../logs/ip.ts";
 
 const MAX_BLOB_LENGTH = 4096;
 
@@ -112,7 +116,22 @@ function handleUpstreamResponse(response: Response): Response {
   });
 }
 
+function extractClientIp(c: Context): string {
+  const fwd = c.req.header("x-forwarded-for");
+  if (fwd) {
+    const first = fwd.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  const real = c.req.header("x-real-ip");
+  if (real) return real.trim();
+  const env = c.env as { info?: { remoteAddr?: { hostname?: string } } } | undefined;
+  const host = env?.info?.remoteAddr?.hostname;
+  return host ?? "";
+}
+
 async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Promise<Response> {
+  const startedAt = Date.now();
+
   if (blobRaw.length > MAX_BLOB_LENGTH) {
     return jsonError(c, 414, "blob_too_large", "Encrypted blob exceeds maximum size");
   }
@@ -142,46 +161,170 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     return jsonError(c, 400, "invalid_auth_mode", "Unsupported auth mode: " + config.auth);
   }
 
+  const logsActive = logsEnabled() && config.logs?.enabled === true;
+  const detailedActive = logsActive && config.logs?.detailed === true;
+
   const methodsWithBody = ["POST", "PUT", "PATCH"];
   const hasBodyMethod = methodsWithBody.includes(c.req.method.toUpperCase());
-  const isJsonContent = (c.req.header("content-type") ?? "").includes("application/json");
+  const rawContentType = c.req.header("content-type") ?? "";
+  const isJsonContent = rawContentType.includes("application/json");
+  const isMultipart = rawContentType.includes("multipart/");
 
   const scopesHaveBodyFilters = config.scopes.some(
     (s: Scope) => typeof s !== "string" && s.bodyFilters && s.bodyFilters.length > 0,
   );
 
-  let parsedBody: unknown;
+  const shouldCaptureDetailed = detailedActive && hasBodyMethod && isJsonContent && !isMultipart;
+  const needsRawBody = (hasBodyMethod && scopesHaveBodyFilters) || shouldCaptureDetailed;
 
-  if (hasBodyMethod && scopesHaveBodyFilters) {
-    const rawBody = await c.req.raw.clone().arrayBuffer();
-    if (isJsonContent) {
-      try {
-        parsedBody = JSON.parse(new TextDecoder().decode(rawBody));
-      } catch {
-        return jsonError(c, 400, "invalid_body", "Request body is not valid JSON");
+  let parsedBody: unknown;
+  let rawBodyBytes: Uint8Array | null = null;
+
+  if (needsRawBody) {
+    const buf = await c.req.raw.clone().arrayBuffer();
+    rawBodyBytes = new Uint8Array(buf);
+    if (hasBodyMethod && scopesHaveBodyFilters) {
+      if (isJsonContent) {
+        try {
+          parsedBody = JSON.parse(new TextDecoder().decode(rawBodyBytes));
+        } catch {
+          return await finishWithCapture(
+            c,
+            config,
+            blobRaw,
+            clientKey,
+            serverSalt,
+            proxyPath,
+            startedAt,
+            logsActive,
+            false,
+            null,
+            jsonError(c, 400, "invalid_body", "Request body is not valid JSON"),
+          );
+        }
+      } else {
+        return await finishWithCapture(
+          c,
+          config,
+          blobRaw,
+          clientKey,
+          serverSalt,
+          proxyPath,
+          startedAt,
+          logsActive,
+          false,
+          null,
+          jsonError(
+            c,
+            403,
+            "scope_denied",
+            "Body filters require application/json content type",
+          ),
+        );
       }
-    } else {
-      return jsonError(
-        c,
-        403,
-        "scope_denied",
-        "Body filters require application/json content type",
-      );
     }
   }
 
   if (!checkAccess(config.scopes, c.req.method, proxyPath, parsedBody)) {
-    return jsonError(c, 403, "scope_denied", "Insufficient permissions for this action");
+    return await finishWithCapture(
+      c,
+      config,
+      blobRaw,
+      clientKey,
+      serverSalt,
+      proxyPath,
+      startedAt,
+      logsActive,
+      false,
+      null,
+      jsonError(c, 403, "scope_denied", "Insufficient permissions for this action"),
+    );
   }
 
   let response;
   try {
     response = await forwardRequest(c, config, proxyPath);
   } catch {
-    return jsonError(c, 502, "upstream_unreachable", "Unable to reach target API");
+    return await finishWithCapture(
+      c,
+      config,
+      blobRaw,
+      clientKey,
+      serverSalt,
+      proxyPath,
+      startedAt,
+      logsActive,
+      false,
+      null,
+      jsonError(c, 502, "upstream_unreachable", "Unable to reach target API"),
+    );
   }
 
-  return handleUpstreamResponse(response);
+  const forwarded = handleUpstreamResponse(response);
+  return await finishWithCapture(
+    c,
+    config,
+    blobRaw,
+    clientKey,
+    serverSalt,
+    proxyPath,
+    startedAt,
+    logsActive,
+    shouldCaptureDetailed,
+    rawBodyBytes,
+    forwarded,
+  );
+}
+
+async function finishWithCapture(
+  c: Context,
+  _config: BlobConfig,
+  blobRaw: string,
+  clientKey: string,
+  serverSalt: string,
+  proxyPath: string,
+  startedAt: number,
+  logsActive: boolean,
+  shouldCaptureDetailed: boolean,
+  rawBodyBytes: Uint8Array | null,
+  response: Response,
+): Promise<Response> {
+  if (!logsActive) return response;
+
+  const ts = Date.now();
+  const durationMs = ts - startedAt;
+
+  try {
+    const blobId = await computeBlobId(blobRaw);
+    const method = c.req.method.toUpperCase();
+    const ipPrefix = truncateIp(extractClientIp(c));
+
+    captureNetwork({
+      blobId,
+      method,
+      path: proxyPath,
+      status: response.status,
+      durationMs,
+      ipPrefix,
+      ts,
+    });
+
+    if (shouldCaptureDetailed && rawBodyBytes) {
+      const derivedKey = await deriveKey(clientKey, serverSalt);
+      await captureDetailed({
+        blobId,
+        method,
+        path: proxyPath,
+        bodyRaw: rawBodyBytes,
+        derivedKey,
+        ts,
+      });
+    }
+  } catch (err) {
+    console.error("[fgp] logs capture failed:", err);
+  }
+
+  return response;
 }
 
 export function blobHeaderProxy(): MiddlewareHandler {
@@ -190,6 +333,7 @@ export function blobHeaderProxy(): MiddlewareHandler {
     if (!blobRaw) return next();
     const url = new URL(c.req.url);
     const proxyPath = url.pathname;
+    if (proxyPath === "/logs" || proxyPath.startsWith("/logs/")) return next();
     return handleProxy(c, blobRaw, proxyPath);
   };
 }

@@ -182,6 +182,7 @@ export function setupGenerate(
   bodyFiltersData: Record<string, FilterData[]>,
   showError: (msg: string) => void,
   hideError: () => void,
+  getLogsConfig?: () => { enabled: boolean; detailed: boolean } | null,
 ): void {
   const fgpForm = assertElement("fgp-form", HTMLFormElement);
   fgpForm.addEventListener("submit", async function (e: Event) {
@@ -237,17 +238,24 @@ export function setupGenerate(
     btn.disabled = true;
     btn.textContent = "G\u00e9n\u00e9ration\u2026";
 
+    const nameInput = document.getElementById("config-name") as HTMLInputElement | null;
+    const name = nameInput?.value.trim() || undefined;
+    const logs = getLogsConfig ? getLogsConfig() : null;
+
     try {
+      const payload: Record<string, unknown> = {
+        token: token,
+        target: target,
+        auth: auth,
+        scopes: scopes,
+        ttl: ttl,
+      };
+      if (name) payload.name = name;
+      if (logs) payload.logs = logs;
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: token,
-          target: target,
-          auth: auth,
-          scopes: scopes,
-          ttl: ttl,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const errData = await res.json().catch(function () {

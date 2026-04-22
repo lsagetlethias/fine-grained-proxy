@@ -2,6 +2,11 @@
 
 ## 22 avril 2026
 
+- Nouvelle page [`/logs`](/logs) pour consulter en direct les requêtes d'un blob (flux live + court historique in-memory)
+- Logs opt-in par blob depuis l'onglet « Logs » de la configuration, deux niveaux : requêtes (méthode, chemin, status, durée, IP tronquée) ou bodies détaillés
+- Bodies détaillés chiffrés avec votre clé client avant stockage : le serveur FGP ne peut pas les lire
+- Zero storage strict : aucun log n'est persisté, purge automatique après 10 minutes d'inactivité
+- Feature désactivable globalement par l'admin de l'instance (variable `FGP_LOGS_ENABLED`)
 - Proxy transparent : les réponses de l'API cible sont forwardées telles quelles (status, body, headers)
 - Nouveau header `X-FGP-Source: proxy|upstream` pour distinguer une erreur FGP d'une erreur de l'API cible
 - **Breaking** : les codes `upstream_error`, `upstream_auth_failed` et le body `rate_limited` disparaissent. Les clients qui matchaient dessus doivent migrer sur `X-FGP-Source` + status/body natifs de l'API cible

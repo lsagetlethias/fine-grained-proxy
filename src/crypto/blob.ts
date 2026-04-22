@@ -2,6 +2,11 @@ import { decodeBase64Url, encodeBase64Url } from "@std/encoding/base64url";
 
 import type { Scope, ScopeEntry } from "../middleware/scopes.ts";
 
+export interface BlobLogsConfig {
+  enabled: boolean;
+  detailed: boolean;
+}
+
 export interface BlobConfig {
   v: number;
   token: string;
@@ -10,6 +15,8 @@ export interface BlobConfig {
   scopes: Scope[];
   ttl: number;
   createdAt: number;
+  name?: string;
+  logs?: BlobLogsConfig;
 }
 
 const PBKDF2_ITERATIONS = 100_000;
