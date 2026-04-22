@@ -4,8 +4,19 @@ import { logger } from "hono/logger";
 
 import { blobHeaderProxy, proxyMiddleware } from "./middleware/proxy.ts";
 import { uiRoutes } from "./routes/ui.tsx";
+import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "./constants.ts";
 
 const app = new Hono();
+
+app.onError((err, c) => {
+  console.error("[fgp] unhandled error:", err);
+  const response = c.json(
+    { error: "internal_error", message: "Internal server error" },
+    500,
+  );
+  response.headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+  return response;
+});
 
 app.use("*", logger());
 app.use("*", blobHeaderProxy());

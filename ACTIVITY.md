@@ -187,3 +187,33 @@
 - **Prochaines étapes** :
   - Premier déploiement Deno Deploy
   - Test e2e avec un vrai token Scalingo
+
+## 2026-04-22 — Proxy transparent + header X-FGP-Source
+
+- **Changements** :
+  - Refactor `src/middleware/proxy.ts` : suppression des transformations de status upstream (plus de `upstream_error`, `upstream_auth_failed`, `rate_limited`). Toute réponse upstream est forwardée telle quelle (status/body/headers, seul `Set-Cookie` strippé).
+  - Nouveau header `X-FGP-Source` sur toutes les réponses : `upstream` pour les réponses forwardées, `proxy` pour les erreurs FGP et `upstream_unreachable`.
+  - Nouvelle erreur FGP `502 upstream_unreachable` (seul 502 légitime, fetch throw uniquement).
+  - `app.onError` global dans `src/main.ts` → `500 internal_error` avec shape FGP + `X-FGP-Source: proxy`, pas de leak de stack ni de message sensible.
+  - Harmonisation `POST /api/list-apps` dans `src/routes/ui.tsx` : modèle hybride (pas proxy transparent car contrat JSON stable attendu par l'UI) — `upstream_unreachable` sur fetch throw, `upstream_list_apps_failed` sur upstream non-OK, `token_exchange_failed` sur échec exchange, tous avec `X-FGP-Source: proxy`.
+  - Nouveau fichier `src/constants.ts` : `FGP_SOURCE_HEADER`, constantes `proxy`/`upstream`, codes d'erreur canoniques.
+  - OpenAPI schemas de réponse stricts par route : union `z.enum([...])` sur les error codes autorisés.
+  - ADR-0006 : "Proxy transparent vs gateway opinionated pour les erreurs upstream".
+  - Specs v3 section 8 entièrement refactorée (sous-sections 8.1 forward transparent, 8.2 erreurs FGP, 8.3 endpoints internes hybrides, 8.4 ordre de vérification). AC-15.3 scopée explicitement aux réponses `X-FGP-Source: proxy`.
+  - AC-17 rédigés (AC-17.1 → AC-17.35) couvrant forward transparent + header discriminant + endpoints internes + onError.
+  - 4 tests de régression bonus : `no-token-leak.test.ts`, `onerror.test.ts`, `proxy-transparent.test.ts` + durcissement `headers.test.ts`.
+  - Changelog UI mis à jour par le dev (breaking change contrat API signalé).
+  - 342 tests, 0 failed.
+- **Décisions** :
+  - ADR-0006 : forward transparent total + header `X-FGP-Source` plutôt que gateway opinionated. Breaking change du contrat API (les clients qui matchaient sur `upstream_error`/`upstream_auth_failed`/`rate_limited` dans le body doivent migrer sur `X-FGP-Source` + status/body upstream natifs).
+  - Helper `/api/list-apps` non transparent : shape dédiée `upstream_list_apps_failed` parce que c'est un helper FGP consommé par l'UI, pas un proxy. Arbitrage validé par le lead.
+  - Les anciens AC-10.1/10.2/10.3/10.4 sont marqués obsolètes (remplacés par AC-17).
+  - `Set-Cookie` toujours strippé : seule entorse à la transparence, justifiée par la nature stateless du proxy.
+- **ADR** : ADR-0006
+- **Process** :
+  - Copilotage archi avec l'utilisateur sur le nouveau modèle (validé avant dispatch).
+  - Multi-agent : PO → specs + ADR, testeur → AC-17 + challenge wording, dev → implé + 4 tests bonus + OpenAPI strict, lead → review structurelle + verify + sync-docs.
+  - Testeur a signalé deux incohérences pendant la session : AC-15.3 wording (corrigé dans specs 8.2) et AC-17.33 wording (corrigé pour matcher la livraison `upstream_list_apps_failed`).
+- **Prochaines étapes** :
+  - Tests e2e reportés (suivi dans `MEMORY.md` → `project_fgp_followups.md`, pas droppés, à ressortir plus tard avec un vrai token Scalingo)
+  - Premier déploiement Deno Deploy toujours en attente

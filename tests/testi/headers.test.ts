@@ -92,7 +92,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.4: upstream 429 without Retry-After propagated without Retry-After",
+  name: "AC-17.6: upstream 429 without Retry-After forwarded transparently, no Retry-After added",
   fn: async () => {
     setup();
 
@@ -107,7 +107,7 @@ Deno.test({
         );
       }
       if (url.includes("api.mock.local")) {
-        return Promise.resolve(new Response("{}", { status: 429 }));
+        return Promise.resolve(new Response("upstream body", { status: 429 }));
       }
       return Promise.resolve(new Response("Not found", { status: 404 }));
     }) as typeof globalThis.fetch;
@@ -118,11 +118,12 @@ Deno.test({
     const res = await app.request(`/${blob}/v1/apps/my-app`, {
       headers: { "X-FGP-Key": CLIENT_KEY },
     });
-    const body = await res.json();
+    const body = await res.text();
 
     assertEquals(res.status, 429);
-    assertEquals(body.error, "rate_limited");
+    assertEquals(body, "upstream body");
     assertEquals(res.headers.get("Retry-After"), null);
+    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
     teardown();
   },
   sanitizeOps: false,
@@ -130,7 +131,8 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-9.6: non-JSON response from target propagated with original Content-Type",
+  name:
+    "AC-17.14: non-JSON (text/html) response forwarded with original Content-Type + X-FGP-Source: upstream",
   fn: async () => {
     setup();
 
@@ -164,6 +166,7 @@ Deno.test({
 
     assertEquals(res.status, 200);
     assertEquals(res.headers.get("Content-Type"), "text/html");
+    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
     const body = await res.text();
     assertEquals(body.includes("Maintenance"), true);
     teardown();

@@ -12,11 +12,14 @@ import {
   setInflight,
 } from "../auth/cache.ts";
 import { checkAccess, type Scope } from "./scopes.ts";
+import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY, FGP_SOURCE_UPSTREAM } from "../constants.ts";
 
 const MAX_BLOB_LENGTH = 4096;
 
 function jsonError(c: Context, status: number, error: string, message: string): Response {
-  return c.json({ error, message }, status as 401);
+  const response = c.json({ error, message }, status as 401);
+  response.headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+  return response;
 }
 
 function getServerSalt(): string {
@@ -97,28 +100,10 @@ async function forwardRequest(
   return await fetch(targetUrl, init);
 }
 
-function handleUpstreamResponse(
-  c: Context,
-  response: Response,
-): Response {
-  if (response.status === 401) {
-    return jsonError(c, 502, "upstream_auth_failed", "Target API rejected the token");
-  }
-  if (response.status === 429) {
-    const retryAfter = response.headers.get("Retry-After");
-    const headers = new Headers({ "Content-Type": "application/json" });
-    if (retryAfter) headers.set("Retry-After", retryAfter);
-    return new Response(
-      JSON.stringify({ error: "rate_limited", message: "Rate limit exceeded, retry later" }),
-      { status: 429, headers },
-    );
-  }
-  if (response.status >= 500) {
-    return jsonError(c, 502, "upstream_error", "Target API is unavailable");
-  }
-
+function handleUpstreamResponse(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.delete("Set-Cookie");
+  headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_UPSTREAM);
 
   return new Response(response.body, {
     status: response.status,
@@ -166,10 +151,9 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
   );
 
   let parsedBody: unknown;
-  let rawBody: ArrayBuffer | undefined;
 
   if (hasBodyMethod && scopesHaveBodyFilters) {
-    rawBody = await c.req.raw.clone().arrayBuffer();
+    const rawBody = await c.req.raw.clone().arrayBuffer();
     if (isJsonContent) {
       try {
         parsedBody = JSON.parse(new TextDecoder().decode(rawBody));
@@ -194,10 +178,10 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
   try {
     response = await forwardRequest(c, config, proxyPath);
   } catch {
-    return jsonError(c, 502, "upstream_error", "Target API is unavailable");
+    return jsonError(c, 502, "upstream_unreachable", "Unable to reach target API");
   }
 
-  return handleUpstreamResponse(c, response);
+  return handleUpstreamResponse(response);
 }
 
 export function blobHeaderProxy(): MiddlewareHandler {

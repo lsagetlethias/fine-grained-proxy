@@ -394,7 +394,34 @@ Header: X-FGP-Key: ma-cle-secrete
 
 ## 8. Comportement des erreurs
 
-Le proxy renvoie des erreurs HTTP standardisées. Les messages d'erreur sont volontairement génériques pour ne pas leaker d'information sur la configuration interne.
+FGP distingue strictement deux sources d'erreurs : celles produites par le proxy lui-même (validation, décryptage, scopes, TTL, réseau upstream injoignable) et celles produites par l'API cible (status HTTP renvoyés par l'upstream). Cette distinction est matérialisée par le header de réponse **`X-FGP-Source`** :
+
+| Valeur | Signification |
+|--------|---------------|
+| `proxy` | La réponse a été générée par FGP (erreur de validation, de scope, ou upstream injoignable). Le body suit la shape FGP `{error, message}`. |
+| `upstream` | La réponse provient de l'API cible et est forwardée telle quelle (status, body, headers). FGP n'a rien transformé. |
+
+Tous les clients doivent utiliser ce header pour savoir à qui attribuer une erreur (FGP vs API cible) et décider de la stratégie de retry / remédiation.
+
+### 8.1 Forward transparent des réponses upstream
+
+**Règle** : toute réponse HTTP effectivement reçue de l'API cible (peu importe le status : 2xx, 3xx, 4xx, 5xx) est forwardée **transparente** au client, sans aucune transformation du status ni du body.
+
+- Status HTTP : préservé tel quel (y compris 401, 403, 404, 429, 500, 502, 503, 504 upstream).
+- Body : forwardé inchangé (stream), avec le `Content-Type` original.
+- Headers : propagés tels quels, sauf `Set-Cookie` qui reste filtré (le proxy est stateless — entorse acceptée à la transparence pure, cf. section 11.3).
+- Header ajouté : `X-FGP-Source: upstream`.
+
+En particulier :
+- Un 401 upstream (token invalide côté API cible) n'est plus transformé en 502 `upstream_auth_failed`. Il reste un 401 avec le body d'origine de l'API cible et `X-FGP-Source: upstream`. C'est au client d'interpréter ce 401 : son token upstream est invalide, pas un problème de proxy.
+- Un 429 upstream n'est plus réécrit en body FGP `rate_limited`. Il reste un 429 avec le body d'origine de l'API cible et ses headers (`Retry-After` inclus) et `X-FGP-Source: upstream`.
+- Un 5xx upstream n'est plus transformé en 502 `upstream_error`. Il reste le status original de l'upstream avec son body et `X-FGP-Source: upstream`.
+
+### 8.2 Erreurs FGP
+
+Les erreurs produites par le proxy (avant ou pendant le forward) suivent la shape JSON `{error, message}` et portent systématiquement le header `X-FGP-Source: proxy`.
+
+Les messages des erreurs FGP (`X-FGP-Source: proxy`) sont **volontairement génériques** pour ne pas leaker d'information sur la configuration interne (pas de détail sur quel scope a échoué, pas de dump du blob, pas d'exception stack). Cette contrainte ne s'applique **qu'aux réponses `X-FGP-Source: proxy`** : les réponses `X-FGP-Source: upstream` sont forwardées telles quelles et peuvent contenir n'importe quel message produit par l'API cible — c'est le contrat de transparence (section 8.1), pas une fuite côté FGP.
 
 | Code | Condition | Corps JSON |
 |------|-----------|------------|
@@ -407,23 +434,39 @@ Le proxy renvoie des erreurs HTTP standardisées. Les messages d'erreur sont vol
 | **403 Forbidden** | Body filters requis mais content-type non JSON | `{"error": "scope_denied", "message": "Body filters require application/json content type"}` |
 | **410 Gone** | Le TTL du blob est expiré | `{"error": "token_expired", "message": "This token has expired"}` |
 | **414 URI Too Long** | Blob base64url > 4 KB | `{"error": "blob_too_large", "message": "Encrypted blob exceeds maximum size"}` |
-| **502 Bad Gateway** | Erreur réseau ou HTTP 5xx de l'API cible | `{"error": "upstream_error", "message": "Target API is unavailable"}` |
-| **502 Bad Gateway** | Token rejeté par l'API cible (401 upstream) | `{"error": "upstream_auth_failed", "message": "Target API rejected the token"}` |
-| **429 Too Many Requests** | Rate limit de l'API cible atteint (429 upstream) | `{"error": "rate_limited", "message": "Rate limit exceeded, retry later"}` |
+| **500 Internal Server Error** | Exception non catchée dans le proxy (bug FGP) | `{"error": "internal_error", "message": "Internal proxy error"}` |
+| **502 Bad Gateway** | L'API cible est injoignable (fetch throw : DNS, timeout, connexion refusée, TLS) | `{"error": "upstream_unreachable", "message": "Target API is unreachable"}` |
 
-### Ordre de vérification
+Le 502 `upstream_unreachable` est la **seule 502 légitime côté proxy** : elle n'est renvoyée que quand aucune réponse HTTP n'a pu être obtenue de l'upstream. Dès qu'une réponse upstream existe (même un 502/503/504 upstream), elle est forwardée telle quelle avec `X-FGP-Source: upstream`.
+
+Le 500 `internal_error` est renvoyé par un handler global (`app.onError`) qui catche toute exception non prévue dans le pipeline FGP. Il conserve la même shape `{error, message}` et le header `X-FGP-Source: proxy`.
+
+### 8.3 Harmonisation des endpoints internes
+
+Les endpoints internes du proxy qui tapent eux-mêmes des APIs externes (ex : `POST /api/list-apps` qui appelle Scalingo pour l'UI) ne sont **pas des proxies transparents** : ils consomment l'upstream pour servir leur propre contrat (shape JSON stable attendue par l'UI). Ils utilisent donc un modèle hybride :
+
+- Échec réseau (fetch throw) → 502 `upstream_unreachable` + `X-FGP-Source: proxy`.
+- Échec d'exchange token (pour `list-apps`) → 401 `token_exchange_failed` + `X-FGP-Source: proxy`.
+- Réponse upstream non-OK (status non-2xx reçu de l'upstream) → 502 avec shape FGP dédiée à l'endpoint (ex : `upstream_list_apps_failed` avec le status upstream reporté dans `message` pour le debug) + `X-FGP-Source: proxy`.
+
+Tous les résultats de ces endpoints portent `X-FGP-Source: proxy` (que ce soit 2xx ou erreur), puisque le contrat de réponse est défini par FGP et non par l'upstream.
+
+### 8.4 Ordre de vérification
 
 Le proxy vérifie dans cet ordre, et renvoie la première erreur rencontrée :
 
-1. Validité du path (segments) → 400
-2. Taille du blob → 414
-3. Présence du header `X-FGP-Key` → 401 (missing_key)
-4. Déchiffrement du blob → 401 (invalid_credentials)
-5. Validité du mode d'auth → 400 (invalid_auth_mode)
-6. Vérification du TTL → 410 (token_expired)
-7. Parsing du body (si body filters requis) → 400 (invalid_body) ou 403 (content-type)
-8. Vérification du scope (méthode + path + body) → 403 (scope_denied)
-9. Forward vers l'API cible → 502/429 selon la réponse
+1. Validité du path (segments) → 400 `invalid_request` (`X-FGP-Source: proxy`)
+2. Taille du blob → 414 `blob_too_large` (`X-FGP-Source: proxy`)
+3. Présence du header `X-FGP-Key` → 401 `missing_key` (`X-FGP-Source: proxy`)
+4. Déchiffrement du blob → 401 `invalid_credentials` (`X-FGP-Source: proxy`)
+5. Validité du mode d'auth → 400 `invalid_auth_mode` (`X-FGP-Source: proxy`)
+6. Vérification du TTL → 410 `token_expired` (`X-FGP-Source: proxy`)
+7. Parsing du body (si body filters requis) → 400 `invalid_body` ou 403 `scope_denied` (`X-FGP-Source: proxy`)
+8. Vérification du scope (méthode + path + body) → 403 `scope_denied` (`X-FGP-Source: proxy`)
+9. Forward vers l'API cible :
+   - Si `fetch` throw (réseau) → 502 `upstream_unreachable` (`X-FGP-Source: proxy`)
+   - Sinon → status/body/headers upstream forwardés transparents (`X-FGP-Source: upstream`)
+10. Exception inattendue à n'importe quelle étape → 500 `internal_error` via `app.onError` (`X-FGP-Source: proxy`)
 
 ---
 
@@ -434,7 +477,7 @@ Le proxy vérifie dans cet ordre, et renvoie la première erreur rencontrée :
 FGP ne fait pas de rate limiting propre. La stratégie est transparente :
 
 1. **Forward transparent** : les requêtes sont transmises à l'API cible telles quelles.
-2. **Propagation du 429** : si l'API cible répond 429, FGP renvoie 429 au client avec le header `Retry-After` si présent.
+2. **Propagation du 429** : si l'API cible répond 429, FGP forwarde le 429 avec son body et ses headers d'origine (`Retry-After` inclus) et ajoute `X-FGP-Source: upstream` (cf. section 8.1).
 3. **Pas de quota par URL** : FGP ne tente pas de répartir le budget entre les différentes URLs.
 
 ### 9.2 Optimisation : cache du bearer (Scalingo)
@@ -490,11 +533,15 @@ Le header `Authorization` (ou le header custom) est défini selon le mode d'auth
 ### 11.3 Headers de réponse
 
 Le proxy propage tous les headers de la réponse de l'API cible, sauf :
-- `Set-Cookie` (filtré, le proxy est stateless et ne doit pas propager de cookies)
+- `Set-Cookie` (filtré, le proxy est stateless et ne doit pas propager de cookies). C'est la seule entorse à la transparence stricte, acceptée pour préserver la nature stateless du proxy.
+
+Le proxy ajoute systématiquement le header `X-FGP-Source` sur toutes ses réponses :
+- `X-FGP-Source: upstream` sur les réponses forwardées depuis l'API cible.
+- `X-FGP-Source: proxy` sur les réponses générées par FGP (erreurs de validation, de scope, TTL, `upstream_unreachable`, `internal_error`).
 
 ### 11.4 Réponses non-JSON
 
-Si l'API cible renvoie une réponse non-JSON (page de maintenance HTML, erreur texte), le proxy la propage telle quelle avec le `Content-Type` original. Les erreurs FGP elles-mêmes (400, 401, 403, 410, 414, 429, 502) sont toujours en JSON.
+Si l'API cible renvoie une réponse non-JSON (page de maintenance HTML, erreur texte), le proxy la forwarde telle quelle avec le `Content-Type` original et `X-FGP-Source: upstream`. Les erreurs FGP (400, 401, 403, 410, 414, 500, 502 `upstream_unreachable`) sont toujours en JSON avec `X-FGP-Source: proxy`.
 
 ### 11.5 Body forwarding
 

@@ -107,7 +107,8 @@ Deno.test({
 // --- /api/list-apps upstream failure ---
 
 Deno.test({
-  name: "POST /api/list-apps when upstream returns non-ok status returns 502",
+  name:
+    "AC-17.33: POST /api/list-apps upstream non-ok returns 502 upstream_list_apps_failed + X-FGP-Source: proxy",
   fn: async () => {
     setup();
     globalThis.fetch = ((input: string | URL | Request) => {
@@ -134,7 +135,9 @@ Deno.test({
     const body = await res.json();
 
     assertEquals(res.status, 502);
-    assertEquals(body.error, "upstream_error");
+    assertEquals(body.error, "upstream_list_apps_failed");
+    assertEquals(body.message.includes("500"), true);
+    assertEquals(res.headers.get("X-FGP-Source"), "proxy");
 
     teardown();
   },
@@ -143,7 +146,8 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/list-apps when upstream fetch throws returns 502",
+  name:
+    "AC-17.34: POST /api/list-apps fetch throw returns 502 upstream_unreachable + X-FGP-Source: proxy",
   fn: async () => {
     setup();
     globalThis.fetch = ((input: string | URL | Request) => {
@@ -167,7 +171,40 @@ Deno.test({
     const body = await res.json();
 
     assertEquals(res.status, 502);
-    assertEquals(body.error, "upstream_error");
+    assertEquals(body.error, "upstream_unreachable");
+    assertEquals(res.headers.get("X-FGP-Source"), "proxy");
+
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name:
+    "AC-17.35: POST /api/list-apps exchange fail returns 401 token_exchange_failed + X-FGP-Source: proxy",
+  fn: async () => {
+    setup();
+    globalThis.fetch = ((input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("auth.mock.local")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "invalid_token" }), { status: 401 }),
+        );
+      }
+      return Promise.resolve(new Response("Not found", { status: 404 }));
+    }) as typeof globalThis.fetch;
+
+    const res = await app.request("/api/list-apps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "tk-us-invalid" }),
+    });
+    const body = await res.json();
+
+    assertEquals(res.status, 401);
+    assertEquals(body.error, "token_exchange_failed");
+    assertEquals(res.headers.get("X-FGP-Source"), "proxy");
 
     teardown();
   },

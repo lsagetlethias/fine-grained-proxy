@@ -112,7 +112,7 @@ Deno.test({
 // --- Network error (fetch throws) ---
 
 Deno.test({
-  name: "AC-10.2: integration: network error (fetch throws) returns 502 upstream_error",
+  name: "AC-17.29: fetch throw returns 502 upstream_unreachable + X-FGP-Source: proxy",
   fn: async () => {
     setup();
     globalThis.fetch = (() => {
@@ -127,7 +127,8 @@ Deno.test({
     });
     const body = await res.json();
     assertEquals(res.status, 502);
-    assertEquals(body.error, "upstream_error");
+    assertEquals(body.error, "upstream_unreachable");
+    assertEquals(res.headers.get("X-FGP-Source"), "proxy");
     teardown();
   },
   sanitizeOps: false,
@@ -243,6 +244,8 @@ Deno.test({
     assertEquals(r1.status, 502);
     assertEquals(r2.status, 502);
     assertEquals(r3.status, 502);
+    assertEquals((await r1.json()).error, "upstream_unreachable");
+    assertEquals(r1.headers.get("X-FGP-Source"), "proxy");
     assertEquals(exchangeCount, 1);
     teardown();
   },
@@ -253,7 +256,7 @@ Deno.test({
 // --- Upstream 503 returns 502 ---
 
 Deno.test({
-  name: "AC-10.2: integration: upstream 503 returns 502 upstream_error",
+  name: "AC-17.9: upstream 503 forwarded transparently with X-FGP-Source: upstream",
   fn: async () => {
     setup();
     globalThis.fetch = (() => {
@@ -266,9 +269,10 @@ Deno.test({
     const res = await app.request(`/${blob}/v1/apps`, {
       headers: { "X-FGP-Key": CLIENT_KEY },
     });
-    const body = await res.json();
-    assertEquals(res.status, 502);
-    assertEquals(body.error, "upstream_error");
+    const body = await res.text();
+    assertEquals(res.status, 503);
+    assertEquals(body, "Service Unavailable");
+    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
     teardown();
   },
   sanitizeOps: false,

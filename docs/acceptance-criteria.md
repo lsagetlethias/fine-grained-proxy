@@ -468,31 +468,17 @@
 
 ---
 
-## AC-10 — Gestion des erreurs upstream
+## AC-10 — Gestion des erreurs upstream — **OBSOLETE (remplace par AC-17)**
 
-### AC-10.1 Token rejete par la cible
+> Cette section decrit l'ancien modele gateway (transformation des erreurs upstream). Elle est **remplacee par AC-17** (proxy transparent). Conservee ici pour historique uniquement. Les tests correspondants doivent etre reecrits selon AC-17.
 
-**Given** une requete valide (blob ok, scopes ok)
-**When** l'API cible renvoie `401` (token revoque ou invalide)
-**Then** le proxy renvoie `502` avec `{"error": "upstream_auth_failed", "message": "Target API rejected the token"}`
+### AC-10.1 ~~Token rejete par la cible~~ — **obsolete, voir AC-17.2**
 
-### AC-10.2 API cible indisponible
+### AC-10.2 ~~API cible indisponible~~ — **obsolete, voir AC-17.7/17.9 (forward) et AC-17.29 (fetch throw)**
 
-**Given** une requete valide
-**When** l'API cible renvoie `500`, `503`, ou une erreur reseau (timeout, connection refused)
-**Then** le proxy renvoie `502` avec `{"error": "upstream_error", "message": "Target API is unavailable"}`
+### AC-10.3 ~~Rate limit upstream (429)~~ — **obsolete, voir AC-17.5**
 
-### AC-10.3 Rate limit upstream (429)
-
-**Given** une requete valide
-**When** l'API cible renvoie `429` avec un header `Retry-After: 30`
-**Then** le proxy renvoie `429` avec `{"error": "rate_limited", "message": "Rate limit exceeded, retry later"}` et propage le header `Retry-After: 30`
-
-### AC-10.4 Rate limit sans Retry-After
-
-**Given** une requete valide
-**When** l'API cible renvoie `429` sans header `Retry-After`
-**Then** le proxy renvoie `429` avec `{"error": "rate_limited", "message": "Rate limit exceeded, retry later"}` sans header `Retry-After`
+### AC-10.4 ~~Rate limit sans Retry-After~~ — **obsolete, voir AC-17.6**
 
 ---
 
@@ -698,6 +684,228 @@
 
 ---
 
+## AC-17 — Proxy transparent et provenance des erreurs
+
+> **Contexte** : FGP est un proxy, pas une gateway. Toute reponse qui provient reellement de l'upstream est forwardee telle quelle (status, headers, body). Seules les erreurs que FGP genere lui-meme (avant ou apres le forward) portent une shape `{error, message}`. La provenance est explicite via le header `X-FGP-Source`.
+>
+> **Convention `X-FGP-Source`** :
+> - `proxy` : la reponse est generee par FGP (erreur FGP ou 502 fetch throw ou 500 onError).
+> - `upstream` : la reponse provient de l'API cible (status, headers et body forwardes sans transformation, sauf `Set-Cookie` strippe).
+>
+> **Liste exhaustive des erreurs FGP (shape `{error, message}` + `X-FGP-Source: proxy`)** : `missing_key` (401), `blob_too_large` (414), `invalid_credentials` (401), `token_expired` (410), `invalid_auth_mode` (400), `invalid_body` (400), `scope_denied` (403), `upstream_unreachable` (502), `invalid_request` (400), `internal_error` (500 via `app.onError`).
+
+### AC-17.1 Forward transparent — status 2xx
+
+**Given** une requete valide (blob ok, scopes ok) et l'API cible repond `200` avec un body JSON
+**When** le proxy construit la reponse
+**Then** le proxy renvoie `200` avec le body JSON de l'upstream tel quel, le header `X-FGP-Source: upstream`, et sans transformation
+
+### AC-17.2 Forward transparent — upstream 401
+
+**Given** une requete valide (blob ok, scopes ok)
+**When** l'API cible renvoie `401` avec un body `{"error": "invalid_token"}` et un `Content-Type: application/json`
+**Then** le proxy renvoie `401` (status original), le body `{"error": "invalid_token"}` exact, le `Content-Type: application/json` et le header `X-FGP-Source: upstream`
+
+### AC-17.3 Forward transparent — upstream 403
+
+**Given** une requete valide
+**When** l'API cible renvoie `403` avec un body et des headers custom
+**Then** le proxy renvoie `403`, body et headers forwardes tels quels, header `X-FGP-Source: upstream`
+
+### AC-17.4 Forward transparent — upstream 404
+
+**Given** une requete valide
+**When** l'API cible renvoie `404`
+**Then** le proxy renvoie `404`, body et headers forwardes tels quels, header `X-FGP-Source: upstream`
+
+### AC-17.5 Forward transparent — upstream 429 avec Retry-After
+
+**Given** une requete valide
+**When** l'API cible renvoie `429` avec header `Retry-After: 30` et un body arbitraire
+**Then** le proxy renvoie `429`, body upstream preserve, header `Retry-After: 30` preserve, header `X-FGP-Source: upstream`
+
+### AC-17.6 Forward transparent — upstream 429 sans Retry-After
+
+**Given** une requete valide
+**When** l'API cible renvoie `429` sans header `Retry-After`
+**Then** le proxy renvoie `429`, body upstream preserve, pas de header `Retry-After` ajoute, header `X-FGP-Source: upstream`
+
+### AC-17.7 Forward transparent — upstream 500
+
+**Given** une requete valide (blob ok, scopes ok, fetch a reussi)
+**When** l'API cible renvoie `500` avec un body
+**Then** le proxy renvoie `500`, body upstream preserve, header `X-FGP-Source: upstream` (pas de reecriture en `502 upstream_error`)
+
+### AC-17.8 Forward transparent — upstream 502
+
+**Given** une requete valide
+**When** l'API cible renvoie `502`
+**Then** le proxy renvoie `502` (status original de l'upstream), body upstream preserve, header `X-FGP-Source: upstream`
+
+### AC-17.9 Forward transparent — upstream 503
+
+**Given** une requete valide
+**When** l'API cible renvoie `503`
+**Then** le proxy renvoie `503`, body upstream preserve, header `X-FGP-Source: upstream`
+
+### AC-17.10 Forward transparent — upstream 504
+
+**Given** une requete valide
+**When** l'API cible renvoie `504`
+**Then** le proxy renvoie `504`, body upstream preserve, header `X-FGP-Source: upstream`
+
+### AC-17.11 Forward transparent — status atypique
+
+**Given** une requete valide
+**When** l'API cible renvoie un status atypique (`418`, `507`, `451`, `226`)
+**Then** le proxy renvoie le status original, body upstream preserve, header `X-FGP-Source: upstream`
+
+### AC-17.12 Body upstream preserve exactement
+
+**Given** une requete valide
+**When** l'API cible renvoie un body arbitraire (JSON, bytes, multi-ligne, vide)
+**Then** le body recu par le client est byte-identique a celui emis par l'upstream
+
+### AC-17.13 Body upstream vide preserve
+
+**Given** une requete valide
+**When** l'API cible renvoie un status `500` (ou autre) avec un body vide
+**Then** le proxy renvoie le status original avec un body vide (pas de JSON `{error, message}` injecte), header `X-FGP-Source: upstream`
+
+### AC-17.14 Content-Type upstream preserve — text/html
+
+**Given** une requete valide
+**When** l'API cible renvoie `Content-Type: text/html` avec un body HTML
+**Then** le proxy propage `Content-Type: text/html` tel quel et le body HTML sans forcer du JSON
+
+### AC-17.15 Content-Type upstream preserve — application/xml
+
+**Given** une requete valide
+**When** l'API cible renvoie `Content-Type: application/xml` avec un body XML
+**Then** le proxy propage le `Content-Type: application/xml` tel quel et le body XML
+
+### AC-17.16 Content-Type upstream preserve — application/octet-stream
+
+**Given** une requete valide
+**When** l'API cible renvoie `Content-Type: application/octet-stream` avec un body binaire
+**Then** le proxy propage `Content-Type: application/octet-stream` et les bytes sans corruption
+
+### AC-17.17 Redirects upstream — non suivi
+
+**Given** une requete valide
+**When** l'API cible renvoie `302` avec `Location: /new-path`
+**Then** le proxy renvoie `302`, header `Location` preserve, header `X-FGP-Source: upstream` (le proxy ne suit pas la redirection cote serveur, c'est au client de la suivre)
+
+### AC-17.18 Set-Cookie upstream strippe — header unique
+
+**Given** une requete valide
+**When** l'API cible renvoie un header `Set-Cookie: session=abc`
+**Then** le `Set-Cookie` est absent de la reponse FGP, les autres headers sont preserves, `X-FGP-Source: upstream` est present
+
+### AC-17.19 Set-Cookie upstream strippe — headers multiples
+
+**Given** une requete valide
+**When** l'API cible renvoie plusieurs headers `Set-Cookie` (session, csrf, preferences)
+**Then** aucun `Set-Cookie` n'est present dans la reponse FGP (tous strippes)
+
+### AC-17.20 X-FGP-Source overwrite si present dans l'upstream
+
+**Given** une requete valide
+**When** l'API cible renvoie un header `X-FGP-Source: attacker-value` dans sa reponse
+**Then** la reponse FGP contient `X-FGP-Source: upstream` (la valeur de l'upstream est ecrasee sans etat d'ame)
+
+### AC-17.21 Header X-FGP-Source: proxy — missing_key
+
+**Given** une requete sans `X-FGP-Key`
+**When** le proxy repond `401 missing_key`
+**Then** la reponse contient `X-FGP-Source: proxy` et la shape `{"error": "missing_key", "message": "..."}`
+
+### AC-17.22 Header X-FGP-Source: proxy — blob_too_large
+
+**Given** une requete avec un blob > 4096 chars
+**When** le proxy repond `414 blob_too_large`
+**Then** la reponse contient `X-FGP-Source: proxy` et la shape `{"error": "blob_too_large", ...}`
+
+### AC-17.23 Header X-FGP-Source: proxy — invalid_credentials
+
+**Given** une requete avec une cle client invalide ou blob corrompu
+**When** le proxy repond `401 invalid_credentials`
+**Then** la reponse contient `X-FGP-Source: proxy`
+
+### AC-17.24 Header X-FGP-Source: proxy — token_expired
+
+**Given** une requete avec un blob dont le TTL est expire
+**When** le proxy repond `410 token_expired`
+**Then** la reponse contient `X-FGP-Source: proxy`
+
+### AC-17.25 Header X-FGP-Source: proxy — invalid_auth_mode
+
+**Given** une requete avec un blob contenant un mode d'auth non supporte
+**When** le proxy repond `400 invalid_auth_mode`
+**Then** la reponse contient `X-FGP-Source: proxy`
+
+### AC-17.26 Header X-FGP-Source: proxy — invalid_body
+
+**Given** une requete POST avec body filters actifs et body JSON malforme
+**When** le proxy repond `400 invalid_body`
+**Then** la reponse contient `X-FGP-Source: proxy`
+
+### AC-17.27 Header X-FGP-Source: proxy — scope_denied
+
+**Given** une requete dont la methode ou le path ne matche aucun scope autorise
+**When** le proxy repond `403 scope_denied`
+**Then** la reponse contient `X-FGP-Source: proxy`
+
+### AC-17.28 Header X-FGP-Source: proxy — invalid_request
+
+**Given** une requete `/{blob}` sans path de proxy (segments.length < 2)
+**When** le proxy repond `400 invalid_request`
+**Then** la reponse contient `X-FGP-Source: proxy`
+
+### AC-17.29 Fetch throw → 502 upstream_unreachable
+
+**Given** une requete valide
+**When** `fetch` throw (connexion refusee, DNS fail, timeout, network error)
+**Then** le proxy renvoie `502` avec `{"error": "upstream_unreachable", "message": "Unable to reach target API"}` et header `X-FGP-Source: proxy`
+
+### AC-17.30 Fetch throw — tous les modes reseau
+
+**Given** une requete valide
+**When** `fetch` rejette avec (a) connexion refusee, (b) DNS fail, (c) timeout, (d) TLS error
+**Then** dans les 4 cas, le proxy repond `502 upstream_unreachable` + `X-FGP-Source: proxy`
+
+### AC-17.31 Exception non catchee → 500 internal_error (app.onError)
+
+**Given** une requete vers une route FGP et un code middleware qui throw (ex: `FGP_SALT` absent → `getServerSalt` throw)
+**When** l'exception remonte sans etre catchee
+**Then** `app.onError` renvoie `500` avec `{"error": "internal_error", "message": "Internal server error"}` et header `X-FGP-Source: proxy`
+
+### AC-17.32 Exception non catchee — pas de leak
+
+**Given** une exception non catchee avec un message sensible (ex: `"FGP_SALT missing"`, stack trace)
+**When** `app.onError` construit la reponse
+**Then** le message renvoye au client est generique (`"Internal server error"`), le message d'origine et la stack ne fuitent pas dans le body ni dans les headers
+
+### AC-17.33 Harmonisation endpoint `/api/list-apps` — upstream non-ok
+
+**Given** un POST `/api/list-apps` avec token valide, exchange ok
+**When** l'API Scalingo `/v1/apps` renvoie un status non-2xx (ex: `500`, `403`)
+**Then** la reponse FGP est `502` avec `{"error": "upstream_list_apps_failed", "message": "Scalingo returned {status}"}` et `X-FGP-Source: proxy` (l'endpoint n'est pas un proxy transparent : c'est un helper FGP avec shape dediee, le status upstream est seulement reporte dans le message pour le debug)
+
+### AC-17.34 Harmonisation endpoint `/api/list-apps` — fetch throw
+
+**Given** un POST `/api/list-apps` avec token valide, exchange ok
+**When** le fetch vers `/v1/apps` throw (connexion refusee, timeout, etc.)
+**Then** la reponse FGP est `502` avec `{"error": "upstream_unreachable", "message": "..."}` et `X-FGP-Source: proxy`
+
+### AC-17.35 Harmonisation endpoint `/api/list-apps` — exchange failed
+
+**Given** un POST `/api/list-apps` avec token Scalingo invalide
+**When** l'exchange `exchangeToken` throw
+**Then** la reponse FGP est `401` avec `{"error": "token_exchange_failed", "message": "..."}` et `X-FGP-Source: proxy` (erreur FGP, pas un forward upstream puisque c'est une etape interne)
+
+---
+
 ## Remarques
 
 - **Backward compat** : le proxy supporte les blobs v2 (scopes string uniquement) et v3 (scopes mixtes). Un blob v2 n'a jamais de body filters.
@@ -705,3 +913,5 @@
 - **Deny-all** : toute requete qui ne matche aucun scope est refusee avec 403. Le proxy est une allowlist stricte.
 
 - **Body parsing lazy** : le body n'est parse que si au moins un scope de la config contient des body filters ET que la methode est POST/PUT/PATCH. Les GET ne declenchent jamais le parsing du body.
+
+- **Proxy transparent (AC-17)** : remplace le modele gateway precedent. Les anciens AC-10.1/10.2/10.3/10.4 (upstream 401 → 502 `upstream_auth_failed`, upstream 5xx → 502 `upstream_error`, 429 → 429 `rate_limited`) sont **obsoletes**. Les AC-15.3 (messages generiques sur erreurs FGP) restent valides pour les erreurs generees par le proxy uniquement ; les bodies forwardes depuis l'upstream peuvent contenir n'importe quoi, c'est la responsabilite du client et de la cible.

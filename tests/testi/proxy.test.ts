@@ -510,10 +510,26 @@ Deno.test({
 // --- Upstream error handling ---
 
 Deno.test({
-  name: "AC-10.1: integration: upstream 401 returns 502 upstream_auth_failed",
+  name: "AC-17.2: upstream 401 forwarded transparently with X-FGP-Source: upstream",
   fn: async () => {
     setup();
-    mockFetch({ apiStatus: 401 });
+    globalThis.fetch = ((input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("auth.mock.local")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ token: "mock-bearer" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "invalid_token" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }) as typeof globalThis.fetch;
     const app = createApp();
     const blob = await makeBlob(["GET:/v1/apps/*"]);
 
@@ -522,8 +538,9 @@ Deno.test({
     });
     const body = await res.json();
 
-    assertEquals(res.status, 502);
-    assertEquals(body.error, "upstream_auth_failed");
+    assertEquals(res.status, 401);
+    assertEquals(body.error, "invalid_token");
+    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
     teardown();
   },
   sanitizeOps: false,
@@ -531,7 +548,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.3: integration: upstream 429 returns 429 rate_limited with Retry-After",
+  name: "AC-17.5: upstream 429 forwarded transparently with Retry-After and X-FGP-Source: upstream",
   fn: async () => {
     setup();
     mockFetch({ apiStatus: 429 });
@@ -541,11 +558,12 @@ Deno.test({
     const res = await app.request(`/${blob}/v1/apps/my-app`, {
       headers: { "X-FGP-Key": CLIENT_KEY },
     });
-    const body = await res.json();
+    const body = await res.text();
 
     assertEquals(res.status, 429);
-    assertEquals(body.error, "rate_limited");
+    assertEquals(body, "{}");
     assertEquals(res.headers.get("Retry-After"), "30");
+    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
     teardown();
   },
   sanitizeOps: false,
@@ -553,7 +571,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-10.2: integration: upstream 500 returns 502 upstream_error",
+  name: "AC-17.7: upstream 500 forwarded transparently with X-FGP-Source: upstream",
   fn: async () => {
     setup();
     mockFetch({ apiStatus: 500 });
@@ -563,10 +581,11 @@ Deno.test({
     const res = await app.request(`/${blob}/v1/apps/my-app`, {
       headers: { "X-FGP-Key": CLIENT_KEY },
     });
-    const body = await res.json();
+    const body = await res.text();
 
-    assertEquals(res.status, 502);
-    assertEquals(body.error, "upstream_error");
+    assertEquals(res.status, 500);
+    assertEquals(body, "Internal Server Error");
+    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
     teardown();
   },
   sanitizeOps: false,
@@ -607,7 +626,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-9.5: integration: Set-Cookie from upstream is stripped",
+  name: "AC-17.18: Set-Cookie from upstream is stripped, X-FGP-Source: upstream is set",
   fn: async () => {
     setup();
     globalThis.fetch = ((input: string | URL | Request) => {
@@ -634,6 +653,7 @@ Deno.test({
 
     assertEquals(res.status, 200);
     assertEquals(res.headers.get("Set-Cookie"), null);
+    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
     teardown();
   },
   sanitizeOps: false,

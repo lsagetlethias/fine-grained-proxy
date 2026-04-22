@@ -1,4 +1,6 @@
 import { FgpLogo, Layout } from "./layout.tsx";
+import { renderChangelog } from "./changelog-renderer.tsx";
+import { CHANGELOG_MARKDOWN } from "./changelog-data.ts";
 
 const TTL_PRESETS = [
   { label: "1 heure", value: "3600" },
@@ -1343,77 +1345,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                 aria-hidden="true"
                 class="hidden text-sm text-gray-600 dark:text-gray-400"
               >
-                <div class="space-y-6">
-                  <section>
-                    <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-wider">
-                      16 avril 2026
-                    </h3>
-                    <ul class="space-y-1.5 text-xs">
-                      <li>
-                        Blob en header{" "}
-                        <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                          X-FGP-Blob
-                        </code>{" "}
-                        (dual mode URL/header)
-                      </li>
-                      <li>
-                        Section &laquo; Tester un scope &raquo; avec highlight temps r&eacute;el
-                      </li>
-                      <li>
-                        Test end-to-end via{" "}
-                        <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                          POST /api/test-proxy
-                        </code>
-                      </li>
-                      <li>
-                        Partage de config via{" "}
-                        <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">?c=</code>
-                        {" "}
-                        (sans token)
-                      </li>
-                      <li>Import d'URL FGP existante avec token redact&eacute;</li>
-                      <li>API encode/decode pour URLs publiques</li>
-                      <li>Champ &laquo; Nom de la configuration &raquo;</li>
-                      <li>
-                        Body filters dans l'URL de partage{" "}
-                        <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">?c=</code>
-                      </li>
-                      <li>Presets r&eacute;organis&eacute;s en accord&eacute;ons</li>
-                      <li>Fix pipe methods dans le scope matching</li>
-                      <li>Onglets Doc / Exemples / Changelog</li>
-                    </ul>
-                  </section>
-
-                  <section>
-                    <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-wider">
-                      9 avril 2026
-                    </h3>
-                    <ul class="space-y-1.5 text-xs">
-                      <li>Body filters v3 : exact, wildcard, glob, regex, not, and</li>
-                      <li>Scopes structur&eacute;s (ScopeEntry) avec filtrage JSON body</li>
-                      <li>Tailwind CSS build-time (plus de CDN)</li>
-                      <li>Type regex dans les body filters</li>
-                      <li>Preset Scalingo enrichi (permissions par app, branches)</li>
-                      <li>Logo, SEO, palette fgp-*, dark mode media</li>
-                      <li>Extraction JS &rarr; modules TypeScript (esbuild)</li>
-                      <li>Migration Zod 4</li>
-                    </ul>
-                  </section>
-
-                  <section>
-                    <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-wider">
-                      8 avril 2026
-                    </h3>
-                    <ul class="space-y-1.5 text-xs">
-                      <li>Premi&egrave;re version : proxy stateless + double cl&eacute;</li>
-                      <li>Chiffrement AES-256-GCM + PBKDF2 (Web Crypto)</li>
-                      <li>4 modes d'auth : bearer, basic, scalingo-exchange, header custom</li>
-                      <li>Scopes METHOD:PATH avec wildcard</li>
-                      <li>UI de configuration (Hono JSX)</li>
-                      <li>OpenAPI 3.0 + Swagger UI</li>
-                    </ul>
-                  </section>
-                </div>
+                {renderChangelog(CHANGELOG_MARKDOWN)}
               </div>
             </div>
           </aside>

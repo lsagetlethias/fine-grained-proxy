@@ -15,6 +15,7 @@ import {
   type Scope,
   type ScopeEntry,
 } from "../middleware/scopes.ts";
+import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../constants.ts";
 
 let commitHash = "dev";
 try {
@@ -37,10 +38,42 @@ function getRequestOrigin(c: Context): string {
 
 const DEFAULT_API_URL = "https://api.osc-fr1.scalingo.com";
 
-const ErrorSchema = z.object({
-  error: z.string(),
-  message: z.string(),
-}).openapi("Error");
+function errorSchema<const T extends readonly [string, ...string[]]>(
+  codes: T,
+  name: string,
+) {
+  return z.object({
+    error: z.enum(codes),
+    message: z.string(),
+  }).openapi(name);
+}
+
+const DecodeError400Schema = errorSchema(["invalid_body"], "DecodeError400");
+const DecodeError401Schema = errorSchema(["invalid_credentials"], "DecodeError401");
+const DecodeError500Schema = errorSchema(["server_error"], "DecodeError500");
+
+const ShareEncodeError400Schema = errorSchema(["invalid_body"], "ShareEncodeError400");
+
+const ShareDecodeError400Schema = errorSchema(
+  ["invalid_body", "invalid_encoded"],
+  "ShareDecodeError400",
+);
+
+const GenerateError400Schema = errorSchema(
+  ["invalid_body", "blob_too_large", "scope_limit_exceeded"],
+  "GenerateError400",
+);
+const GenerateError500Schema = errorSchema(["server_error"], "GenerateError500");
+
+const ListAppsError400Schema = errorSchema(["invalid_body"], "ListAppsError400");
+const ListAppsError401Schema = errorSchema(["token_exchange_failed"], "ListAppsError401");
+const ListAppsError502Schema = errorSchema(
+  ["upstream_unreachable", "upstream_list_apps_failed"],
+  "ListAppsError502",
+);
+
+const TestScopeError400Schema = errorSchema(["invalid_body"], "TestScopeError400");
+const TestProxyError400Schema = errorSchema(["invalid_body"], "TestProxyError400");
 
 const ObjectValueSchema = z.union([
   z.object({ type: z.literal("any"), value: z.unknown() }),
@@ -228,16 +261,16 @@ const decodeRoute = createRoute({
       content: { "application/json": { schema: DecodeResponseSchema } },
     },
     400: {
-      description: "Invalid body",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Invalid body (missing or malformed fields)",
+      content: { "application/json": { schema: DecodeError400Schema } },
     },
     401: {
-      description: "Unable to decrypt",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Unable to decrypt blob (wrong key or corrupted blob)",
+      content: { "application/json": { schema: DecodeError401Schema } },
     },
     500: {
-      description: "Server misconfigured",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Server misconfigured (FGP_SALT missing)",
+      content: { "application/json": { schema: DecodeError500Schema } },
     },
   },
 });
@@ -261,8 +294,8 @@ const shareEncodeRoute = createRoute({
       content: { "application/json": { schema: ShareEncodeResponseSchema } },
     },
     400: {
-      description: "Invalid body",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Invalid body (missing or malformed fields)",
+      content: { "application/json": { schema: ShareEncodeError400Schema } },
     },
   },
 });
@@ -285,8 +318,8 @@ const shareDecodeRoute = createRoute({
       content: { "application/json": { schema: ShareDecodeResponseSchema } },
     },
     400: {
-      description: "Invalid body or unable to decode",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Invalid body or unable to decode the shared config string",
+      content: { "application/json": { schema: ShareDecodeError400Schema } },
     },
   },
 });
@@ -324,12 +357,13 @@ const generateRoute = createRoute({
       content: { "application/json": { schema: GenerateResponseSchema } },
     },
     400: {
-      description: "Invalid JSON body or missing fields",
-      content: { "application/json": { schema: ErrorSchema } },
+      description:
+        "Invalid body, generated blob exceeds 4KB, or scope limits violated (body filters, depth, etc.)",
+      content: { "application/json": { schema: GenerateError400Schema } },
     },
     500: {
-      description: "Server misconfigured",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Server misconfigured (FGP_SALT missing)",
+      content: { "application/json": { schema: GenerateError500Schema } },
     },
   },
 });
@@ -352,16 +386,17 @@ const listAppsRoute = createRoute({
       content: { "application/json": { schema: ListAppsResponseSchema } },
     },
     400: {
-      description: "Invalid JSON body or missing fields",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Invalid body (missing or malformed fields)",
+      content: { "application/json": { schema: ListAppsError400Schema } },
     },
     401: {
-      description: "Token exchange failed",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Scalingo token exchange failed (token invalid or unauthorized)",
+      content: { "application/json": { schema: ListAppsError401Schema } },
     },
     502: {
-      description: "Upstream error",
-      content: { "application/json": { schema: ErrorSchema } },
+      description:
+        "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing apps",
+      content: { "application/json": { schema: ListAppsError502Schema } },
     },
   },
 });
@@ -385,8 +420,8 @@ const testScopeRoute = createRoute({
       content: { "application/json": { schema: TestScopeResponseSchema } },
     },
     400: {
-      description: "Invalid body",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Invalid body (missing or malformed fields)",
+      content: { "application/json": { schema: TestScopeError400Schema } },
     },
   },
 });
@@ -410,8 +445,8 @@ const testProxyRoute = createRoute({
       content: { "application/json": { schema: TestProxyResponseSchema } },
     },
     400: {
-      description: "Invalid body",
-      content: { "application/json": { schema: ErrorSchema } },
+      description: "Invalid body (missing or malformed fields)",
+      content: { "application/json": { schema: TestProxyError400Schema } },
     },
   },
 });
@@ -488,14 +523,17 @@ uiRoutes.openapi(decodeRoute, async (c) => {
 
   const serverSalt = Deno.env.get("FGP_SALT");
   if (!serverSalt) {
-    return c.json({ error: "server_error", message: "Server misconfigured" }, 500);
+    return c.json({ error: "server_error" as const, message: "Server misconfigured" }, 500);
   }
 
   let config;
   try {
     config = await decryptBlob(blob, key, serverSalt);
   } catch {
-    return c.json({ error: "invalid_credentials", message: "Unable to decrypt blob" }, 401);
+    return c.json(
+      { error: "invalid_credentials" as const, message: "Unable to decrypt blob" },
+      401,
+    );
   }
 
   const token = config.token;
@@ -527,7 +565,10 @@ uiRoutes.openapi(shareDecodeRoute, async (c) => {
     const config = await decodePublicConfig(encoded);
     return c.json(config, 200);
   } catch {
-    return c.json({ error: "invalid_encoded", message: "Unable to decode config" }, 400);
+    return c.json(
+      { error: "invalid_encoded" as const, message: "Unable to decode config" },
+      400,
+    );
   }
 });
 
@@ -536,7 +577,7 @@ uiRoutes.openapi(generateRoute, async (c) => {
 
   const serverSalt = Deno.env.get("FGP_SALT");
   if (!serverSalt) {
-    return c.json({ error: "server_error", message: "Server misconfigured" }, 500);
+    return c.json({ error: "server_error" as const, message: "Server misconfigured" }, 500);
   }
 
   const clientKey = crypto.randomUUID();
@@ -544,7 +585,7 @@ uiRoutes.openapi(generateRoute, async (c) => {
 
   const limitError = validateScopeLimits(scopes);
   if (limitError) {
-    return c.json({ error: "scope_limit_exceeded", message: limitError }, 400);
+    return c.json({ error: "scope_limit_exceeded" as const, message: limitError }, 400);
   }
 
   const hasStructuredScope = scopes.some((s) => typeof s !== "string");
@@ -562,7 +603,10 @@ uiRoutes.openapi(generateRoute, async (c) => {
 
   if (blob.length > 4096) {
     return c.json(
-      { error: "blob_too_large", message: "Generated blob exceeds 4KB limit. Reduce scopes." },
+      {
+        error: "blob_too_large" as const,
+        message: "Generated blob exceeds 4KB limit. Reduce scopes.",
+      },
       400,
     );
   }
@@ -578,8 +622,9 @@ uiRoutes.openapi(listAppsRoute, async (c) => {
   try {
     bearer = await exchangeToken(body.token);
   } catch {
+    c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
-      { error: "token_exchange_failed", message: "Failed to exchange token" },
+      { error: "token_exchange_failed", message: "Failed to exchange Scalingo token" },
       401,
     );
   }
@@ -591,11 +636,22 @@ uiRoutes.openapi(listAppsRoute, async (c) => {
       headers: { "Authorization": `Bearer ${bearer}` },
     });
   } catch {
-    return c.json({ error: "upstream_error", message: "Failed to fetch apps" }, 502);
+    c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+    return c.json(
+      { error: "upstream_unreachable", message: "Scalingo API unreachable" },
+      502,
+    );
   }
 
   if (!appsResponse.ok) {
-    return c.json({ error: "upstream_error", message: "Failed to fetch apps" }, 502);
+    c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+    return c.json(
+      {
+        error: "upstream_list_apps_failed",
+        message: `Scalingo returned ${appsResponse.status}`,
+      },
+      502,
+    );
   }
 
   const data = await appsResponse.json();

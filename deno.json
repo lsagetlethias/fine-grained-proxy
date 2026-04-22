@@ -6,7 +6,8 @@
     "build:css": "deno run -A npm:tailwindcss@3 -i src/ui/tailwind.css -o static/styles.css --minify",
     "build:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --minify --target=es2020",
     "build:version": "deno run --allow-run --allow-write --allow-net --allow-env=FGP_GITHUB_REPO scripts/version.ts",
-    "build": "deno task build:css && deno task build:client && deno task build:version",
+    "build:changelog": "deno run --allow-read=docs --allow-write=src/ui/changelog-data.ts scripts/changelog.ts",
+    "build": "deno task build:css && deno task build:client && deno task build:version && deno task build:changelog",
     "dev:css": "deno run -A npm:tailwindcss@3 -i src/ui/tailwind.css -o static/styles.css --watch",
     "dev:client": "deno run -A npm:esbuild src/ui/client.ts --bundle --outfile=static/client.js --format=iife --watch",
     "dev:server": "deno serve --watch --env-file --allow-net --allow-env --allow-read src/main.ts",
@@ -20,7 +21,7 @@
     "lint": "deno lint",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
-    "check": "deno check src/main.ts src/middleware/*.ts src/crypto/*.ts src/auth/*.ts src/routes/*.tsx tests/**/*.ts",
+    "check": "deno check src/main.ts src/middleware/*.ts src/crypto/*.ts src/auth/*.ts src/routes/*.tsx src/ui/*.tsx tests/**/*.ts",
     "verify": "deno task lint && deno task fmt:check && deno task check && deno task test"
   },
   "imports": {
@@ -48,6 +49,7 @@
       "static/",
       "src/ui/client.ts",
       "src/ui/client/",
+      "src/ui/changelog-data.ts",
       "tailwind.config.*"
     ]
   },
@@ -63,7 +65,8 @@
       "static/",
       "tailwind.config.*",
       "src/ui/client.ts",
-      "src/ui/client/"
+      "src/ui/client/",
+      "src/ui/changelog-data.ts"
     ]
   },
   "exclude": [".claude/", "node_modules/", "static/"],

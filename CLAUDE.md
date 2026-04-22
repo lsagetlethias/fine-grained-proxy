@@ -45,6 +45,7 @@
 ```
 src/
   main.ts           — point d'entrée, Hono app
+  constants.ts      — constantes partagées (FGP_SOURCE_HEADER, valeurs proxy/upstream, etc.)
   routes/           — routes Hono (UI, API, OpenAPI/Swagger)
   middleware/        — middlewares (proxy, scopes, body filters)
   crypto/           — chiffrement/déchiffrement blob, dérivation clé, gzip
@@ -72,6 +73,8 @@ docs/
 - Imports triés : deps externes, puis internes, ligne vide entre les deux
 - Nommage : camelCase pour variables/fonctions, PascalCase pour types/interfaces
 - Erreurs : utiliser `HTTPException` de Hono pour les erreurs HTTP
+- OpenAPI : schemas de réponse stricts par route (union `z.enum([...])` des error codes autorisés). Ajouter un nouveau code d'erreur = l'ajouter dans l'enum de la route correspondante.
+- Toute réponse du proxy principal doit porter `X-FGP-Source: proxy|upstream` (voir `src/constants.ts`).
 
 ## Flow proxy
 ```
@@ -83,8 +86,10 @@ Requête → extraire blob (header X-FGP-Blob prioritaire, sinon premier segment
   → vérifier scopes vs méthode/path/body
   → auth (bearer direct, basic, header custom, ou scalingo-exchange avec cache)
   → forward vers config.target avec auth headers (X-FGP-Key et X-FGP-Blob strippés)
-  → renvoyer réponse (filtrage Set-Cookie)
+  → renvoyer réponse upstream telle quelle (status/body/headers, seul Set-Cookie strippé)
 ```
+
+**Proxy transparent (ADR-0006)** : toute réponse effectivement reçue de l'upstream est forwardée sans transformation, avec header `X-FGP-Source: upstream`. Les erreurs générées par FGP lui-même portent `X-FGP-Source: proxy` et la shape `{error, message}`. Seul `502 upstream_unreachable` est légitime côté proxy (fetch throw only). Les 500 non catchés passent par `app.onError` dans `src/main.ts` → shape FGP `{error: "internal_error", ...}`. Ne jamais réintroduire de transformation de status/body upstream.
 
 ## Variables d'environnement
 - `PORT` — port du serveur (défaut: 8000)
