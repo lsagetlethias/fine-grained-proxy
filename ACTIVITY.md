@@ -188,6 +188,33 @@
   - Premier déploiement Deno Deploy
   - Test e2e avec un vrai token Scalingo
 
+## 2026-04-22 — Feature /logs : stream SSE par blob (in-memory, opt-in, zero trust)
+
+- **Changements** :
+  - Nouveau module `src/logs/` : `config.ts` (env `FGP_LOGS_*`), `blob-id.ts` (hash blob → id stable), `events.ts` (types `LogEntry` network/detailed), `capture.ts` (fabrication entry + chiffrement body detailed avec clé client), `store.ts` (ring buffer par blob + subscribe/flushSince + purge inactivité), `ip.ts` (extraction IP derrière reverse proxy).
+  - Nouveau routeur `src/routes/logs.tsx` : `GET /logs` (page UI), `GET /logs/stream` (SSE avec heartbeat 15s + cursor `?since=`), `GET /logs/health` (toujours 200, expose `enabled`). Gating via `logsEnabled()` → 404 quand off. 403 `logs_not_enabled` si le blob n'a pas opt-in. 409 `logs_stream_conflict` si un stream est déjà actif sur ce blob.
+  - Instrumentation `src/middleware/proxy.ts` : capture opt-in par blob (`config.logs?.enabled === true`) après forward, body detailed chiffré AES-256-GCM avec la clé dérivée client avant push dans le ring buffer.
+  - `src/crypto/blob.ts` : champ optionnel `logs: { enabled, detailed }` ajouté à `BlobConfig` **sans bump de version** (v3 reste v3, non-cassant rétro et forward).
+  - UI config-page : onglet `logs-tab` pour activer/configurer la feature par blob, inclusion dans `?c=`, message informatif quand `FGP_LOGS_ENABLED=0` côté serveur (via `/logs/health`).
+  - Nouvelle page `src/ui/logs-page.tsx` + client `src/ui/logs-client.ts` : consommation SSE via `fetch` streaming (pas `EventSource` pour pouvoir envoyer `X-FGP-Blob` + `X-FGP-Key` en headers), déchiffrement body detailed dans le navigateur, reconnect avec cursor.
+  - 5 nouveaux env vars : `FGP_LOGS_ENABLED`, `FGP_LOGS_BUFFER_NETWORK`, `FGP_LOGS_BUFFER_DETAILED`, `FGP_LOGS_INACTIVITY_MIN`, `FGP_LOGS_DETAILED_MAX_KB`.
+  - ADR-0007 rédigé avec 7 choix structurants (in-memory only, opt-in par blob sans bump version, kill switch global, body chiffré client-side, SSE via fetch, cursor `since`, ring buffer court + purge).
+  - Specs §14 + AC + docs/design/logs-page-and-tab.md + entrée changelog.
+  - 4 fichiers de tests ajoutés : `tests/testi/logs-endpoints.test.ts`, `tests/testu/logs-blob-id.test.ts`, `tests/testu/logs-capture.test.ts`, `tests/testu/logs-ip.test.ts`, `tests/testu/logs-store.test.ts`.
+- **Décisions** :
+  - ADR-0007 : in-memory only (pas de DB) pour rester cohérent avec zero storage ; opt-in par blob via champ optionnel (pas de bump v4, YAGNI) ; body detailed chiffré côté serveur avec clé client (zero trust, même en dump mémoire le serveur ne peut pas lire) ; SSE `fetch` (headers custom impossibles avec `EventSource`) ; kill switch env var pour désactivation à chaud sans toucher aux blobs émis.
+  - `/logs/health` exposé même quand feature off : permet à l'UI config d'afficher un message explicatif plutôt que de laisser l'utilisateur découvrir le 404.
+  - 1 stream max par blob pour éviter l'abus, sans rate limiter IP (IP spoofable). Trade-off accepté.
+  - Exclusions assumées documentées : pas de multipart, pas de headers de requête, pas de body de réponse, pas de target upstream capturée (prévention fuite).
+- **ADR** : ADR-0007
+- **Process** :
+  - Multi-agent orchestré : PO → specs §14 + ADR-0007 + schéma blob (champ `logs` optionnel) ; Testeur → AC Given/When/Then ; Designer → wireframe page + onglet dans `docs/design/logs-page-and-tab.md` ; Dev → implémentation modules logs + routes + UI + tests ; Lead → review structurelle + commit + sync-docs.
+  - Copilotage archi avec l'utilisateur sur les 7 arbitrages structurants avant dispatch, puis sur 10 détails fins pendant l'impl.
+- **Prochaines étapes** :
+  - Monitoring RAM en prod sur instances à fort trafic (le ring buffer est borné mais ~330 KB/blob worst case à surveiller)
+  - Tests e2e `/logs` reportés (cohérent avec le suivi e2e global dans `MEMORY.md → project_fgp_followups.md`)
+  - Premier déploiement Deno Deploy toujours en attente
+
 ## 2026-04-22 — Proxy transparent + header X-FGP-Source
 
 - **Changements** :

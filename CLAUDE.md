@@ -13,6 +13,7 @@
 - **4 modes d'auth** : bearer, basic, scalingo-exchange, header custom. Scalingo est un cas d'usage parmi d'autres.
 - **Blob v2/v3** : v2 = scopes string METHOD:PATH, v3 = scopes mixtes string + ScopeEntry avec body filters.
 - **Body filters** (v3) : filtrage du contenu JSON des requêtes POST/PUT/PATCH (types : any, wildcard, stringwildcard, regex, not, and).
+- **Logs stream** (ADR-0007) : page `/logs` avec SSE live par blob, opt-in via champ `logs: { enabled, detailed }` dans le blob (non-cassant sur v3). In-memory only (ring buffer par blob + purge inactivité), body `detailed` chiffré AES-256-GCM côté serveur avec la clé client (zero trust). Kill switch global `FGP_LOGS_ENABLED`.
 
 ## Stack
 - **Runtime** : Deno
@@ -46,12 +47,13 @@
 src/
   main.ts           — point d'entrée, Hono app
   constants.ts      — constantes partagées (FGP_SOURCE_HEADER, valeurs proxy/upstream, etc.)
-  routes/           — routes Hono (UI, API, OpenAPI/Swagger)
-  middleware/        — middlewares (proxy, scopes, body filters)
+  routes/           — routes Hono (UI, API, OpenAPI/Swagger, logs)
+  middleware/        — middlewares (proxy, scopes, body filters, capture logs)
   crypto/           — chiffrement/déchiffrement blob, dérivation clé, gzip
   auth/             — client auth (Scalingo exchange), cache bearer, singleflight
-  ui/               — pages JSX (config-page, layout, logo/SEO)
-  ui/client/        — modules TS client (presets, body-filters, apps, generate, ttl, clipboard, scopes, test-scope, share-config, import-config, tabs, elements, types)
+  logs/             — feature /logs : config env, blob-id, capture, events, ip, store (ring buffer in-memory)
+  ui/               — pages JSX (config-page, layout, logo/SEO, logs-page)
+  ui/client/        — modules TS client (presets, body-filters, apps, generate, ttl, clipboard, scopes, test-scope, share-config, import-config, tabs, logs-tab, elements, types)
   ui/tailwind.css   — source Tailwind (build-time → static/styles.css)
 tailwind.config.js  — config Tailwind (couleurs fgp, dark mode media)
 static/             — assets compilés (client.js, styles.css) — gitignored
@@ -97,6 +99,11 @@ Requête → extraire blob (header X-FGP-Blob prioritaire, sinon premier segment
 - `SCALINGO_API_URL` — URL de l'API Scalingo pour le helper list-apps (défaut: https://api.osc-fr1.scalingo.com)
 - `SCALINGO_AUTH_URL` — URL du service auth Scalingo pour le mode scalingo-exchange (défaut: https://auth.scalingo.com)
 - `FGP_GITHUB_REPO` — repo GitHub `owner/name` pour la résolution du SHA de build (défaut: auto-détecté via git remote ou `lsagetlethias/fine-grained-proxy`)
+- `FGP_LOGS_ENABLED` — kill switch feature `/logs` ; `1` active la capture et les routes `/logs` + `/logs/stream`, toute autre valeur (ou absence) les désactive (404). `/logs/health` répond toujours. Défaut: désactivé.
+- `FGP_LOGS_BUFFER_NETWORK` — taille du ring buffer des entries network par blob (défaut: 50)
+- `FGP_LOGS_BUFFER_DETAILED` — taille du ring buffer des entries detailed (body chiffré) par blob (défaut: 10)
+- `FGP_LOGS_INACTIVITY_MIN` — minutes d'inactivité avant purge complète du buffer d'un blob (défaut: 10)
+- `FGP_LOGS_DETAILED_MAX_KB` — taille max du body capturé en detailed, en KB, avant troncature (défaut: 32)
 
 ## Équipe multi-agent
 - **Référence complète** : `docs/ia-architecture-reference.md` — setup, rôles, skills, process type
@@ -107,6 +114,11 @@ Requête → extraire blob (header X-FGP-Blob prioritaire, sinon premier segment
   - `testeur.md` — challenge specs, AC Given/When/Then, /add-tests, /verif
   - `designer.md` — specs UI/UX dans docs/design/, review a11y, PAS d'intégration
 - **Avant de dispatcher** : lire la fiche du rôle correspondant et l'inclure dans le brief de l'agent
+
+## Endpoints logs (ADR-0007)
+- `GET /logs` — page UI de consultation des logs d'un blob (saisie blob + clé client, déchiffrement du body detailed côté navigateur). Retourne 404 si `FGP_LOGS_ENABLED` off.
+- `GET /logs/stream` — stream SSE des entries du blob passé via `X-FGP-Blob` + `X-FGP-Key`. Flush ring buffer puis push live. Heartbeat `event: ping` toutes les 15s. Param query `?since=<ts>` pour reconnect sans doublons. 1 stream max par blob (`logs_stream_conflict` sinon). 403 `logs_not_enabled` si le blob n'a pas opt-in.
+- `GET /logs/health` — `{ enabled: bool }` toujours 200. Utilisé par l'UI pour afficher un message quand le kill switch est off.
 
 ## Documentation
 - **OpenAPI** : `GET /api/openapi.json` — spec OpenAPI 3.0 auto-générée depuis le code (schemas Zod)

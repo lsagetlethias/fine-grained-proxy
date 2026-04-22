@@ -23,6 +23,11 @@ Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de gen
 | `SCALINGO_API_URL` | non | URL de l'API Scalingo | `https://api.osc-fr1.scalingo.com` |
 | `SCALINGO_AUTH_URL` | non | URL du service auth Scalingo | `https://auth.scalingo.com` |
 | `FGP_GITHUB_REPO` | non | Repo GitHub (`owner/name`) pour la resolution du SHA de build (utile pour les forks sans git) | auto-detecte via git remote ou `lsagetlethias/fine-grained-proxy` |
+| `FGP_LOGS_ENABLED` | non | Kill switch feature `/logs` (`1` active les routes `/logs` + `/logs/stream` et la capture, sinon 404) | off |
+| `FGP_LOGS_BUFFER_NETWORK` | non | Taille du ring buffer network par blob | `50` |
+| `FGP_LOGS_BUFFER_DETAILED` | non | Taille du ring buffer detailed (body chiffre) par blob | `10` |
+| `FGP_LOGS_INACTIVITY_MIN` | non | Minutes d'inactivite avant purge du buffer d'un blob | `10` |
+| `FGP_LOGS_DETAILED_MAX_KB` | non | Taille max du body capture en detailed (KB) avant troncature | `32` |
 
 ### Lancer en dev
 
@@ -114,6 +119,9 @@ Retourne la configuration complete avec le token redacte. Utile pour inspecter o
 | `/api/share/decode` | POST | Decode une config partagee depuis un string gzip+base64url |
 | `/api/openapi.json` | GET | Spec OpenAPI 3.0 |
 | `/api/docs` | GET | Swagger UI |
+| `/logs` | GET | Page UI de consultation des logs d'un blob (opt-in, requiert `FGP_LOGS_ENABLED=1`) |
+| `/logs/stream` | GET | Stream SSE des logs d'un blob (`X-FGP-Blob` + `X-FGP-Key`, heartbeat 15s, cursor `?since=`) |
+| `/logs/health` | GET | Indique si la feature logs est activee sur l'instance (`{enabled}`) |
 | `/{blob}/{path...}` | * | Proxy vers l'API cible |
 
 Documentation OpenAPI complete : [Swagger UI](/api/docs)
@@ -182,6 +190,10 @@ Requete -> extraire blob (header X-FGP-Blob prioritaire, sinon premier segment U
 ```
 
 Toute reponse du proxy porte le header `X-FGP-Source` : `upstream` quand la reponse vient de l'API cible (forward transparent), `proxy` quand c'est une erreur FGP (shape `{error, message}`). Voir [ADR-0006](docs/adr/0006-proxy-transparent-erreurs-upstream.md).
+
+### Logs stream par blob (optionnel)
+
+Feature opt-in gatee par `FGP_LOGS_ENABLED=1`. Activee par blob via le champ `logs: { enabled, detailed }` (ajout non-cassant sur v3). La page `/logs` consomme un stream SSE (`/logs/stream`) scope au blob + cle client : network entries (methode, path, status, duree) en clair, body `detailed` chiffre AES-256-GCM cote serveur avec la cle client et dechiffre dans le navigateur (zero trust). Stockage in-memory (ring buffer par blob, purge apres inactivite). Voir [ADR-0007](docs/adr/0007-logs-stream-in-memory-opt-in.md).
 
 ## Scripts
 
