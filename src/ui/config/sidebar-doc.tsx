@@ -97,9 +97,10 @@ export function DocPanel() {
           </li>
           <li>
             <code class="font-mono text-xs">upstream</code>{" "}
-            : la r&eacute;ponse vient de votre API cible, transmise telle quelle. FGP n'a
-            touch&eacute; ni au status, ni au corps, ni aux en-t&ecirc;tes. Interpr&eacute;tez-la
-            avec la documentation de cette API.
+            : la r&eacute;ponse vient de votre API cible. FGP n'a touch&eacute; ni au status ni au
+            corps. Il ajoute seulement cet en-t&ecirc;te et retire{" "}
+            <code class="font-mono text-xs">Set-Cookie</code>, le proxy &eacute;tant sans
+            &eacute;tat. Interpr&eacute;tez la r&eacute;ponse avec la documentation de cette API.
           </li>
         </ul>
         <p class="mt-1">
