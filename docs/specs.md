@@ -989,7 +989,7 @@ Les deux modes Scalingo portent dans l'UI les noms utilisés par Scalingo lui-m�
 | Option du sélecteur de mode (mode historique) | « Scalingo API » |
 | Option du sélecteur de mode (mode addon) | « Scalingo Database API » |
 | Titre du bloc | « Base de données » |
-| Aide du bloc | « FGP échange votre token de compte contre un bearer, puis obtient un token de base de données valable 1 heure, renouvelé automatiquement. Le consommateur de l'URL ne voit ni l'un ni l'autre. » |
+| Aide du bloc | « Le consommateur ne voit jamais votre token de compte. L'accès est limité à cette base. » (86 caractères, capacité 118) |
 | Label région | « Région » |
 | Options région | « Paris (`osc-fr1`) », « SecNumCloud (`osc-secnum-fr1`) » |
 | Aide région | « Détermine l'API interrogée : `https://api.<région>.scalingo.com`. » |
@@ -998,9 +998,30 @@ Les deux modes Scalingo portent dans l'UI les noms utilisés par Scalingo lui-m�
 | Bouton helper | « Charger les bases de données » |
 | Label sélecteur de base (visible) | « Base de données » |
 | Placeholder sélecteur | « Choisissez une base de données » |
-| Aide portée | « Ce blob donne accès à une seule base de données. Pour en ouvrir une autre, générez un second blob : chacun garde son TTL, ses scopes et sa clé. » |
-| Aide périmètre | « Le token obtenu ne vaut que pour cette base : une requête qui en vise une autre est rejetée par Scalingo. » |
-| Rappel URL cible | « Cible attendue pour la Database API : `https://db-api.<région>.scalingo.com` » |
+| Lien vers le panneau Doc | « Comment fonctionne ce mode » (cf. §12.11) |
+| Lien de retour depuis le panneau Doc | « Revenir à Base de données » (cf. §12.11) |
+| Rappel URL cible | « Cible : `https://db-api.<région>.scalingo.com` » (voir la contrainte de largeur ci-dessous) |
+
+#### Contraintes de largeur mesurées à 375 px
+
+**Ligne « Cible »**. Le préfixe et l'URL se partagent 343 px. « Cible attendue : » en occupait 93 et l'URL, en police à chasse fixe, 253, soit 346 px pour 343 disponibles. Il manquait **3 pixels** et le navigateur coupait l'URL sur son tiret, ce qui donnait une adresse en deux morceaux, illisible et impossible à copier d'un geste.
+
+Le préfixe passe donc à « Cible : », ce qui libère largement les 3 px manquants. L'URL est la partie incompressible, c'est le préfixe qui doit céder.
+
+**Ce texte est écrit à deux endroits** et les deux doivent rester identiques :
+
+- `src/ui/config/form-auth.tsx`, dans le JSX, pour le rendu au chargement ;
+- `src/ui/client/addons.ts`, dans `syncRegion()`, qui le réécrit à chaque changement de région.
+
+Reformuler l'un sans l'autre produit un texte qui change tout seul au premier clic sur une région, et le bug ne se voit pas au chargement de la page. Toute modification de cette ligne se fait aux deux endroits.
+
+**Hint du bloc**. Le texte intégré mesurait 125 caractères pour 118 disponibles, et portait deux informations sans rapport : la garantie de périmètre et la disponibilité des suggestions d'applications. Seule la première est conservée, reformulée en 86 caractères.
+
+La suggestion d'applications n'est pas remplacée ailleurs : le champ propose ses complétions dès qu'on le focalise après un chargement, et décrire une autocomplétion en toutes lettres coûte plus qu'elle n'apprend.
+
+La formulation retenue dit **ce qui est vrai** : l'accès est limité à cette base, ce qui est une propriété du token obtenu, et non « une requête qui ne vise pas cette base est refusée », qui laisse croire que FGP filtre les requêtes. Il ne les filtre pas, c'est Scalingo qui refuse (§11.1.2). La nuance tient en un mot de moins et évite un contresens sur le rôle du proxy.
+
+**Découpe** : le paragraphe qui détaillait le flow en trois temps sort du formulaire. L'échange de token, le renouvellement horaire et le fait que Scalingo refuse une requête visant une autre base sont des explications de mécanisme, elles vivent dans le panneau Doc (guide des modes d'auth, entrée « Scalingo Database API », qui les porte déjà). Sous un sélecteur, il reste la seule chose qui aide à choisir : ce que le consommateur de l'URL peut faire et ne peut pas faire. Le conseil « pour en ouvrir une autre, générez un second blob » rejoint le panneau Doc, il ne se lit pas au moment de sélectionner une base.
 
 Le helper « Charger les bases de données » remplit l'identifiant d'addon automatiquement à partir de la réponse de l'API Scalingo. **Cet identifiant n'est jamais exposé dans le formulaire** : l'utilisateur choisit une base dans une liste lisible (nom du provider et plan), pas un identifiant technique. La saisie manuelle reste possible en repli quand le helper échoue.
 
@@ -1066,26 +1087,38 @@ Le 404 `app_not_found` est volontairement séparé du 502 générique : c'est le
 
 ### 12.9 Clé client personnalisée (copy)
 
-Section repliée (`<details>`) placée juste avant le bouton de génération. Elle est fermée par défaut : la génération automatique de la clé reste le chemin nominal.
+Section repliée (`<details>`) placée juste avant le bouton de génération, fermée par défaut : la génération automatique de la clé reste le chemin nominal.
 
-**Activation** : il n'y a pas de choix explicite entre « générer » et « fournir ». Le champ fait foi, **un champ non vide vaut activation**. Déplier la section n'engage à rien, laisser le champ vide laisse le serveur générer. Un badge sur le résumé de la section signale l'état actif quand une clé est saisie, y compris section repliée. Deux gestes pour une seule intention créeraient deux états capables de diverger, par exemple une case cochée avec un champ vide, ou un champ rempli avec la case décochée : il n'y a donc qu'une source de vérité.
+**Activation** : il n'y a pas de choix explicite entre « générer » et « fournir ». Le champ fait foi, **un champ non vide vaut activation**. Un badge sur le résumé signale l'état actif quand une clé est saisie, y compris section repliée. Deux gestes pour une seule intention créeraient deux états capables de diverger.
+
+#### Principe de découpe
+
+Le formulaire ne garde que ce qui doit être lu **au moment de saisir**. Tout ce qui relève de la compréhension du mécanisme part dans le panneau Doc, entrée « Clé client » de « Infos sur les champs », qui le porte déjà. Le bloc passe ainsi d'environ treize lignes à trois.
+
+Ce qui reste dans le formulaire, et pourquoi :
+
+- **Le risque de mutualisation.** C'est la seule information dont l'ignorance coûte cher, et elle est irréversible une fois le blob généré. Une phrase, pas deux.
+- **La contrainte de saisie.** Sans le minimum de 24 caractères, l'utilisateur découvre l'erreur au moment de générer.
+- **Le comportement du champ vide.** C'est la question immédiate quand on ouvre un champ optionnel.
+
+#### Copy
 
 | Élément | Texte |
 |---------|-------|
-| Libellé de la section repliable | « Utiliser ma propre clé client (avancé) » |
-| Badge d'état actif | « Clé personnalisée active » |
+| Libellé de la section repliable | « Utiliser ma propre clé client » (29 caractères) |
+| Badge d'état actif | « Active » (6 caractères), avec `aria-label="Clé personnalisée active"` |
 | Label champ (visible) | « Clé personnalisée » |
 | Placeholder champ | « 24 caractères minimum » |
 | Bouton | « Générer une clé forte » |
-| Avertissement de mutualisation | « Réutiliser une clé lie les blobs entre eux : si elle fuite, tous les blobs générés avec cette clé deviennent déchiffrables d'un coup. » puis « Réservez la mutualisation aux secrets de CI, et prenez une clé longue et aléatoire. La clé n'est jamais stockée : FGP ne peut ni la retrouver, ni la réinitialiser. Sans elle, le blob est inexploitable. » |
-| Aide sous le champ | « Laissez vide pour que le serveur génère une clé unique. 24 caractères minimum, ASCII imprimable, sans espace. La jauge mesure la variété des caractères saisis, pas la sécurité réelle de la clé. » |
-| Compteur, sous le minimum | « {n}/24 caractères minimum » |
-| Compteur, à partir de 24 | « {n} caractères » |
+| Avertissement (encadré) | « Réutiliser une clé lie les blobs : sa fuite rend déchiffrables tous ceux générés avec elle. » (91 caractères, capacité 99) |
+| Aide sous le champ | « Laissez vide pour que FGP en génère une. » (40 caractères, capacité 52) |
 | Label de la jauge | « Diversité » |
 | Niveaux de la jauge | « faible », « moyenne », « élevée » (trois segments, trois niveaux) |
 | Alerte clé dégénérée | « Cette clé contient très peu de caractères distincts. Préférez une clé aléatoire. » |
+| Lien vers le panneau Doc | « En savoir plus sur la clé client » (cf. §12.11) |
+| Lien de retour depuis le panneau Doc | « Revenir à Clé personnalisée » (cf. §12.11) |
 
-Messages d'erreur du bloc :
+Messages d'erreur du bloc, inchangés. Ils n'apparaissent qu'en cas d'erreur et ne pèsent donc pas sur la lecture nominale :
 
 | Condition | Texte |
 |-----------|-------|
@@ -1093,15 +1126,66 @@ Messages d'erreur du bloc :
 | Caractères invalides | « Caractères ASCII imprimables sans espace uniquement. » |
 | Clé trop longue | « 256 caractères maximum. » |
 
-**Le compteur change de forme au franchissement du minimum.** Sous 24 caractères, il mesure une progression vers un plancher : « 17/24 caractères minimum ». À partir de 24, le rapport n'informe plus (il est atteint, et il ne s'agit pas d'une cible à viser) alors que le nombre absolu, lui, devient utile : il permet de vérifier qu'une clé longue collée depuis un gestionnaire de secrets est arrivée entière, sans la relire caractère par caractère. Le compteur est conservé pour cette raison, maintenant que le plafond de 256 est réellement atteignable (cf. §15.3).
+#### Ce qui sort du formulaire, et où ça va
 
-**Pourquoi « Diversité » et pas « Force »** : avec un plancher à 24 caractères, toute clé réellement aléatoire dépasse déjà largement les 128 bits d'entropie. Il n'y a donc pas de gradient de sécurité à afficher. Ce que la jauge détecte est plus étroit que cela : **le seul cas dégénéré qu'une heuristique de diversité sait attraper, la clé pauvre en caractères distincts** (`aaaaaaaa...`, `123412341234...`). Afficher « Force : excellente » sur une répétition de 40 caractères serait un mensonge de l'interface, et dans un outil de sécurité une jauge qui ment est pire que pas de jauge du tout. Le libellé « Diversité » dit exactement ce qui est mesuré, sans promettre un verdict que l'UI n'a aucun moyen de rendre.
+| Texte retiré | Destination |
+|--------------|-------------|
+| « Réservez la mutualisation aux secrets de CI, et prenez une clé longue et aléatoire. » | Panneau Doc, déjà couvert par l'explication de l'intérêt de la mutualisation |
+| « La clé n'est jamais stockée : FGP ne peut ni la retrouver, ni la réinitialiser. Sans elle, le blob est inexploitable. » | Bloc de résultat, cf. §12.12 |
+| « ASCII imprimable, sans espace » dans l'aide | Message d'erreur, qui s'affiche au moment exact où la règle est enfreinte |
+| « La jauge mesure la variété des caractères saisis, pas la sécurité réelle de la clé. » | Panneau Doc, phrase à ajouter (ci-dessous) |
 
-**Ce que la jauge ne détecte pas, et il ne faut pas prétendre le contraire** : la phrase de passe en langue naturelle. `correcthorsebatterystaple1` fait 26 caractères, 13 caractères distincts et deux familles ; elle ressort en « élevée », au même niveau qu'une clé aléatoire. La repérer demanderait un dictionnaire et une estimation de type zxcvbn, hors de portée d'un bundle sans dépendance. C'est une limite assumée, pas un défaut à corriger : la jauge mesure la variété des caractères, rien d'autre, et la documentation ne doit pas promettre plus que l'écran. Écrire l'inverse ici reviendrait à réintroduire dans la doc le mensonge que le refus du mot « Force » a chassé de l'interface.
+**Pourquoi retirer la phrase d'avertissement sur la jauge du formulaire.** Le mot « Diversité » a été choisi précisément pour que l'interface n'ait pas besoin de se dédire. Un libellé honnête doublé d'un avertissement expliquant qu'il est honnête, c'est de la ceinture avec des bretelles, et ça rallonge le bloc de trois lignes. La nuance reste utile mais elle relève de la documentation.
 
-La jauge est **indicative et non bloquante** : seules les contraintes de §15.3 (longueur, charset) refusent une génération. Une clé à diversité faible mais conforme passe, avec l'alerte affichée.
+Phrase à ajouter à l'entrée « Clé client » du panneau Doc :
 
----
+> « La jauge affichée sous le champ mesure la variété des caractères saisis. Elle repère une clé pauvre, par exemple une répétition, mais elle ne mesure pas la sécurité réelle : une phrase de passe en langue naturelle y ressort au maximum. »
+
+#### Budget de caractères du résumé
+
+Mesure du designer à 375 px : le libellé du `summary` et le badge disposent **ensemble de 40 caractères** pour tenir sur une ligne, avec une cible de sécurité à **36**. La formulation précédente en consommait 62, d'où le débordement constaté.
+
+Le budget est dépensé côté libellé plutôt que côté badge, parce que le libellé est lu à chaque visite alors que le badge n'apparaît qu'une fois une clé saisie. Le sacrifice porte donc d'abord sur le badge, réduit à un seul mot.
+
+| Élément | Avant | Après | Coût |
+|---------|-------|-------|------|
+| Libellé du `summary` | « Utiliser ma propre clé client (avancé) » | « Utiliser ma propre clé client » | 38 vers 29 |
+| Badge | « Clé personnalisée active » | « Active » | 24 vers 6 |
+| **Total** | 62 | **35** | sous la cible de 36 |
+
+Ce qui est sacrifié, et pourquoi c'est le bon ordre :
+
+- **« (avancé) »**, 9 caractères, est la coupe la moins coûteuse. Le marqueur disait « vous n'avez pas besoin de ceci », or la section est déjà repliée par défaut et l'aide interne dit « Laissez vide pour que FGP en génère une ». L'information est portée deux fois ailleurs.
+- **Le badge** perd son contexte visuel mais le récupère à l'oral : `aria-label="Clé personnalisée active"` donne aux lecteurs d'écran la phrase complète, pendant que l'affichage se limite à « Active ». Le badge est de toute façon collé au libellé, donc « Utiliser ma propre clé client » suivi de « Active » se lit sans ambiguïté à l'écran.
+
+#### Capacités de ligne mesurées à 375 px
+
+Le budget de 40 caractères du résumé (ci-dessus) n'était que le premier. Le dev a mesuré la hauteur réelle du bloc après intégration : chaque texte tenait sur une ligne de plus que prévu, ce qui portait le bloc ouvert à 329 px au lieu des 240 visés. Ni la structure du designer ni la formulation n'étaient en cause isolément, c'est leur combinaison qui n'avait jamais été mesurée.
+
+| Texte | Avant | Capacité | Après |
+|-------|-------|----------|-------|
+| Avertissement | 123 | 99 | 91 |
+| Aide sous le champ | 63 | 52 | 40 |
+
+**La capacité de l'avertissement est de 99 caractères, pas 116.** La première mesure portait sur la largeur du paragraphe, 309 px, sans voir qu'il est le second enfant d'un conteneur flex : l'icône de 16 px, le `gap` de 8 px et 16 px de padding sont prélevés sur cette même largeur. Le texte n'en reçoit que 269, soit 49 caractères par ligne et 99 pour tenir en deux.
+
+À retenir pour les prochains encadrés : **la capacité d'un texte accompagné d'une icône n'est pas la largeur de son conteneur.** Mesurer la boîte du texte, pas celle du bloc.
+
+Ce qui a été retiré :
+
+- **« entre eux »** dans l'avertissement, 10 caractères. « Réutiliser une clé lie les blobs » porte déjà la réciprocité, le complément ne fait que la répéter.
+- **« si elle fuite, tous ceux [...] deviennent [...] d'un coup »** resserré en « sa fuite rend déchiffrables tous ceux générés avec elle », 22 caractères de moins. La subordonnée devient un groupe nominal et « d'un coup » disparaît : « tous » porte déjà la simultanéité. Le complément « générés avec elle » est en revanche **conservé**, c'est lui qui limite la portée aux blobs concernés. Sans lui, la phrase se lit comme si tous les blobs de l'instance tombaient.
+- **« 24 caractères minimum »** dans l'aide, 23 caractères. L'information est **déjà présente deux fois** : dans le placeholder du champ et dans le message d'erreur qui s'affiche si la règle est enfreinte. La dire une troisième fois au-dessus du champ coûtait une ligne entière.
+
+**Toute reformulation de ces textes doit être remesurée.** Une phrase qui gagne trois mots reprend une ligne, et la contrainte ne se voit pas dans le markdown des specs.
+
+**Repli si 35 déborde malgré tout en conditions réelles** : libellé « Ma clé client » (13) et badge inchangé, soit 19 caractères. On perd le verbe d'action, ce qui rend la section moins explicite sur ce qu'elle propose. Ne l'appliquer que sur mesure, pas par précaution.
+
+#### Réserve sur « la clé n'est jamais stockée »
+
+Le brief demandait de garder cette phrase dans le formulaire. Je la déplace, et voici pourquoi. Dans le champ BYOK, l'utilisateur **fournit** une clé qu'il détient déjà et qu'il a donc rangée quelque part : lui dire que FGP ne la mémorise pas ne change aucune de ses actions. L'information mord ailleurs, sur la clé **générée**, affichée une seule fois dans le bloc de résultat, où un utilisateur qui ferme l'onglet la perd définitivement.
+
+Or ce bloc ne porte aujourd'hui **aucun avertissement** de ce genre, ce qui est un vrai manque (§12.12). Déplacer la phrase la met à l'endroit où elle protège quelqu'un.
 
 ### 12.10 Codes d'erreur dans le panneau Doc (copy)
 
@@ -1191,6 +1275,51 @@ La section se compose de trois blocs, dans cet ordre :
 - Aucun tiret cadratin dans l'intégration, **entités HTML comprises** : pas de `&mdash;`. Utiliser deux-points, virgule, parenthèses ou point.
 - Le `<details>` du bloc 2 n'a besoin d'aucun attribut ARIA supplémentaire, l'élément est nativement accessible. Il est fermé par défaut (pas d'attribut `open`).
 - Le bloc 3 n'est pas un encadré d'alerte : c'est une explication, pas un avertissement. Même traitement visuel que les autres paragraphes de la section.
+
+### 12.11 Liens vers le panneau Doc (libellés)
+
+Plusieurs blocs du formulaire renvoient vers le panneau Doc pour le détail (§12.8, §12.9), et le changelog pourra le faire aussi. Ces liens ont besoin d'une convention, sinon chaque intégration inventera la sienne.
+
+**Répartition** : le **mécanisme** relève du designer, la **formulation** de moi. Le mécanisme est tranché, ce qui suit est définitif.
+
+#### Mécanisme retenu (rappel, spécifié par le designer)
+
+- Le lien **bascule l'onglet actif**, il ne navigue pas. Aucun hash n'est écrit dans l'URL : `share-config.ts` y écrit déjà l'état du formulaire via `replaceState`, et deux écritures concurrentes mettraient le partage en risque.
+- Le focus se déplace vers la section de destination, qui porte `tabindex="-1"` et un `aria-labelledby` pointant vers son `dt` existant. À l'arrivée, un lecteur d'écran annonce par exemple « Clé client, groupe ».
+- Un **lien de retour** est nécessaire et visible, pas seulement au clavier : sur mobile le déplacement mesuré atteint 4499 px. Chaque élément porte un `data-return-label` transportant le libellé du champ d'origine.
+
+#### Convention de libellé
+
+Trois formes, selon le sens du déplacement :
+
+| Origine | Forme | Exemples |
+|---------|-------|----------|
+| Un champ ou un bloc du formulaire | « En savoir plus sur {sujet} » | « En savoir plus sur la clé client », « Comment fonctionne ce mode » |
+| Le changelog | « Voir {section} dans la doc » | « Voir Codes d'erreur dans la doc » |
+| Le retour, depuis le panneau Doc | « Revenir à {label du champ} » | « Revenir à Clé personnalisée », « Revenir à Base de données » |
+
+Le libellé de retour cite le label du champ **tel qu'il est affiché, majuscule comprise**, et sans article. La majuscule signale que c'est une citation d'un élément de l'interface et non une tournure de phrase, ce qui est exactement ce qui rend le retour identifiable quand plusieurs renvois coexistent sur la page. C'est la valeur transportée par `data-return-label`.
+
+Trois règles, dans l'ordre d'importance :
+
+1. **Le libellé nomme sa destination.** Jamais « cliquez ici », jamais « en savoir plus » seul, jamais « revenir au formulaire ». Un lecteur d'écran peut lister les liens d'une page hors de leur contexte : un libellé qui ne dit pas où il mène devient inutilisable dans cette liste, et il y en aura plusieurs identiques sur la même page. C'est la règle qui impose la forme du retour : dès qu'il y a deux renvois, « Revenir au formulaire » ne distingue plus rien.
+2. **Le sujet reprend le mot du label du champ**, en minuscule à l'aller, tel quel au retour. Le lien placé sous « Clé personnalisée » parle de « la clé client », pas de « BYOK » ni de « la génération de clé ». L'utilisateur doit reconnaître ce qu'il vient de lire.
+3. **Pas de formulation de navigation externe.** Le lien bascule d'onglet sans quitter la page : il ne dit ni « ouvrir », ni « aller à », ni « consulter la documentation », qui laissent croire à un départ. « En savoir plus sur », « Voir » et « Revenir à » conviennent.
+
+### 12.12 Bloc de résultat : la clé n'est affichée qu'une fois
+
+**Manque constaté.** Le bloc de résultat affiche l'URL, la clé et le blob, sans **aucun** avertissement indiquant que la clé n'est montrée qu'une seule fois et que FGP ne peut pas la redonner. Un utilisateur qui ferme l'onglet perd l'accès à tous les blobs générés avec cette clé, définitivement, sans avoir été prévenu.
+
+C'est le bon endroit pour cette information, et c'est la destination du texte retiré du champ BYOK (§12.9) : dans le champ, l'utilisateur fournit une clé qu'il détient déjà, ici il en reçoit une qu'il est seul à détenir.
+
+| Élément | Texte | Condition d'affichage |
+|---------|-------|-----------------------|
+| Avertissement sous le champ clé | « Notez cette clé maintenant : FGP ne la stocke pas et ne pourra pas vous la redonner. Sans elle, l'URL est inexploitable. » | Uniquement quand la clé a été **générée par le serveur** |
+| Variante clé fournie | « Cette clé est celle que vous avez fournie. FGP ne la stocke pas. » | Uniquement quand l'utilisateur a fourni sa propre clé |
+
+La distinction n'est pas cosmétique : « notez cette clé maintenant » adressé à quelqu'un qui vient de la coller depuis son coffre est un bruit qui décrédibilise les avertissements suivants.
+
+Traitement visuel : même registre que l'avertissement de mutualisation, pas plus fort. C'est une consigne, pas une alerte de sécurité.
 
 ---
 

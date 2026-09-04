@@ -36,6 +36,10 @@ Il intervient à l'étape 3 du process type (section 8 de [`../ia-architecture-r
 
 Une ligne par item, orientée utilisateur, `**Breaking** :` en tête quand c'est cassant, ordre antéchronologique. Le renderer JSX ne gère que cinq features markdown : `## DATE`, `- item`, `**gras**`, `` `code` ``, `[texte](url)`. Le détail complet est dans la définition d'agent.
 
+**Règle de densité** (décidée le 2026-09-04, applicable à tout le changelog, entrées passées comprises) : un changement égale une puce, deux lignes maximum, soit environ 180 caractères. Au-delà, deux cas seulement. Si la puce couvre deux changements distincts, la scinder. Si un seul changement demande plus de place, garder l'essentiel dans la puce et renvoyer vers la documentation par un lien, en suivant la convention de libellé de `docs/specs.md` §12.11.
+
+Condenser n'est pas amputer : une information retirée d'une puce doit exister ailleurs, dans les specs ou dans le panneau Doc. Vérifier la conformité en mesurant la longueur des items, pas à l'oeil.
+
 ## Points de vigilance
 
 - **Doc API non négociable** : chaque route doit avoir une doc avec exemples curl.
