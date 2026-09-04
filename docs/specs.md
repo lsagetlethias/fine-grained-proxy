@@ -332,7 +332,7 @@ Détail complet, justification chiffrée et articulation avec les budgets d'ADR-
 |--------|--------|----------------|
 | `queryFilters` par ScopeEntry | 8 max | Même plafond que les body filters, même raison : au-delà, scinder en plusieurs scopes |
 | Valeurs OR par query filter | 16 max | Même plafond que les body filters, même union `ObjectValue` |
-| Occurrences d'un paramètre répété, évaluées par requête | 4 max | Nouveau : un paramètre répété multiplie les évaluations à la charge de l'appelant, pas de l'auteur du blob. Au-delà, ce filtre échoue (fail-closed) |
+| Occurrences d'un paramètre répété, évaluées par requête | 4 max si le filtre contient une valeur `regex`, 64 max sinon | Nouveau : un paramètre répété multiplie les évaluations à la charge de l'appelant, pas de l'auteur du blob. Palier déterminé une fois au déchiffrement. Au-delà, ce filtre échoue (fail-closed) |
 | Type `any` sur un query filter | `string` uniquement | Une valeur de query est toujours une chaîne sur le fil ; `number`/`boolean`/`null` y créeraient une comparaison dont le résultat dépend d'une coercion, pas d'une valeur écrite par l'auteur (cf. §19.3) |
 
 Ces plafonds structurels (nombre de filtres, de valeurs) partagent les budgets **globaux au blob** déjà posés par ADR-0010 avec les body filters : 4 valeurs `regex` toutes portées confondues, 256 `ObjectValue` au total, largeur d'un `and` à 8. Un `queryFilter` de type `regex` consomme le même budget qu'un `bodyFilter` de type `regex` ; il n'existe pas de budget séparé par axe.
@@ -452,14 +452,16 @@ Ce scope autorise `GET /v1/items?status=open` et `GET /v1/items?status=pending&p
 | `createdAt` | `number` | Timestamp Unix (secondes) de création du blob |
 | `ttl` | `number` | Durée de validité en secondes depuis `createdAt`. `0` = pas d'expiration. |
 
-La version est déterminée automatiquement, sur **trois axes indépendants**, en prenant la plus haute des trois :
+La version est déterminée automatiquement, sur **trois axes indépendants**, en prenant la plus haute des trois. Chaque axe impose un **plancher** (`v >= N`), jamais une égalité : le détail de cette règle et l'erreur qu'elle corrige sont en §19.7.
 
-- au moins un ScopeEntry porte des `queryFilters` → **v5**
-- sinon, `auth` est un objet `AuthSpec` → **v4**
-- sinon, au moins un scope est un ScopeEntry (avec ou sans `bodyFilters`) → **v3**
-- sinon → **v2**
+- au moins un ScopeEntry porte un `queryFilters` **non vide** → plancher **v5**
+- sinon, `auth` est un objet `AuthSpec` → plancher **v4**
+- sinon, au moins un scope est un ScopeEntry (avec ou sans `bodyFilters`) → plancher **v3**
+- sinon → plancher **v2**
 
-Un blob v5 peut donc n'avoir qu'une auth string, et un blob v4 conserve des scopes string. Un ScopeEntry qui porte des `queryFilters` est par construction un ScopeEntry structuré, donc la condition v5 entraîne toujours la condition v3 : il n'y a pas de cas où v5 s'applique sans que v3 s'applique aussi, ce qui est sans conséquence puisqu'on ne retient que le maximum. Le numéro de version est un marqueur de capacité de lecture, pas une génération fonctionnelle : il dit à un lecteur quels champs il doit savoir interpréter, rien de plus.
+`queryFilters: []` (tableau vide) n'impose aucun plancher : il est sérialisé comme absent, pas comme une capacité utilisée (§19.7).
+
+Un blob v5 peut donc n'avoir qu'une auth string, et un blob v4 conserve des scopes string. Un ScopeEntry qui porte des `queryFilters` non vide est par construction un ScopeEntry structuré, donc le plancher v5 entraîne toujours le plancher v3 : il n'y a pas de cas où v5 s'applique sans que v3 s'applique aussi, ce qui est sans conséquence puisqu'on ne retient que le maximum. Le numéro de version est un marqueur de capacité de lecture, pas une génération fonctionnelle : il dit à un lecteur quels champs il doit savoir interpréter, rien de plus.
 
 Le token est considéré expiré quand `Date.now() / 1000 > createdAt + ttl` (sauf si `ttl === 0`).
 
@@ -494,7 +496,7 @@ type Auth = string | AuthSpec;
 **Validation au déchiffrement** (en plus des règles §6.5) :
 
 - `auth` est soit une string non vide, soit un objet avec un `type` connu (`headers`, `scalingo-addon`). Tout autre `type` → blob rejeté.
-- Si `auth` est un objet, alors `v` doit valoir `4`. Si `v <= 3`, `auth` doit être une string.
+- Si `auth` est un objet, alors `v` doit être **au moins** `4` (`v >= 4`, jamais `v === 4` : un blob v5 à auth structurée doit rester lisible, §19.7). Si `v <= 3`, `auth` doit être une string.
 - `headers` : tableau non vide, chaque entrée a un `name` et un `value` non vides, les noms sont uniques (comparaison insensible à la casse), limites §5 respectées.
 - `scalingo-addon` : `app` et `addonId` sont présents et non vides, `token` est requis et non vide, `apiUrl` (si présent) est une URL absolue en `https`. Limites §5 respectées. Un `auth` de ce type qui porterait un tableau d'addons est rejeté : la forme multi n'existe pas en v4.
 
@@ -515,14 +517,14 @@ type Auth = string | AuthSpec;
 4. Déchiffrer AES-256-GCM et vérifier le tag d'authenticité
 5. Décompresser gzip
 6. Parser le JSON
-7. Valider la structure :
+7. Valider la structure. **Chaque capacité impose un plancher de version (`v >= N`), jamais une égalité (`v === N`) : voir §19.7 pour la faute que cette formulation corrige et la règle générale.**
    - `v` doit être `2`, `3`, `4` ou `5`. Toute autre valeur → blob rejeté, sans tenter d'interpréter le reste. C'est ce contrôle, exhaustif et vérifié en premier, qui garantit qu'un proxy antérieur à v5 refuse tout blob v5 plutôt que de l'accepter en ignorant silencieusement `queryFilters` (§6.2).
    - `target` et `auth` non vides ; `token` non vide sauf en AuthSpec `headers` (cf. §6.3)
    - `scopes` est un tableau
-   - Si v2 : tous les scopes sont des strings, `auth` est une string
-   - Si v3 : chaque scope est soit un string, soit un ScopeEntry valide (limites vérifiées), `auth` est une string
-   - Si v4 : mêmes règles de scopes que v3, et `auth` est un AuthSpec valide (cf. §6.3)
-   - Si v5 : mêmes règles que v4, et chaque `queryFilters` de chaque ScopeEntry est valide (limites et sémantique du §19 vérifiées)
+   - Un scope structuré (`ScopeEntry`, avec ou sans `bodyFilters`) n'est valide que si `v >= 3`. En dessous, tous les scopes doivent être des strings.
+   - `auth` objet (`AuthSpec`) n'est valide que si `v >= 4` (cf. §6.3). En dessous, `auth` doit être une string.
+   - Un `queryFilters` non vide sur un `ScopeEntry` n'est valide que si `v >= 5` (limites et sémantique du §19 vérifiées). En dessous, le blob est rejeté : un `v` sous-déclaré face à des `queryFilters` réellement présents est une capacité non couverte par son propre plancher, refusée au même titre qu'une capacité manquante (§19.7). Un `queryFilters` vide (`[]`) n'impose aucun plancher et n'est pas considéré comme porter des `queryFilters` (§19.7).
+   - `v` publié est le **maximum** des planchers effectivement imposés par le contenu du blob. Un blob peut légitimement publier un `v` supérieur à son plancher minimum (par exemple v5 avec une auth string simple), jamais inférieur.
 
 ---
 
@@ -992,7 +994,17 @@ Le testeur de scopes **mentait**, et pas par accident de code : il possédait sa
 
 Le correctif est structurel : **une seule fonction d'autorisation**, exportée par `src/middleware/scopes.ts`, appelée par le proxy et par le highlight client. Elle prend le chemin brut avec sa query éventuelle, applique la règle des deux formes (§18.3), et retourne un verdict dont un champ indique si la query est contrainte. Trois lectures des scopes ne peuvent pas rester d'accord dans le temps, une seule ne peut pas diverger.
 
-**Depuis v5, ce champ vaut « query contrainte » dès qu'au moins un scope testé porte des `queryFilters` (§19).** Pour tout autre scope, il reste « non contrainte », exactement comme avant. L'UI doit refléter les deux états, et ne jamais afficher un refus fondé sur une query que le proxy ne refuserait pas.
+**Correction (challenge testeur, T2) : le champ de contrainte doit être lu sur le scope qui accorde réellement l'accès, jamais sur « au moins un scope testé ».** Les scopes sont en OR (§3.2) : `checkAccess` retourne vrai au premier scope qui matche et n'examine pas les suivants. Si un blob contient à la fois un scope string historique `GET:/v1/items` (aucune contrainte) et un `ScopeEntry` à `queryFilters` sur le même chemin et la même méthode, une requête `/v1/items?force=true` est **autorisée par le premier**, `force=true` part tel quel, et le second n'a jamais été sollicité. Afficher « contrainte » parce que le second scope du blob en porte une, à côté d'un verdict « autorisé », dirait au testeur que sa query a été validée alors qu'elle ne l'a pas été : exactement le mensonge, dans une forme nouvelle, que ce module existe pour supprimer (§18.3, ADR-0009 §4).
+
+**Ce que le testeur doit donc afficher : trois états, jamais deux.**
+
+| État | Condition | Texte |
+|------|-----------|-------|
+| 1. Non contrainte | Le chemin de test contient un `?`, et **aucun** scope testé, dans tout le jeu de scopes, ne porte de `queryFilters` | « La query n'est pas contrainte par les scopes : tous les paramètres passent. » |
+| 2. Contrainte | Le chemin de test contient un `?`, la requête est autorisée, et **le scope qui accorde l'accès** porte des `queryFilters` | « La query est contrainte par le scope qui vous autorise : {method}:{pattern}. » |
+| 3. Contournée | Le chemin de test contient un `?`, la requête est autorisée, **au moins un scope du blob porte des `queryFilters` sur ce chemin**, mais **le scope qui accorde l'accès n'en porte pas** | « Autorisé par un scope qui ne contraint pas la query : {method}:{pattern}. D'autres scopes de ce blob contraignent ce chemin, mais ce n'est pas celui qui a matché en premier. » |
+
+L'état 3 est la correction du bug : il dit explicitement que la protection existe ailleurs dans le blob mais n'a pas joué, ce qui est la seule formulation qui n'induit pas en erreur. Quand la requête est **refusée**, aucun de ces trois états ne s'affiche : il n'y a pas de scope accordant l'accès à nommer, et le détail par scope ci-dessous porte déjà toute l'information utile.
 
 #### Labels UI (copy)
 
@@ -1007,26 +1019,18 @@ Le correctif est structurel : **une seule fonction d'autorisation**, exportée p
 | Résultat autorisé | "Accès autorisé" (vert) |
 | Résultat refusé | "Accès refusé" (rouge) |
 
-#### Note query : deux états, pas un
-
-Avant v5, une seule note existait, permanente dès qu'un `?` apparaissait dans le chemin de test. Depuis v5, le verdict distingue deux situations, et la note affichée dépend d'**aucun** scope testé ne portant de `queryFilters` versus **au moins un** en portant :
-
-| Condition d'affichage | Texte |
-|------------------------|-------|
-| Le chemin de test contient un `?`, et **aucun** scope testé ne porte de `queryFilters` | « La query n'est pas contrainte par les scopes : tous les paramètres passent. » |
-| Le chemin de test contient un `?`, et **au moins un** scope testé porte des `queryFilters` | « La query est contrainte par au moins un scope : voir le détail sous chaque scope concerné. » |
-
-La première note reste vraie et nécessaire pour tout scope sans `queryFilters`, qui restent la majorité des blobs existants : rien ne change pour eux. La seconde renvoie vers le détail par scope décrit ci-dessous, plutôt que de répéter une explication générique qui n'aiderait pas à corriger.
-
 #### Détail par scope : quel paramètre a bloqué
 
-Un indicateur ✓/✗ par scope ne suffit plus quand le refus vient de la query : un utilisateur qui voit juste « ✗ » sur un scope à `queryFilters` ne sait pas s'il a oublié un paramètre requis, ajouté un paramètre non prévu, ou envoyé une valeur hors liste. **Quand un scope refuse spécifiquement sur son axe query, une ligne de détail apparaît sous ce scope**, nommant le paramètre fautif et la nature du problème. Trois cas, jamais cumulés puisque l'évaluation s'arrête au premier problème rencontré :
+Un indicateur ✓/✗ par scope ne suffit plus quand le refus vient de la query : un utilisateur qui voit juste « ✗ » sur un scope à `queryFilters` ne sait pas s'il a oublié un paramètre requis, ajouté un paramètre non prévu, envoyé une valeur hors liste, ou répété un paramètre plus de fois que le plafond ne l'autorise. **Quand un scope refuse spécifiquement sur son axe query, une ligne de détail apparaît sous ce scope**, nommant le paramètre fautif et la nature du problème. **Quatre cas, jamais cumulés** : l'évaluation s'arrête au premier problème rencontré, dans l'ordre où ce tableau les liste, qui est aussi l'ordre d'évaluation imposé par §19.2 (le comptage des occurrences précède toujours l'examen des valeurs) :
 
 | Cas | Texte |
 |-----|-------|
 | Un paramètre présent dans la requête de test n'est couvert par aucun `queryFilter` de ce scope (déni par défaut, §19.2) | « Paramètre "{param}" non déclaré : refusé par défaut dès qu'un filtre query existe sur ce scope. » |
 | Un `queryFilter` a `required: true` et son paramètre est absent de la requête de test | « Paramètre requis "{param}" absent. » |
-| Un `queryFilter` est présent mais aucune de ses valeurs ne couvre la valeur envoyée (ou une occurrence, en cas de répétition) | « Valeur de "{param}" non autorisée par ce filtre. » |
+| Un paramètre couvert par un `queryFilter` apparaît plus de fois que le plafond applicable ne l'autorise (§19.4) | « Plus de {plafond} occurrences de "{param}" : au-delà de cette limite, la requête est refusée quelles que soient les valeurs. Pour filtrer davantage d'occurrences, remplacez une valeur `regex` par `stringwildcard` si possible : le plafond passe de 4 à 64. » |
+| Un `queryFilter` est présent, le nombre d'occurrences est dans le plafond, mais au moins une occurrence ne matche aucune valeur de `values` | « Valeur de "{param}" non autorisée par ce filtre. » |
+
+**Pourquoi le comptage précède l'examen des valeurs, et pourquoi c'est écrit ici et pas seulement en §19.2.** Sans cet ordre fixé, le message dépendrait d'un détail d'implémentation invisible à l'utilisateur : un dev qui évalue occurrence par occurrence pourrait renvoyer « valeur non autorisée » sur la troisième occurrence d'un paramètre qui en compte six, avant même d'avoir remarqué qu'il y en a trop, ce qui envoie l'utilisateur vérifier des valeurs qui sont pourtant toutes bonnes. Le troisième message de ce tableau n'existe que parce que le quatrième ne doit jamais se déclencher à sa place.
 
 Le nom du paramètre entre guillemets doubles droits n'est pas un choix arbitraire : c'est la même convention que celle déjà utilisée pour citer un champ dans les messages de validation de body filters (`"deployment.git_ref" exceeds maximum of 6 segments"`), reprise ici pour la cohérence.
 
@@ -1474,9 +1478,11 @@ L'avertissement doit donc être **visible dès qu'un filtre existe sur ce scope*
 
 | Élément | Condition d'affichage | Texte |
 |---------|------------------------|-------|
-| Alerte de déni par défaut | Au moins un query filter existe sur ce scope | « Dès qu'un filtre query est ajouté à ce scope, tout paramètre de query non déclaré ici fait échouer la requête. Ce n'est pas une contrainte en plus : c'est un refus par défaut sur tout le reste de la query. » |
+| Alerte de déni par défaut | Au moins un query filter existe sur ce scope | « Dès qu'un filtre query est ajouté à ce scope, tout paramètre de query non déclaré ici fait échouer la requête, y compris ceux que vous n'écrivez pas vous-même (pagination, cache-busting, tracking ajoutés par votre client). Ce n'est pas une contrainte en plus : c'est un refus par défaut sur tout le reste de la query. » |
 
 La gravité tient au texte seul (« fait échouer la requête », « refus par défaut ») sans avoir besoin d'un mot comme « Attention » : c'est exactement le corollaire du designer en §12.13 appliqué ici.
+
+**Ajout (challenge testeur, T1) : la mention des paramètres ajoutés par le client de l'auteur.** La première version de cette alerte disait « tout paramètre de query non déclaré ici fait échouer la requête », qui se lit comme « les paramètres que j'écris », pas comme « ceux que mon SDK ajoute ». Le mode de défaillance nominal de la feature est justement un paramètre que l'auteur ne voit jamais dans son propre code (§19.8) : la copy doit le dire à l'endroit où l'auteur peut encore agir, avant de basculer le déni par défaut, pas seulement dans le guide qu'il n'ouvrira qu'après coup.
 
 #### Labels du formulaire
 
@@ -1507,7 +1513,15 @@ Les messages de validation à la génération suivent la convention déjà en pl
 | `any` avec une valeur non-string sur un query filter | `Type "any" on a query filter only accepts a string value (param: '{param}')` |
 | Deux `queryFilters` du même ScopeEntry nomment le même paramètre | `Duplicate query filter for param '{param}'` |
 
-**Le plafond de 4 occurrences évaluées par requête n'a pas de message de génération.** Il ne peut pas en avoir : contrairement à tous les autres plafonds de cette liste, il ne dépend d'aucune donnée du blob, seulement de la requête envoyée par l'appelant au moment du forward. Il ne se manifeste jamais à la génération, seulement à l'usage, en `scope_denied` générique côté proxy et en détail nommé côté testeur (§12.5).
+**Le doublon de `param` est rejeté aux deux endroits, pas seulement à la génération.** Le message ci-dessus s'affiche à la génération, mais la même règle est aussi vérifiée au déchiffrement du blob (§19.5) : le salt étant public, une règle qui ne vivrait qu'au formulaire ne protégerait personne contre un blob forgé à la main.
+
+**Le plafond d'occurrences évaluées par requête n'a pas de message de génération, quel que soit le palier applicable.** Il ne peut pas en avoir : contrairement à tous les autres plafonds de cette liste, il ne dépend d'aucune donnée du blob, seulement de la requête envoyée par l'appelant au moment du forward. Il ne se manifeste jamais à la génération, seulement à l'usage, en `scope_denied` générique côté proxy et en détail nommé côté testeur (§12.5).
+
+**Le choix du type « Expression régulière » doit dire, au moment où l'auteur le sélectionne, qu'il abaisse le plafond d'occurrences (§19.4).** C'est le point de copy qui débloque un auteur qui se retrouverait sinon enfermé (§19.4) : sans cette information au bon endroit, il découvre le plafond de 4 en production, sur une requête refusée, sans savoir pourquoi ni quoi corriger.
+
+| Élément | Condition d'affichage | Texte |
+|---------|------------------------|-------|
+| Texte d'aide sous le sélecteur de type, uniquement quand « Expression régulière » est choisi | « Un paramètre filtré par une expression régulière n'accepte que 4 occurrences répétées par requête, contre 64 pour les autres types. Si vous attendez plus de 4 valeurs sur ce paramètre, un pattern glob (`stringwildcard`) suffit souvent et n'a pas cette limite. » |
 
 #### 12.14.1 Guide « Query filters : exemples »
 
@@ -1529,7 +1543,7 @@ Nouveau guide repliable, même registre que les guides existants (§12.4, scopes
 
 | Cas | Contenu |
 |-----|---------|
-| Paramètre répété | Filtre `tag` = `feature` \| `bugfix`. `/v1/items?tag=feature&tag=bugfix` : chaque occurrence est vérifiée séparément, toutes doivent matcher une valeur. `/v1/items?tag=feature&tag=urgent` est refusé : `urgent` ne matche aucune valeur. Au-delà de 4 occurrences du même paramètre, la requête est refusée quelle que soit leur valeur (limite de charge, cf. `docs/limits.md`). |
+| Paramètre répété | Filtre `tag` = `feature` \| `bugfix`. `/v1/items?tag=feature&tag=bugfix` : chaque occurrence est vérifiée séparément, toutes doivent matcher une valeur. `/v1/items?tag=feature&tag=urgent` est refusé : `urgent` ne matche aucune valeur. Au-delà du plafond d'occurrences, la requête est refusée quelle que soit leur valeur : 64 occurrences ici (aucune `regex` dans ce filtre), seulement 4 si le filtre avait utilisé une `regex` (cf. `docs/limits.md`). |
 | Refus par défaut | Dès qu'un seul `queryFilter` existe sur ce scope, tout paramètre non déclaré, même anodin (`?debug=1`), fait échouer la requête sur ce scope. |
 | Type de valeur | Contrairement aux body filters, `any` sur un query filter n'accepte que du texte. Pour `?page=1`, la valeur du filtre s'écrit `1` en tant que texte, pas en tant que nombre. |
 
@@ -1659,7 +1673,8 @@ Le schéma des events est discriminé par le champ `type`.
   "path": "/v1/apps/my-app/containers",
   "status": 200,
   "durationMs": 142,
-  "ipPrefix": "203.0.113.0/24"
+  "ipPrefix": "203.0.113.0/24",
+  "queryParamNames": ["per_page", "status"]
 }
 ```
 
@@ -1671,8 +1686,13 @@ Le schéma des events est discriminé par le champ `type`.
 | `status` | Status HTTP renvoyé au client (peut être FGP ou upstream) |
 | `durationMs` | Durée totale du traitement proxy, depuis l'entrée jusqu'à l'envoi de la réponse |
 | `ipPrefix` | IP client tronquée au /24 (IPv4) ou /48 (IPv6). Respect vie privée + infos debug. |
+| `queryParamNames` | Depuis v5 (§19.8). Noms des paramètres de query présents dans la requête, dédupliqués, **jamais leurs valeurs**. Absent (pas un tableau vide) quand la requête n'a pas de query. |
 
 Le `target` upstream n'est **pas** inclus dans les entries network.
+
+**Sur `queryParamNames` : pourquoi les noms et jamais les valeurs.** L'entry `network` vit **en clair** dans le ring buffer, contrairement au body `detailed` qui est chiffré côté client avant stockage (§14.8). Les noms de paramètres suffisent au diagnostic le plus courant (« `per_page` apparaît, mon SDK de pagination l'a ajouté ») et ne fuitent aucun secret. Les valeurs, elles, contiennent régulièrement des identifiants ou des secrets (`?api_key=`, `?token=`) : les stocker en clair dans le ring buffer network en ferait un vecteur de fuite à part entière, ce qu'aucune autre donnée de cette entry ne fait aujourd'hui. Un besoin futur de voir les valeurs a sa place dans l'entry `detailed`, chiffrée, jamais ici.
+
+**Champ additif, pas une rupture du flux.** Un client `/logs/stream` déjà écrit continue de fonctionner : `queryParamNames` est un champ de plus sur un JSON qu'aucun consommateur connu ne valide en mode strict. Un client qui veut afficher les noms de paramètres doit être mis à jour pour les lire, ce qui est une évolution, pas une migration forcée.
 
 **Event `detailed`**, capturé en plus du network, uniquement si `logs.detailed` et content-type JSON non-multipart :
 
@@ -2186,7 +2206,7 @@ Ce qui est observable côté client :
 - **413 `payload_too_large`** sur `/api/*` au-delà du plafond de la route, et sur le proxy au-delà de 512 Ko de corps quand un body filter ou la capture detailed est actif.
 - **Le streaming du corps proxy est préservé** quand aucun body filter ni capture detailed n'est actif : les gros uploads à travers le proxy continuent de passer sans être mis en mémoire. C'est une propriété du proxy transparent qu'il ne fallait pas perdre en posant la limite au mauvais endroit.
 - **400 `unsupported_regex`** quand une regex du blob sort du dialecte autorisé.
-- **Un paramètre de query répété au-delà de 4 occurrences fait échouer le scope qui le filtre** (v5, §19.4), avec le même code `scope_denied` que tout autre refus de scope. Contrairement aux autres limites de cette liste, celle-ci ne dépend d'aucune donnée du blob : elle porte sur la requête de l'appelant, pas sur ce que l'auteur du blob a écrit.
+- **Un paramètre de query répété au-delà du plafond d'occurrences fait échouer le scope qui le filtre** (v5, §19.4) : 4 occurrences pour un filtre qui contient une regex à n'importe quelle profondeur, 64 pour les autres. Même code `scope_denied` que tout autre refus de scope. Contrairement aux autres limites de cette liste, celle-ci ne dépend d'aucune donnée du blob : elle porte sur la requête de l'appelant, pas sur ce que l'auteur du blob a écrit.
 
 ### 18.6 Limitation de débit : hors de l'application, et pourquoi
 
@@ -2204,6 +2224,8 @@ L'ordre de grandeur qui justifie qu'on ne l'ignore pas : avant les correctifs de
 
 Cette section spécifie l'axe `queryFilters` annoncé en §3.1, §6.1 et §18.4, arbitré par l'ADR-0009 §4 (forme du `QueryFilter`, opt-in, déni par défaut, bump en v5) et contraint par l'ADR-0010 (critère de dimensionnement des primitives optionnelles). Les points que les deux ADR laissent ouverts, et qui sont tranchés ici, sont signalés comme tels.
 
+**Révision.** Cette section a été challengée par le testeur QA (`docs/review/challenge-query-filters-v5.md`) et corrigée sur cinq points bloquants (B1 à B5) et sept points tranchés par l'architecte (T1 à T7). Les corrections sont intégrées directement, sans les marquer en marge : une spec ne garde pas la trace de ses propres bugs corrigés, elle est juste correcte.
+
 ### 19.1 Ce que ça résout
 
 Sans `queryFilters`, un scope ne contraint que la méthode et le chemin (§18.4) : `GET:/v1/items` autorise n'importe quelle query sur ce chemin, y compris des paramètres destructeurs (`?force=true`, `?action=delete`). Sur une API à dominante GET, la query **est** le corps de la requête au sens où le body l'est pour un POST : être fine-grained sur l'un et grossier sur l'autre est incohérent avec la promesse du produit (ADR-0009 §4, même argument que celui qui a justifié les body filters en ADR-0004).
@@ -2220,12 +2242,19 @@ interface QueryFilter {
 }
 ```
 
-`values` réutilise l'union `ObjectValue` des body filters (§4.2) telle quelle : `any`, `wildcard`, `stringwildcard`, `regex`, `and`, `not`, avec une seule restriction contextuelle sur `any` (§19.3). Toutes les autres règles déjà posées pour `ObjectValue` s'appliquent sans exception aux valeurs d'un `queryFilter` : profondeur `and`/`not` à 4 niveaux, combinaisons interdites (§5), dialecte et ancrage des regex (ADR-0010 D3/D2). Rien de nouveau n'est inventé sur ce plan, c'est le même moteur de matching qui s'applique, avec en entrée la valeur brute du paramètre de query au lieu d'une valeur résolue dans le body JSON.
+`values` réutilise l'union `ObjectValue` des body filters (§4.2) telle quelle : `any`, `wildcard`, `stringwildcard`, `regex`, `and`, `not`, avec une seule restriction contextuelle sur `any`, à toute profondeur d'imbrication (§19.3). Toutes les autres règles déjà posées pour `ObjectValue` s'appliquent sans exception aux valeurs d'un `queryFilter` : profondeur `and`/`not` à 4 niveaux, combinaisons interdites (§5), dialecte et ancrage des regex (ADR-0010 D3/D2). Rien de nouveau n'est inventé sur ce plan, c'est le même moteur de matching qui s'applique, avec en entrée la valeur brute du paramètre de query au lieu d'une valeur résolue dans le body JSON.
 
-**Deux règles gouvernent le comportement d'un `ScopeEntry` dès qu'il porte au moins un `queryFilter` :**
+**Un `ScopeEntry` ne peut pas déclarer deux `queryFilters` sur le même `param`.** Deux filtres sur un même paramètre créeraient une ambiguïté de sémantique non résolue et non résolvable a priori (le premier gagne-t-il, sont-ils en AND, en OR ?), donc il n'y a rien à définir, seulement à rejeter : à la génération et **au déchiffrement** (§19.5), miroir exact de l'unicité déjà exigée des noms de headers d'auth (§6.3).
+
+**Deux règles sémantiques gouvernent le comportement d'un `ScopeEntry` dès qu'il porte au moins un `queryFilter` non vide** (un tableau `queryFilters` vide est traité comme absent, §19.7) :
 
 1. **Déni par défaut.** Tout paramètre présent dans la requête et dont le nom ne correspond à **aucun** `queryFilter` de ce `ScopeEntry` fait échouer ce scope. Ce n'est pas conditionné par `required` : c'est une propriété du `ScopeEntry` dès que `queryFilters` est non vide, indépendante de ce que chaque filtre déclare individuellement. Un scope qui déclare `queryFilters: [{param: "status", ...}]` refuse tout aussi bien `?other=1` que `?status=invalide`.
-2. **Occurrences multiples en AND.** Un paramètre répété (`?tag=a&tag=b`) n'est autorisé que si **chacune** de ses occurrences satisfait `values` (OR entre les valeurs, AND entre les occurrences). Une seule occurrence qui ne matche aucune valeur suffit à faire échouer le filtre, sans attendre d'avoir examiné les autres occurrences.
+2. **Occurrences multiples en AND.** Un paramètre répété (`?tag=a&tag=b`) n'est autorisé que si **chacune** de ses occurrences satisfait `values` (OR entre les valeurs, AND entre les occurrences). Une seule occurrence qui ne matche aucune valeur suffit à faire échouer le filtre.
+
+**Deux règles d'exécution, pour que le résultat ne dépende jamais d'un choix d'implémentation :**
+
+3. **Le comptage des occurrences précède l'évaluation des valeurs (challenge testeur, B3).** Pour un paramètre couvert par un `queryFilter`, le nombre d'occurrences réellement présentes dans la requête est déterminé **avant** qu'aucune valeur ne soit comparée à `values`. Si ce nombre dépasse le plafond applicable (§19.4), le filtre échoue immédiatement pour surnombre, sans regarder si les valeurs envoyées auraient matché. Sans cet ordre fixé ici, le message de diagnostic dépendrait de l'ordre dans lequel l'appelant a rangé ses paramètres dans l'URL, et un dev qui évalue occurrence par occurrence pourrait renvoyer « valeur non autorisée » sur une requête dont le seul problème est le nombre d'occurrences (détail des quatre messages en §12.5).
+4. **L'axe query est évalué une seule fois par requête, en amont de la double passe brute/canonique du chemin, jamais à l'intérieur (challenge testeur, T4).** `checkRequestAccess` (§18.3) évalue le chemin sous sa forme brute, puis, si elle diffère, sous sa forme canonique. L'axe query n'a aucun rapport avec cette normalisation de chemin et ne doit jamais être réévalué à la seconde passe : un appelant qui force cette seconde passe (`//v1/items`, `/v1/./items`) ne doit pas pouvoir doubler au passage le coût de l'évaluation query, ce qui doublerait aussi le pire cas chiffré en §19.4.
 
 #### La matrice de `required`
 
@@ -2239,46 +2268,112 @@ interface QueryFilter {
 
 **Le piège d'articulation à ne pas laisser un lecteur reconstruire seul** : les deux lignes du tableau qui parlent d'un « filtre déclaré » répondent à la question *que devient une valeur que j'ai prévue*, la troisième ligne répond à une question différente, *que devient un paramètre que je n'ai pas prévu du tout*. `required: false` sur le filtre `page` ne rend jamais un paramètre `sort` non déclaré tolérable : le déni par défaut ne se désactive pas filtre par filtre, il se désactive uniquement en retirant `queryFilters` du `ScopeEntry` en entier.
 
-### 19.3 Arbitrage 1 : le type `any` est restreint aux chaînes
+### 19.3 Arbitrage 1 : le type `any` est restreint aux chaînes, à toute profondeur
 
-**Le piège que l'ADR-0009 signale sans le trancher, tranché ici.** Un paramètre de query est **toujours une chaîne** sur le fil, alors que `ObjectValue` de type `any` est typé sur `JsonValue` (string, number, boolean, null, array, object). Un filtre `{"type":"any","value":1}` appliqué à `?page=1` comparerait le nombre `1` à la chaîne `"1"` : elles ne sont jamais égales, le filtre ne matche jamais, et rien ne le signale à l'auteur. C'est un piège silencieux. Trois issues sont possibles : restreindre, coercer, ou laisser passer. La troisième est exclue d'emblée.
+**Le piège que l'ADR-0009 signale sans le trancher, tranché ici, et plus profond qu'il n'y paraît (challenge testeur, B4).** Un paramètre de query est **toujours une chaîne** sur le fil, alors que `ObjectValue` de type `any` est typé sur `JsonValue` (string, number, boolean, null, array, object). Un filtre `{"type":"any","value":1}` appliqué à `?page=1` comparerait le nombre `1` à la chaîne `"1"` : elles ne sont jamais égales, le filtre ne matche jamais, et rien ne le signale à l'auteur. C'est un piège silencieux. Trois issues sont possibles : restreindre, coercer, ou laisser passer. La troisième est exclue d'emblée.
 
-**Décision : `any` sur un `queryFilter` n'accepte que `string`.** `number`, `boolean` et `null` sont refusés, à la génération avec un message actionnable et au déchiffrement avec un rejet du blob (même sévérité que les autres limites de cette section).
+**Décision : `any` sur un `queryFilter` n'accepte que `string`, à n'importe quelle profondeur d'imbrication dans un `and` ou un `not`, jamais seulement au premier niveau.** `{"type":"and","value":[{"type":"any","value":1},{"type":"wildcard"}]}` est tout aussi refusé qu'un `any` non-string isolé. Le rejet a lieu **au déchiffrement** (blob refusé), pas seulement empêché côté formulaire : une restriction qui ne vivrait que dans l'UI n'en serait pas une, le salt étant public et un blob se forgeant hors ligne (ADR-0009 §2). Elle est doublée à la génération avec un message actionnable.
 
-**Pourquoi restreindre plutôt que coercer.** Le projet a déjà tranché ce genre de question une fois, dans l'autre sens qu'on pourrait croire à première vue mais pour la même raison : `any` a été interdit sur les objets et tableaux (ADR-0010 D4) parce que la comparaison `JSON.stringify` dépendait de l'ordre de sérialisation du **client**, une donnée que l'auteur du blob ne contrôle pas. Coercer ici reproduirait un défaut de même nature, pas identique mais parent : le blob porterait une valeur typée (`1`, `true`, `null`) que l'auteur écrit en pensant JSON, alors que la seule chose qui existe réellement sur le fil est une chaîne, potentiellement absente de représentation canonique (`?flag` sans valeur, `?flag=` valeur vide, `?flag=null` chaîne littérale « null » sont trois états distincts qu'un JSON `null` unique ne peut pas représenter sans arbitrage). Coercer obligerait à choisir arbitrairement laquelle de ces formes un `null` JSON représente, un arbitrage que l'auteur ne voit pas et ne contrôle pas au moment où il l'écrit. Restreindre à `string` supprime la question : l'auteur écrit exactement ce qui sera comparé, sans traduction intermédiaire.
+**Pourquoi restreindre plutôt que coercer.** Le projet a déjà tranché ce genre de question une fois, dans l'autre sens qu'on pourrait croire à première vue mais pour la même raison : `any` a été interdit sur les objets et tableaux (ADR-0010 D4) parce que la comparaison `JSON.stringify` dépendait de l'ordre de sérialisation du **client**, une donnée que l'auteur du blob ne contrôle pas. Coercer ici reproduirait un défaut de même nature, pas identique mais parent : le blob porterait une valeur typée (`1`, `true`, `null`) que l'auteur écrit en pensant JSON, alors que la seule chose qui existe réellement sur le fil est une chaîne. Avec le parseur standard (`URLSearchParams`), `?flag` et `?flag=` produisent la **même** valeur, une chaîne vide : un seul état, pas deux. `?flag=null` en est un second, distinct, la chaîne littérale `"null"`. Un JSON `null` unique ne représente proprement ni l'un ni l'autre sans un arbitrage que l'auteur ne voit pas au moment où il écrit sa valeur. Restreindre à `string` supprime la question : l'auteur écrit exactement ce qui sera comparé, sans traduction intermédiaire.
 
-**Conséquence pour l'UI (§12.14) :** le sélecteur de sous-type Texte / Nombre / Booléen / Null, présent sur `any` dans les body filters, n'existe pas pour les query filters. Un seul champ texte, sans choix à faire.
+**Le cas `not` : ce n'est pas un filtre mort, c'est un filtre qui autorise tout, et c'est le plus grave des deux symptômes (ajout du challenge testeur, B4).** Le premier symptôme décrit ci-dessus (`any` non-string isolé, ou dans un `and`) produit un filtre qui ne matche **jamais** : un scope trop strict, gênant mais sûr. Sous `not`, l'effet s'inverse. Le matching compare par `JSON.stringify` : `JSON.stringify(1)` vaut `"1"`, `JSON.stringify("1")` vaut `"\"1\""`, jamais égaux, donc `any` non-string contre n'importe quelle chaîne envoyée retourne toujours `false`. `not` inverse ce résultat : `not({type:"any", value:1})` retourne donc **toujours vrai**, quelle que soit la valeur envoyée par l'appelant. Un auteur qui écrit « exclure la page numéro 1 » avec `{"type":"not","value":{"type":"any","value":1}}` obtient un filtre qui accepte tout. Ce n'est plus un scope trop strict, c'est un **fail-open** sur l'axe même dont la raison d'être est de bloquer `?force=true` (§19.1). C'est ce cas, et lui seul, qui rend le rejet au déchiffrement non négociable : un formulaire qui empêcherait juste la saisie ne protège rien contre un blob écrit à la main.
 
-**Ce que cette restriction ne touche pas :** `stringwildcard`, `regex`, `wildcard`, `and`, `not` fonctionnent déjà exclusivement sur des chaînes ou sans valeur propre (`matchObjectValue` retourne `false` sur un type non-string pour `stringwildcard` et `regex`), donc rien ne change pour eux. Seul `any` avait une porte ouverte sur `JsonValue`, et c'est cette porte qui se referme.
+**Conséquence pour l'UI (§12.14) :** le sélecteur de sous-type Texte / Nombre / Booléen / Null, présent sur `any` dans les body filters, n'existe pas pour les query filters, **y compris dans les sous-conditions imbriquées d'un `ET` ou d'un `Exclure`**. Un seul champ texte, sans choix à faire, à quelque profondeur que ce soit.
 
-### 19.4 Occurrences répétées : un plafond spécifique, à la charge de la requête
+**Ce que cette restriction ne touche pas :** `stringwildcard`, `regex`, `wildcard`, `and`, `not` fonctionnent déjà exclusivement sur des chaînes ou sans valeur propre (`matchObjectValue` retourne `false` sur un type non-string pour `stringwildcard` et `regex`), donc rien ne change pour eux. Seul `any` avait une porte ouverte sur `JsonValue`, et c'est cette porte qui se referme, à tous les étages.
 
-**Ce que l'interaction ADR-0009/ADR-0010 signale sans le chiffrer, chiffré ici.** ADR-0010 établit que les plafonds de dénombrement (4 `regex`, 256 `ObjectValue`, largeur d'`and` à 8) sont globaux au blob, comptés sur l'union des `bodyFilters` et des `queryFilters`. Ces plafonds bornent ce que **l'auteur du blob** peut écrire. Ils ne bornent pas ce qu'**un appelant** peut envoyer : un paramètre de query répété (`?tag=a&tag=b&tag=c...`) multiplie le nombre d'évaluations d'un même `queryFilter` proportionnellement au nombre d'occurrences, sans que le blob n'ait rien de plus à contenir pour ça. C'est un vecteur que les plafonds structurels de l'ADR-0010 ne couvrent pas, parce qu'il ne vit pas dans le blob.
+### 19.4 Occurrences répétées : un plafond à deux paliers, à la charge de la requête
 
-**Décision : au plus 4 occurrences d'un même paramètre sont évaluées par requête.** Au-delà, ce `queryFilter` échoue (fail-closed) : le `ScopeEntry` qui le porte ne matche pas cette requête, indépendamment des valeurs envoyées. Le nombre 4 est choisi par symétrie avec le plafond de 4 valeurs `regex` par blob (ADR-0010 D2) : c'est la même primitive coûteuse, un `queryFilter` de type `regex` appliqué à un paramètre répété, qui motive les deux plafonds, et les aligner évite d'avoir à retenir deux ordres de grandeur différents pour le même risque. Ce plafond s'applique **uniformément, quel que soit le type du filtre** (`any`, `wildcard`, `stringwildcard`, `regex`, `and`, `not`) : il ne dépend d'aucune analyse du contenu du filtre, à l'image de la couche 1 de l'ADR-0010 D2 (le plafond de longueur de la valeur testée par une regex), qui ne dépend elle non plus d'aucune analyse du motif et ne peut donc pas se tromper.
+**Ce que l'interaction ADR-0009/ADR-0010 signale sans le chiffrer, chiffré une première fois puis corrigé par la mesure (challenge testeur, B5).** ADR-0010 établit que les plafonds de dénombrement (4 `regex`, 256 `ObjectValue`, largeur d'`and` à 8) sont globaux au blob, comptés sur l'union des `bodyFilters` et des `queryFilters`. Ces plafonds bornent ce que **l'auteur du blob** peut écrire. Ils ne bornent pas ce qu'**un appelant** peut envoyer : un paramètre de query répété (`?tag=a&tag=b&tag=c...`) multiplie le nombre d'évaluations d'un même `queryFilter` proportionnellement au nombre d'occurrences, sans que le blob n'ait rien de plus à contenir pour ça. C'est un vecteur que les plafonds structurels de l'ADR-0010 ne couvrent pas, parce qu'il ne vit pas dans le blob.
 
-**Ce plafond est d'une nature différente de tous les autres de cette section, et ça doit rester visible dans le code et dans les tests.** Les plafonds de nombre de filtres, de valeurs OR, de type `any` sont des propriétés du **blob** : ils se vérifient à la génération (message actionnable) et au déchiffrement (rejet du blob). Le plafond d'occurrences est une propriété de la **requête** : il ne peut se vérifier qu'au moment du forward, sur le chemin chaud, à chaque requête. Aucun message de génération ne peut exister pour lui, puisqu'aucune donnée du blob ne le déclenche (cf. §12.14).
+**Le plafond uniforme de 4, retenu initialement, a été mesuré et invalidé.** Un plafond unique calibré sur le pire cas (`regex`) interdisait, pour un coût qui n'existe pas dans le cas général, un usage banal : un paramètre répété avec des valeurs `any` ou `stringwildcard`, la forme la plus courante de filtrage par liste sur les API à dominante GET que §19.1 cite comme cas d'usage principal (`expand[]` chez Stripe, `fields` chez Elasticsearch, `include` en JSON:API, `labels` chez GitHub). Sur ces API, cinq identifiants dans un même paramètre est une requête banale, pas une attaque, et un plafond de 4 la refuse sans qu'aucune sortie ne préserve à la fois l'usage et la contrainte : retirer le `queryFilter` perd la protection cherchée, ajouter un second scope sans `queryFilters` sur le même chemin la neutralise tout aussi silencieusement, découper en plusieurs `ScopeEntry` ne change rien puisque le plafond porte sur la requête et non sur le blob.
 
-**Estimation de coût, à confirmer par mesure (pas par cette spec).** Dans le pire cas construit délibérément, un unique `queryFilter` dont les 16 valeurs OR autorisées épuisent à elles seules le budget global de 4 `regex` par blob, appliqué à un paramètre répété 4 fois : au plus 4 occurrences × 4 évaluations `regex` au plafond de coût de l'ADR-0010 D2 (2,54 ms chacune à 128 caractères), soit un ordre de grandeur de 40 ms. C'est au-dessus du budget D0 pris isolément (11,6 ms), mais très en dessous des temps qui ont motivé l'ADR-0010 (3 248 ms à 37 900 ms avant durcissement), et borné : ni exponentiel, ni dépendant de la taille d'une entrée non plafonnée. **Cette estimation est un raisonnement d'ordre de grandeur, pas une mesure : elle doit être vérifiée par un test de performance dédié avant de considérer le plafond de 4 validé**, exactement comme l'ADR-0010 l'a fait pour chacun de ses propres plafonds. Si la mesure dépasse ce qui est acceptable, la variable d'ajustement est le plafond d'occurrences, pas le budget D0 lui-même.
+**Décision, tranchée par l'architecte : deux paliers.**
 
-### 19.5 Limites structurelles
+- **4 occurrences** pour un `queryFilter` dont `values` contient **au moins une valeur `regex`, à n'importe quelle profondeur d'imbrication** dans un `and` ou un `not`.
+- **64 occurrences** pour tout autre `queryFilter` (`any`, `wildcard`, `stringwildcard`, ou des combinaisons `and`/`not` n'en contenant aucune).
 
-Détail chiffré et justifié dans `docs/limits.md`, résumé en §5. Rappel des points qui ne sont **pas** nouveaux : `queryFilters` par `ScopeEntry` (8 max) et valeurs OR par filtre (16 max) reprennent exactement les plafonds des body filters, pour la même raison (au-delà, scinder en plusieurs scopes). Le seul plafond réellement nouveau est celui des occurrences (§19.4).
+Le palier applicable à un `queryFilter` donné est déterminé **une seule fois, au déchiffrement du blob**, en lisant si `values` contient un `ObjectValue` de type `regex` : le même parcours que celui déjà fait pour le budget global de 4 `regex` par blob (ADR-0010 D2), sur une union fermée dont le discriminant `type` ne peut pas être mal lu. Il ne dépend d'aucune donnée de la requête, seulement du blob, et peut donc être calculé une fois par blob et réutilisé à chaque requête. Les deux paliers restent **fail-closed** : au-delà, le filtre échoue quelles que soient les valeurs envoyées, jamais un troncage silencieux des occurrences en trop (règle d'exécution 3, §19.2).
 
-### 19.6 Version du blob
+**Le parallèle avec la couche 1 de l'ADR-0010 D2, invoqué dans la version précédente de cette section pour justifier l'uniformité, était faux et il est retiré.** Cette couche refuse délibérément d'**analyser la source d'une regex** pour y repérer un motif dangereux, parce qu'un tel analyseur est un parseur écrit à la main qui peut lui-même se tromper : l'ADR-0010 le désigne en toutes lettres comme son propre point faible assumé. Déterminer si un `queryFilter` contient un `ObjectValue` de type `regex` n'est pas une analyse de motif, c'est la lecture d'un discriminant sur une union fermée et déjà validée par ailleurs : elle ne peut pas se tromper, il n'y a rien à parser. L'argument d'analogie ne tenait donc pas ; le retirer laisse le vrai argument, qui est la mesure.
 
-`queryFilters` porte le blob en **v5** (§6.1). La règle de calcul de version passe de deux à trois axes indépendants, dont on retient le maximum : `auth` structuré donne v4, un `ScopeEntry` structuré donne v3, des `queryFilters` donnent v5. Détail complet, y compris le comportement d'un proxy antérieur face à un blob v5 et celui d'un proxy à jour face à un blob v2 à v5, en §6.1 et §6.2.
+**Ce que les mesures disent.** Sur le pire cas construit délibérément (16 valeurs OR d'un même filtre, dont les 4 `regex` du budget global entier concentrées sur ce seul filtre, appliqué à un paramètre répété 4 fois), l'ordre de grandeur reste celui déjà avancé, environ 40 ms au coût de référence de l'ADR-0010 (2,54 ms par évaluation regex à 128 caractères), **confirmé par une mesure indépendante du testeur QA** sur le code réel du projet. Le même calcul pour 64 occurrences de valeurs `any` ou `stringwildcard` (1 024 évaluations) coûte environ 0,2 ms, mesuré, soit un cinquantième d'une seule évaluation `regex` et un cinquantième de la dérivation PBKDF2 (11,6 ms) que toute requête paie de toute façon. Le palier de 64 est choisi pour couvrir confortablement les cas réels de paramètres répétés cités plus haut sans s'approcher du budget D0 ; **il reste, comme le 4, une estimation à confirmer par le test de performance dédié avant d'être considéré définitif**, exigence déjà posée par la version précédente de cette section pour le seul palier de 4 et qui s'étend maintenant au palier de 64.
 
-### 19.7 Ce que cette feature rend faux ailleurs dans le produit, et son traitement
+**La porte de sortie devient explicite, et la copy doit la dire au moment de la saisie, pas dans une note de bas de page.** Un auteur qui a besoin de plus de 4 occurrences sur un paramètre filtré par une regex a désormais une issue concrète : passer ce filtre en `stringwildcard`, qui couvre la plupart des besoins réalistes (préfixe, suffixe, motif simple) et rejoint le palier à 64. C'est cette information, au moment où l'auteur choisit le type de son filtre (§12.14), qui débloque l'utilisateur qui se serait retrouvé enfermé, pas une explication qu'il ne lira qu'après avoir buté dessus en production.
+
+### 19.5 Validation : aucune capacité ne doit se perdre en silence
+
+**Exigence fonctionnelle, la mécanique reste au choix du dev (challenge testeur, B2).** Le schéma qui valide un `ScopeEntry` à `POST /api/generate` et à `POST /api/share/encode` doit **rejeter** toute clé non reconnue, jamais la faire disparaître silencieusement. Un `queryFilters` mal placé, mal orthographié, ou envoyé à un schéma qui ne le connaît pas encore, ne doit produire ni un blob amputé de sa contrainte ni une configuration partagée qui perd le filtre en route : dans les deux cas, l'auteur croit avoir contraint sa query, et il ne l'a pas fait, sans le moindre message pour le signaler. C'est exactement le fail-open silencieux que le déni par défaut de §19.2 existe pour empêcher au moment du matching, rouvert par la porte d'à côté si la validation d'entrée n'est pas aussi stricte que le moteur de matching lui-même.
+
+**La validation à la génération doit s'exécuter pour tout `ScopeEntry` qui porte des `bodyFilters` OU des `queryFilters`, jamais seulement quand `bodyFilters` est présent.** Un `ScopeEntry` GET avec uniquement des `queryFilters`, sans aucun `bodyFilters`, est le cas le plus courant de la feature (§19.1, les API à dominante GET) : il doit recevoir exactement le même niveau de validation qu'un `ScopeEntry` POST avec des `bodyFilters`. Les quatre messages de §12.5 et les messages de §12.14 n'ont de sens que si cette validation se déclenche pour ce cas, pas seulement pour celui qui porte historiquement des `bodyFilters`.
+
+**Le doublon de `param` sur un même `ScopeEntry` est rejeté au déchiffrement, pas seulement à la génération (challenge testeur, T6).** Le salt serveur est public (ADR-0009 §2) : n'importe qui fabrique un blob hors ligne, donc une règle qui ne vivrait qu'au moment de `/api/generate` ne protège personne contre un blob forgé à la main. Miroir exact de l'unicité des noms de headers d'auth, déjà exigée au déchiffrement (§6.3).
+
+### 19.6 Limites structurelles
+
+Détail chiffré et justifié dans `docs/limits.md`, résumé en §5. Rappel des points qui ne sont **pas** nouveaux : `queryFilters` par `ScopeEntry` (8 max) et valeurs OR par filtre (16 max) reprennent exactement les plafonds des body filters, pour la même raison (au-delà, scinder en plusieurs scopes). Les plafonds réellement nouveaux sont le palier d'occurrences à deux niveaux (§19.4) et l'unicité des `param` (§19.5).
+
+### 19.7 Version du blob : un plancher par axe, jamais une égalité
+
+**Erreur trouvée dans §6.3 et corrigée là où elle vit, expliquée ici (challenge testeur, B1).** §6.3 disait, depuis la v4 et resté inchangé par erreur au moment d'écrire v5 : « Si `auth` est un objet, alors `v` doit valoir `4` ». Lue littéralement, cette règle teste `v === 4` et rejette donc un blob v5 dont `auth` est structuré, alors que §6.1 promet l'inverse deux sections plus haut. Ce n'est pas un cas tordu : c'est l'intersection de deux features livrées à quelques mois d'écart, les headers multiples (US-8, v4) et `queryFilters` (v5). Le premier blob qui combine les deux tombe dessus, avec pour symptôme un `401 invalid_credentials` qui envoie son porteur vérifier une clé qui n'a jamais été le problème.
+
+**La règle corrigée, valable partout où une version est testée dans ce document et dans le code (§6.1, §6.3, §6.5) :**
+
+- `queryFilters` non vide sur au moins un `ScopeEntry` → `v` doit être **au moins** `5` (`v >= 5`)
+- `auth` structuré (`AuthSpec`) → `v` doit être **au moins** `4` (`v >= 4`)
+- au moins un scope structuré (`ScopeEntry`, avec ou sans filtres) → `v` doit être **au moins** `3` (`v >= 3`)
+- sinon → `v` doit être **au moins** `2` (`v >= 2`)
+
+`v` publié dans le blob est le **maximum** des planchers imposés par ce que le blob contient réellement, jamais une égalité testée contre un seul axe. Un blob v5 peut donc avoir une auth string simple et des scopes sans `bodyFilters` : seul l'axe `queryFilters` a poussé son plancher à 5, les deux autres n'imposaient qu'un plancher de 2. La règle elle-même n'a pas changé depuis §6.1 ; ce qui change ici, c'est sa traduction correcte dans les contrôles de validation, qui doivent tester des inégalités, jamais des égalités.
+
+**Un `v` sous-déclaré est rejeté au déchiffrement, symétriquement (challenge testeur, T5).** Un blob `v: 3` qui porte des `queryFilters` non vides ment sur son propre plancher : `v` doit être au moins 5 pour ce que le blob contient réellement, et un `v` inférieur au plancher requis rend le blob malformé, refusé au déchiffrement, exactement comme une capacité manquante l'aurait fait dans l'autre sens. Sans ce contrôle, un blob mal généré, ou délibérément sous-déclaré pour cibler un vieux proxy, verrait ses `queryFilters` silencieusement ignorés par un lecteur qui validerait la forme des scopes sans vérifier que le plancher de version déclaré leur correspond réellement. C'est le même fail-open que le bump en v5 existe pour fermer, découvert de l'autre côté du contrôle.
+
+**Un tableau `queryFilters` vide (`[]`) n'impose aucun plancher et n'est pas considéré comme « porter » des `queryFilters` (challenge testeur, T5).** Il est sémantiquement identique à l'absence du champ : aucun déni par défaut ne s'applique (§19.2, « dès que `queryFilters` est non vide »). L'UI produira ce cas dès qu'un auteur ouvre le panel puis supprime son dernier filtre, moment où l'alerte de §12.14 disparaît d'ailleurs elle aussi. La sérialisation **omet** le champ plutôt que d'écrire un tableau vide, et le blob reste à la version qu'imposent ses autres axes. Générer un v5 pour un tableau vide casserait la lisibilité du blob sur un proxy antérieur pour une contrainte nulle, ce que l'ADR-0009 §4 refuse explicitement : « on refuse ce qui peut nuire, on ne casse pas ce qui est seulement inutile ».
+
+Détail complet du comportement d'un proxy antérieur face à un blob v5, et d'un proxy à jour face à un blob v2 à v5, en §6.1 et §6.2, inchangés par cette correction qui ne porte que sur les contrôles internes de plancher.
+
+### 19.8 Diagnostic et observabilité
+
+**Le mode de défaillance nominal de cette feature n'est pas l'auteur qui écrit un mauvais filtre, c'est un tiers qui ajoute un paramètre à son insu (challenge testeur, T1).** Pagination injectée par un SDK (`per_page`, `page`), cache-busting jQuery (`_=1712534400`), version d'API ajoutée par un client généré depuis un OpenAPI (`api-version`), tracking collé quand l'URL transite par un outil (`utm_*`). Aucun de ces paramètres n'apparaît dans le code de l'auteur, et le déni par défaut les refuse tous aussi sûrement qu'un `?force=true`.
+
+**Ce que voit l'auteur aujourd'hui quand ça arrive, et pourquoi ce n'est pas suffisant :**
+
+1. En production, `403 scope_denied`, générique. **C'est la bonne décision et elle ne change pas** (§8.2, §12.5) : un appelant anonyme n'a pas à apprendre la structure du blob en sondant ses réponses d'erreur.
+2. Dans `/logs`, rien : la query n'était jusqu'ici pas capturée du tout. Une feature construite pour observer ce qui traverse un blob ne montrait pas l'axe sur lequel une requête a été refusée.
+3. Dans le testeur de scopes, un diagnostic exact et nommé (§12.5), à la seule condition de connaître déjà la query exacte envoyée par son propre client, précisément l'information qui manque quand le paramètre en trop vient d'une couche que l'auteur ne contrôle pas.
+
+**Décision, tranchée par l'architecte : la capture `/logs` enregistre les noms des paramètres de query, jamais leurs valeurs (§14.6, champ `queryParamNames`).** Les noms suffisent au diagnostic : voir `per_page` dans la liste des paramètres d'une requête refusée explique immédiatement la cause, sans qu'aucune valeur ne soit nécessaire. Les valeurs, en revanche, contiennent régulièrement des secrets (`api_key`, `token`, `session`), et l'entrée network vit **en clair** dans le ring buffer, contrairement au body `detailed` qui est chiffré côté client (§14.8) : y écrire des valeurs de query en ferait un vecteur de fuite à part entière, sur une surface que rien ne protège aujourd'hui. Un besoin futur de voir les valeurs a sa place dans l'entrée `detailed`, chiffrée, jamais dans l'entrée network.
+
+**Conséquence, assumée : un champ de plus dans le schéma d'events de §14.6.** Additif, pas une rupture au sens de l'ADR-0009 (aucun champ existant ne change de sens ni ne disparaît) : un client `/logs/stream` déjà connecté continue de fonctionner sans le lire, un client qui veut afficher les noms de paramètres doit être mis à jour pour le faire.
+
+**Ce que ça ne remplace pas.** L'alerte de déni par défaut de §12.14 doit continuer à dire, au moment de la saisie, que des paramètres ajoutés par le client de l'auteur comptent aussi, pas seulement ceux que l'auteur écrit lui-même dans son formulaire : c'est ce qui permet d'anticiper le problème avant qu'il ne se manifeste. La capture dans `/logs` est ce qui permet de le diagnostiquer une fois qu'il s'est manifesté malgré tout. Les deux sont nécessaires, aucune ne suffit seule.
+
+**Le testeur de scopes distingue par ailleurs, depuis §12.5, le scope qui a réellement accordé l'accès de ceux qui contraignent la query sans avoir été sollicités (challenge testeur, T2).** Le détail vit en §12.5, puisqu'il touche l'algorithme d'agrégation du verdict d'autorisation, pas la structure de `queryFilters` elle-même.
+
+### 19.9 Ce que cette feature rend faux ailleurs dans le produit, et son traitement
 
 Trois éléments du produit affirmaient, avant v5, une non-contrainte universelle de la query. Les trois sont mis à jour, pas seulement mentionnés :
 
 - **Le panneau Doc** (§12.10, bloc 2 bis) : la non-contrainte reste vraie par défaut, la contrainte opt-in est maintenant dite à côté.
-- **Le message de refus d'un `?` dans un pattern** (`invalid_scope`, §8.3) : renvoie désormais vers `queryFilters` plutôt que d'affirmer que la query n'est contrainte par rien.
-- **Le testeur de scopes** (§12.5) : distingue les deux états (`queryConstrained`), et détaille le paramètre fautif quand un scope à `queryFilters` refuse la requête testée.
+- **Le message de refus d'un `?` dans un pattern** (`invalid_scope`, §8.3) : renvoie désormais vers `queryFilters` plutôt que d'affirmer que la query n'est contrainte par rien. **Texte exact (challenge testeur, T7)**, en anglais comme le reste des messages de validation de ce fichier, pour remplacer le message actuel qui devient factuellement faux dès que la feature part : `A scope pattern cannot carry a query string: {pattern}. Use the queryFilters field on this scope to constrain query parameters, not the pattern.`
+- **Le testeur de scopes** (§12.5) : distingue trois états, nomme le scope qui accorde réellement l'accès, et détaille le paramètre fautif (quatre causes) quand un scope à `queryFilters` refuse la requête testée.
 
-### 19.8 Non-goals de cette feature
+### 19.10 Décodage de la query : ce que le parseur standard fait, et ce qu'il ne corrige pas
+
+**Quatre comportements que §19.11 (ex-§19.8, non-goals, dans la version précédente de cette spec) évoquait en creux, et que le challenge testeur (T3) demande d'écrire noir sur blanc.** Mesurés avec `URLSearchParams`, le parseur que le dev utilisera :
+
+| Entrée | Ce que voit le filtre | Ce qu'il faut en retenir |
+|---|---|---|
+| `?a=x+y` | `a` = `"x y"` | Le `+` devient une espace. Un auteur qui écrit `x+y` dans le formulaire en attendant un `+` littéral obtient un filtre qui ne matchera jamais cette forme. |
+| `?flag` et `?flag=` | `flag` = `""` dans les deux cas | Les deux écritures sont **identiques** pour le filtre : une chaîne vide, pas deux états distincts (correction de §19.3, qui en affirmait trois à tort dans une version antérieure). |
+| `?A=1&a=2` | deux paramètres distincts | Le nom d'un paramètre est **sensible à la casse**. Aucune normalisation n'est appliquée, à la différence des noms de headers d'auth qui sont comparés insensibles à la casse (§6.3) : les deux mécanismes sont volontairement différents, un nom de header HTTP et un nom de paramètre de query n'obéissent pas à la même convention côté cible. |
+| `?a[]=1&a[]=2` | nom du paramètre = `"a[]"` | La forme employée par Stripe et par PHP pour les tableaux de query. L'auteur doit écrire `a[]`, crochets compris, dans le champ « Paramètre de query » : rien n'est réécrit ou interprété. |
+
+**Le point-virgule comme séparateur : documenté, pas corrigé (T3).** `URLSearchParams` ne traite pas `;` comme un séparateur : `?a=1;force=true` donne **un seul** paramètre `a` valant `"1;force=true"`. Un filtre `{param: "a", values: [{type: "wildcard"}]}` l'accepterait tel quel. Mais certaines piles amont (Jetty en configuration historique, PHP selon `arg_separator.input`) découpent sur `;` et y verraient **deux** paramètres, dont `force=true`. C'est un différentiel de parseur entre FGP et une cible potentielle, de la même famille que celui qu'ADR-0009 §3 a pris au sérieux pour `%2f` sur le chemin. FGP ne le corrige pas : on ne peut pas deviner le parseur de la cible, et normaliser côté FGP casserait des valeurs légitimes contenant un `;`. C'est un non-goal explicite, ci-dessous.
+
+### 19.11 Non-goals de cette feature
 
 - **Pas de contrainte sur l'ordre des paramètres.** `?a=1&b=2` et `?b=2&a=1` sont strictement équivalents pour l'évaluation des `queryFilters`.
 - **Pas de contrainte croisée entre paramètres.** Un `queryFilter` évalue un paramètre indépendamment des autres ; il n'existe pas de condition du type « si `status=deleted` alors `confirm` doit valoir `true` ». Une telle règle demanderait un langage de contrainte plus riche que l'union `ObjectValue`, hors périmètre de cette feature.
 - **Pas de décodage applicatif au-delà du décodage standard de la query string.** Un paramètre encodé en JSON dans sa valeur (`?filter=%7B%22a%22%3A1%7D`) est comparé comme une chaîne brute après décodage percent standard, jamais re-parsé.
+- **Pas de correction du différentiel de parseur sur le point-virgule** (§19.10). Documenté comme limite connue, au même titre que le rebinding DNS l'est en §13 : une limite écrite est un choix, la même limite non écrite est une découverte pour l'auditeur suivant.
