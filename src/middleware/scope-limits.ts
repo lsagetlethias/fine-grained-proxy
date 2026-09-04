@@ -2,16 +2,25 @@ import type { Scope, ScopeEntry } from "./scopes.ts";
 
 // Limites verifiees a la generation. Elles doublent celles appliquees au dechiffrement
 // dans crypto/blob.ts : ici pour un message actionnable, la-bas pour refuser un blob crafte.
-function validateObjectValue(ov: Record<string, unknown>, depth: number): string | null {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// Le schema Zod de /api/generate type not.value et les elements de and.value en unknown :
+// sans ces gardes, une valeur scalaire ou nulle fait throw ici et remonte en 500.
+function validateObjectValue(ov: unknown, depth: number): string | null {
+  if (!isRecord(ov)) return "Object value must be an object";
   if (depth > 4) return "Object value nesting exceeds maximum depth of 4";
   if (ov.type === "not") {
-    const inner = ov.value as Record<string, unknown>;
+    if (!isRecord(ov.value)) return "not(...) requires an object condition";
+    const inner = ov.value;
     if (inner.type === "wildcard") return "not(wildcard) is forbidden";
     if (inner.type === "not") return "not(not(...)) is forbidden";
     return validateObjectValue(inner, depth + 1);
   }
   if (ov.type === "and") {
-    const subs = ov.value as Record<string, unknown>[];
+    if (!Array.isArray(ov.value)) return "and(...) requires an array of conditions";
+    const subs = ov.value;
     if (subs.length === 0) return "and() with empty conditions is forbidden";
     if (subs.length === 1) {
       return "and() with a single condition is forbidden, use the condition directly";
@@ -44,7 +53,7 @@ export function validateScopeLimits(scopes: Scope[]): string | null {
           bf.objectPath;
       }
       for (const ov of bf.objectValue) {
-        const err = validateObjectValue(ov as unknown as Record<string, unknown>, 0);
+        const err = validateObjectValue(ov, 0);
         if (err) return err + " (field: " + bf.objectPath + ")";
       }
     }
