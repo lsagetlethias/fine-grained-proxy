@@ -297,9 +297,9 @@ export function AuthModesGuide() {
           <p>
             Acc&egrave;s &agrave; la Database API d'une base Scalingo (<code class="font-mono">
               https://db-api.&lt;r&eacute;gion&gt;.scalingo.com
-            </code>) sans jamais exposer le token de compte. Avec plusieurs bases, FGP
-            s&eacute;lectionne la bonne &agrave; partir de l'identifiant pr&eacute;sent dans le
-            chemin de la requ&ecirc;te.
+            </code>) sans jamais exposer le token de compte. Un blob couvre une seule base : le
+            token obtenu ne vaut que pour elle, et une requ&ecirc;te qui en vise une autre est
+            rejet&eacute;e par Scalingo.
           </p>
         </div>
         <div>
