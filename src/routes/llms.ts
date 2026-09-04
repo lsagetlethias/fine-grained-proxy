@@ -17,8 +17,10 @@ deny-all by default: a request is forwarded only if it matches at least one
 declared scope.
 
 FGP is a transparent proxy. Any HTTP response actually received from the target
-API is forwarded unchanged (status, body, headers), except \`Set-Cookie\` which is
-stripped because the proxy is stateless. Errors produced by FGP itself use the
+API is forwarded unchanged (status, body, headers), except \`Set-Cookie\` (stripped,
+the proxy is stateless), \`Transfer-Encoding\` (hop-by-hop, never relayed), and, only
+when the runtime already decoded a gzip or br body before FGP received it, the
+now-stale \`Content-Encoding\` and \`Content-Length\` it described. Errors produced by FGP itself use the
 JSON shape \`{"error": "...", "message": "..."}\`. Every response carries the
 \`X-FGP-Source\` header: \`upstream\` when the payload comes from the target API,
 \`proxy\` when FGP produced it. Use that header to decide who to blame and whether
@@ -88,7 +90,7 @@ values inside one \`objectValue\` are alternatives (OR). Available value types:
 - \`{"type": "not", "value": {...}}\`: negation of a single condition.
 - \`{"type": "and", "value": [{...}, {...}]}\`: conjunction, at least 2 entries.
 
-Error codes produced by FGP (\`X-FGP-Source: proxy\`):
+Error codes produced by FGP on the proxy route (\`X-FGP-Source: proxy\`):
 
 - 400 \`invalid_request\`: the proxy path has fewer than 2 segments.
 - 400 \`invalid_auth_mode\`: the blob declares an auth mode this instance ignores.

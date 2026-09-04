@@ -104,9 +104,15 @@ export function DocPanel() {
           <li>
             <code class="font-mono text-xs">upstream</code>{" "}
             : la r&eacute;ponse vient de votre API cible. FGP n'a touch&eacute; ni au status ni au
-            corps. Il ajoute seulement cet en-t&ecirc;te et retire{" "}
-            <code class="font-mono text-xs">Set-Cookie</code>, le proxy &eacute;tant sans
-            &eacute;tat. Interpr&eacute;tez la r&eacute;ponse avec la documentation de cette API.
+            corps. Il ajoute cet en-t&ecirc;te et retire trois en-t&ecirc;tes au plus :{" "}
+            <code class="font-mono text-xs">Set-Cookie</code> et{" "}
+            <code class="font-mono text-xs">Transfer-Encoding</code> toujours,{" "}
+            <code class="font-mono text-xs">Content-Encoding</code> et{" "}
+            <code class="font-mono text-xs">Content-Length</code>{" "}
+            uniquement si votre corps est arriv&eacute; compress&eacute; puis
+            d&eacute;compress&eacute; avant de vous &ecirc;tre transmis (ils d&eacute;criraient
+            alors un corps qui n'existe plus). Interpr&eacute;tez la r&eacute;ponse avec la
+            documentation de cette API.
           </li>
         </ul>
         <p class="mt-1">
@@ -308,10 +314,15 @@ export function DocPanel() {
           un 429 ou un 500 portant <code class="font-mono text-xs">X-FGP-Source: upstream</code>
           {" "}
           sont la r&eacute;ponse de votre API cible : status et corps inchang&eacute;s, seuls{" "}
-          <code class="font-mono text-xs">X-FGP-Source</code> ajout&eacute; et{" "}
-          <code class="font-mono text-xs">Set-Cookie</code>{" "}
-          retir&eacute;. FGP ne les reformule pas et ne les traduit pas : c'est ce qui vous permet
-          de traiter les erreurs de votre API exactement comme si vous l'appeliez en direct.
+          <code class="font-mono text-xs">X-FGP-Source</code>{" "}
+          est ajout&eacute; et quelques en-t&ecirc;tes de transport sont retir&eacute;s ({" "}
+          <code class="font-mono text-xs">Set-Cookie</code>,{" "}
+          <code class="font-mono text-xs">Transfer-Encoding</code>, et{" "}
+          <code class="font-mono text-xs">Content-Encoding</code>/
+          <code class="font-mono text-xs">Content-Length</code>{" "}
+          si votre corps a &eacute;t&eacute; d&eacute;compress&eacute; en route). FGP ne les
+          reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de
+          votre API exactement comme si vous l'appeliez en direct.
         </p>
       </section>
 
