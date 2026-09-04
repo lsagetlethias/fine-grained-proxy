@@ -1,16 +1,8 @@
 import { Context, MiddlewareHandler } from "hono";
 
 import { BlobConfig, decryptBlob, deriveKey, isExpired } from "../crypto/blob.ts";
-import { exchangeToken } from "../auth/client.ts";
-import {
-  clearExpired,
-  deleteInflight,
-  getCachedBearer,
-  getInflight,
-  hashToken,
-  setCachedBearer,
-  setInflight,
-} from "../auth/cache.ts";
+import { obtainAddonToken, obtainBearerViaExchange } from "../auth/credentials.ts";
+import { isAuthSpec, isScalingoAddonSpec } from "../auth/spec.ts";
 import { checkAccess, type Scope } from "./scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY, FGP_SOURCE_UPSTREAM } from "../constants.ts";
 import { logsEnabled } from "../logs/config.ts";
@@ -32,38 +24,32 @@ function getServerSalt(): string {
   return salt;
 }
 
-async function obtainBearerViaExchange(apiToken: string): Promise<string> {
-  clearExpired();
-  const tokenHash = await hashToken(apiToken);
-  const cached = getCachedBearer(tokenHash);
-
-  if (cached) return cached;
-
-  const pending = getInflight(tokenHash);
-  if (pending) return pending;
-
-  const promise = exchangeToken(apiToken).then((bearer) => {
-    setCachedBearer(tokenHash, bearer);
-    deleteInflight(tokenHash);
-    return bearer;
-  }).catch((err) => {
-    deleteInflight(tokenHash);
-    throw err;
-  });
-
-  setInflight(tokenHash, promise);
-  return promise;
-}
-
-function buildAuthHeaders(config: BlobConfig): Headers {
+async function buildAuthHeaders(config: BlobConfig): Promise<Headers> {
   const headers = new Headers();
-  if (config.auth === "bearer") {
-    headers.set("Authorization", `Bearer ${config.token}`);
-  } else if (config.auth === "basic") {
-    headers.set("Authorization", `Basic ${btoa(":" + config.token)}`);
-  } else if (config.auth.startsWith("header:")) {
-    const headerName = config.auth.slice("header:".length);
-    headers.set(headerName, config.token);
+  const auth = config.auth;
+  const token = config.token ?? "";
+
+  if (isAuthSpec(auth)) {
+    if (auth.type === "headers") {
+      for (const entry of auth.headers) {
+        headers.set(entry.name, entry.value);
+      }
+      return headers;
+    }
+    const addonToken = await obtainAddonToken(token, auth.app, auth.addonId, auth.apiUrl);
+    headers.set("Authorization", `Bearer ${addonToken}`);
+    return headers;
+  }
+
+  if (auth === "bearer") {
+    headers.set("Authorization", `Bearer ${token}`);
+  } else if (auth === "basic") {
+    headers.set("Authorization", `Basic ${btoa(":" + token)}`);
+  } else if (auth === "scalingo-exchange") {
+    const bearer = await obtainBearerViaExchange(token);
+    headers.set("Authorization", `Bearer ${bearer}`);
+  } else if (auth.startsWith("header:")) {
+    headers.set(auth.slice("header:".length), token);
   }
   return headers;
 }
@@ -72,25 +58,23 @@ async function forwardRequest(
   c: Context,
   config: BlobConfig,
   proxyPath: string,
+  authHeaders: Headers,
 ): Promise<Response> {
   const url = new URL(c.req.url);
   const target = config.target.replace(/\/+$/, "");
   const targetUrl = `${target}${proxyPath}${url.search}`;
 
   const headers = new Headers(c.req.raw.headers);
+
+  // Ordre impose : les headers d'auth ecrasent ceux de l'appelant (§11.1), puis le strip
+  // transport ecrase tout le reste (§11.2). Sans cet ordre, un header d'auth nomme Host
+  // ou X-FGP-Key aurait un comportement dependant de l'implementation.
+  for (const [key, value] of authHeaders) {
+    headers.set(key, value);
+  }
   headers.delete("X-FGP-Key");
   headers.delete("X-FGP-Blob");
   headers.delete("host");
-
-  if (config.auth === "scalingo-exchange") {
-    const bearer = await obtainBearerViaExchange(config.token);
-    headers.set("Authorization", `Bearer ${bearer}`);
-  } else {
-    const authHeaders = buildAuthHeaders(config);
-    for (const [key, value] of authHeaders) {
-      headers.set(key, value);
-    }
-  }
 
   const init: RequestInit = {
     method: c.req.method,
@@ -156,6 +140,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
 
   const validAuthModes = ["bearer", "basic", "scalingo-exchange"];
   if (
+    typeof config.auth === "string" &&
     !validAuthModes.includes(config.auth) && !config.auth.startsWith("header:")
   ) {
     return jsonError(c, 400, "invalid_auth_mode", "Unsupported auth mode: " + config.auth);
@@ -241,9 +226,36 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     );
   }
 
+  // Apres la verification des scopes : un appelant hors scope ne doit jamais declencher
+  // d'appel reseau vers Scalingo.
+  let authHeaders: Headers;
+  try {
+    authHeaders = await buildAuthHeaders(config);
+  } catch (err) {
+    const credentialsError = isScalingoAddonSpec(config.auth)
+      ? { code: "auth_addon_failed", message: "Unable to obtain addon token" }
+      : config.auth === "scalingo-exchange"
+      ? { code: "auth_exchange_failed", message: "Unable to exchange Scalingo token" }
+      : null;
+    if (!credentialsError) throw err;
+    return await finishWithCapture(
+      c,
+      config,
+      blobRaw,
+      clientKey,
+      serverSalt,
+      proxyPath,
+      startedAt,
+      logsActive,
+      false,
+      null,
+      jsonError(c, 502, credentialsError.code, credentialsError.message),
+    );
+  }
+
   let response;
   try {
-    response = await forwardRequest(c, config, proxyPath);
+    response = await forwardRequest(c, config, proxyPath, authHeaders);
   } catch {
     return await finishWithCapture(
       c,

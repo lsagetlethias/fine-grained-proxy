@@ -273,8 +273,8 @@ Deno.test("AC-6.1: decrypt rejects blob with deeply nested and exceeding depth l
   );
 });
 
-Deno.test("decrypt rejects blob with v: 4", async () => {
-  const raw = makeConfig({ v: 4 });
+Deno.test("decrypt rejects blob with v: 5", async () => {
+  const raw = makeConfig({ v: 5 });
   const blob = await encryptRaw(raw);
 
   await assertRejects(
@@ -282,6 +282,13 @@ Deno.test("decrypt rejects blob with v: 4", async () => {
     Error,
     "malformed BlobConfig",
   );
+});
+
+Deno.test("decrypt accepts a v4 blob with a string auth", async () => {
+  const blob = await encryptRaw(makeConfig({ v: 4 }));
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.v, 4);
+  assertEquals(config.auth, "bearer");
 });
 
 // --- isExpired boundary ---

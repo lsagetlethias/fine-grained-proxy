@@ -1,10 +1,11 @@
 import { assertEquals } from "@std/assert";
 import {
   _resetStoreForTests,
-  clearExpired,
-  getCachedBearer,
+  addonTokenCache,
+  bearerCache,
+  cachedSingleflight,
+  createTokenCache,
   hashToken,
-  setCachedBearer,
 } from "../../../src/auth/cache.ts";
 
 function setup() {
@@ -24,50 +25,106 @@ Deno.test("hashToken returns different hashes for different inputs", async () =>
   assertEquals(h1 !== h2, true);
 });
 
+Deno.test("hashToken composes multiple parts into a single key", async () => {
+  const single = await hashToken("tk-us-aaa");
+  const composed = await hashToken("tk-us-aaa", "my-app", "ad-1111");
+  const other = await hashToken("tk-us-aaa", "my-app", "ad-2222");
+  assertEquals(single !== composed, true);
+  assertEquals(composed !== other, true);
+});
+
 Deno.test("AC-8.1: set and get cached bearer", () => {
   setup();
-  setCachedBearer("hash-1", "bearer-abc");
-  const result = getCachedBearer("hash-1");
-  assertEquals(result, "bearer-abc");
+  bearerCache.set("hash-1", "bearer-abc");
+  assertEquals(bearerCache.get("hash-1"), "bearer-abc");
 });
 
-Deno.test("getCachedBearer returns null for missing key", () => {
+Deno.test("cache get returns null for missing key", () => {
   setup();
-  assertEquals(getCachedBearer("nonexistent"), null);
+  assertEquals(bearerCache.get("nonexistent"), null);
 });
 
-Deno.test("AC-8.2: getCachedBearer returns null for expired entry (56min > 55min TTL)", () => {
+Deno.test("AC-8.2: cache get returns null for expired entry (56min > 55min TTL)", () => {
   setup();
-  setCachedBearer("hash-exp", "bearer-value");
+  bearerCache.set("hash-exp", "bearer-value");
 
   const origNow = Date.now;
   Date.now = () => origNow() + 56 * 60 * 1000;
 
-  assertEquals(getCachedBearer("hash-exp"), null);
+  assertEquals(bearerCache.get("hash-exp"), null);
 
   Date.now = origNow;
 });
 
 Deno.test("clearExpired removes only expired entries", () => {
   setup();
-  setCachedBearer("hash-fresh", "bearer-fresh");
-  setCachedBearer("hash-old", "bearer-old");
+  bearerCache.set("hash-fresh", "bearer-fresh");
+  bearerCache.set("hash-old", "bearer-old");
 
   const origNow = Date.now;
   const baseTime = origNow();
   Date.now = () => baseTime + 56 * 60 * 1000;
 
-  clearExpired();
+  bearerCache.clearExpired();
 
-  assertEquals(getCachedBearer("hash-fresh"), null);
-  assertEquals(getCachedBearer("hash-old"), null);
+  assertEquals(bearerCache.get("hash-fresh"), null);
+  assertEquals(bearerCache.get("hash-old"), null);
 
   Date.now = origNow;
 
   setup();
-  setCachedBearer("hash-a", "bearer-a");
+  bearerCache.set("hash-a", "bearer-a");
 
-  assertEquals(getCachedBearer("hash-a"), "bearer-a");
-  clearExpired();
-  assertEquals(getCachedBearer("hash-a"), "bearer-a");
+  assertEquals(bearerCache.get("hash-a"), "bearer-a");
+  bearerCache.clearExpired();
+  assertEquals(bearerCache.get("hash-a"), "bearer-a");
+});
+
+Deno.test("bearer and addon caches are independent", () => {
+  setup();
+  bearerCache.set("same-key", "bearer-value");
+  addonTokenCache.set("same-key", "addon-value");
+
+  assertEquals(bearerCache.get("same-key"), "bearer-value");
+  assertEquals(addonTokenCache.get("same-key"), "addon-value");
+});
+
+Deno.test("cachedSingleflight runs the producer once for concurrent callers", async () => {
+  const cache = createTokenCache();
+  let calls = 0;
+  const produce = () =>
+    new Promise<string>((resolve) => {
+      calls++;
+      setTimeout(() => resolve("value"), 20);
+    });
+
+  const [a, b, c] = await Promise.all([
+    cachedSingleflight(cache, "k", produce),
+    cachedSingleflight(cache, "k", produce),
+    cachedSingleflight(cache, "k", produce),
+  ]);
+
+  assertEquals(calls, 1);
+  assertEquals([a, b, c], ["value", "value", "value"]);
+  assertEquals(cache.get("k"), "value");
+});
+
+Deno.test("cachedSingleflight propagates the failure to every waiter and caches nothing", async () => {
+  const cache = createTokenCache();
+  let calls = 0;
+  const produce = () =>
+    new Promise<string>((_resolve, reject) => {
+      calls++;
+      setTimeout(() => reject(new Error("boom")), 20);
+    });
+
+  const results = await Promise.allSettled([
+    cachedSingleflight(cache, "k", produce),
+    cachedSingleflight(cache, "k", produce),
+  ]);
+
+  assertEquals(calls, 1);
+  assertEquals(results.map((r) => r.status), ["rejected", "rejected"]);
+  assertEquals(cache.get("k"), null);
+  assertEquals(cache.getInflight("k"), undefined);
 });

@@ -1,6 +1,7 @@
 import { decodeBase64Url, encodeBase64Url } from "@std/encoding/base64url";
 
 import type { Scope, ScopeEntry } from "../middleware/scopes.ts";
+import { type Auth, isValidAuthSpec } from "../auth/spec.ts";
 
 export interface BlobLogsConfig {
   enabled: boolean;
@@ -9,9 +10,9 @@ export interface BlobLogsConfig {
 
 export interface BlobConfig {
   v: number;
-  token: string;
+  token?: string;
   target: string;
-  auth: string;
+  auth: Auth;
   scopes: Scope[];
   ttl: number;
   createdAt: number;
@@ -190,15 +191,35 @@ export async function decryptBlob(
   const config = parsed as BlobConfig;
   if (
     typeof config.v !== "number" ||
-    (config.v !== 2 && config.v !== 3) ||
-    typeof config.token !== "string" || config.token.length === 0 ||
+    (config.v !== 2 && config.v !== 3 && config.v !== 4) ||
     typeof config.target !== "string" || !config.target ||
-    typeof config.auth !== "string" || !config.auth ||
     !Array.isArray(config.scopes) ||
     typeof config.ttl !== "number" ||
     typeof config.createdAt !== "number"
   ) {
     throw new Error("Invalid blob: malformed BlobConfig");
+  }
+
+  const auth: unknown = config.auth;
+  let tokenRequired = true;
+  if (typeof auth === "string") {
+    if (auth.length === 0) {
+      throw new Error("Invalid blob: malformed BlobConfig");
+    }
+  } else {
+    if (config.v !== 4 || !isValidAuthSpec(auth)) {
+      throw new Error("Invalid blob: malformed BlobConfig");
+    }
+    tokenRequired = auth.type !== "headers";
+  }
+
+  if (tokenRequired) {
+    if (typeof config.token !== "string" || config.token.length === 0) {
+      throw new Error("Invalid blob: malformed BlobConfig");
+    }
+  } else {
+    // Un secret orphelin ne casse pas un acces legitime, mais il ne doit jamais ressortir.
+    delete config.token;
   }
 
   if (config.v === 2) {
