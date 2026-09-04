@@ -241,9 +241,9 @@ C'est l'étape qui matérialise la frontière de périmètre. Trois changements,
 
 **Ce qui ne change pas, volontairement** : aucun `queryFilters`, aucune version de blob, aucune nouvelle structure de scope. Voir « Hors lot ».
 
-**Tests** : `tests/testi/test-scope.test.ts` (existant, à étendre), `tests/testi/api.test.ts` (existant, à étendre).
-- AC-46.1 : `POST /api/test-scope` avec `path: "/v1/items?action=delete"` et scope `GET:/v1/items` renvoie `allowed: true` et un indicateur de query non contrainte. C'est le correctif du mensonge fail-open, et c'est le test le plus important de l'étape.
-- AC-46.2 : le verdict de l'endpoint est identique à celui du proxy sur une table de cas partagée, chemins percent-encodés inclus. Garde-fou anti-divergence, il doit exister même s'il paraît redondant.
+**Tests** : `tests/testi/test-scope.test.ts` (existant, à étendre), `tests/testi/api.test.ts` (existant, à étendre). `tests/testi/test-scope.test.ts` a disparu avec l'endpoint, la couverture correspondante vit en test unitaire.
+- AC-46.1 : `POST /api/test-scope` avec `path: "/v1/items?action=delete"` et scope `GET:/v1/items` renvoie `allowed: true` et un indicateur de query non contrainte. C'est le correctif du mensonge fail-open, et c'est le test le plus important de l'étape. **Reformulé après la suppression de l'endpoint** : le même cas est couvert en unitaire sur `checkRequestAccess`, qui est ce que le testeur client appelle désormais.
+- AC-46.2 : le verdict de l'endpoint est identique à celui du proxy sur une table de cas partagée, chemins percent-encodés inclus. Garde-fou anti-divergence, il doit exister même s'il paraît redondant. **Sans objet après la suppression de l'endpoint** : il n'existe plus deux implémentations du verdict à comparer, ce qui est la forme forte de la garantie que ce critère visait.
 - AC-46.3 : `deno task check:client` passe, la fonction partagée compile côté navigateur.
 - AC-46.4 : `POST /api/generate` avec un scope `GET:/v1/items?safe=1` renvoie 400 `invalid_scope`.
 - AC-46.5 : un blob existant portant un tel pattern se déchiffre toujours, et le pattern ne matche jamais (non-régression, aucun blob invalidé).
