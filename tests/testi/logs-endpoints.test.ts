@@ -7,7 +7,7 @@ import { _resetStoreForTests, append, subscribe } from "../../src/logs/store.ts"
 import { computeBlobId } from "../../src/logs/blob-id.ts";
 
 const SALT = "test-logs-salt";
-const CLIENT_KEY = "client-key-test";
+const CLIENT_KEY = "client-key-test-padding-0123";
 
 function nowUnix() {
   return Math.floor(Date.now() / 1000);

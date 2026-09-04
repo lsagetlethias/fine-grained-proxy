@@ -1,4 +1,5 @@
 import type { Auth } from "../auth/spec.ts";
+import { readBounded } from "./bounded.ts";
 
 export interface PublicConfig {
   name?: string;
@@ -37,6 +38,6 @@ export async function decodePublicConfig(encoded: string): Promise<PublicConfig>
   const stream = new Blob([compressed as Uint8Array<ArrayBuffer>]).stream().pipeThrough(
     new DecompressionStream("gzip"),
   );
-  const decompressed = new Uint8Array(await new Response(stream).arrayBuffer());
+  const decompressed = new Uint8Array(await readBounded(stream));
   return JSON.parse(new TextDecoder().decode(decompressed));
 }

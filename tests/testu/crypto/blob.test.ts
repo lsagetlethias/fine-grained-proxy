@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { BlobConfig, decryptBlob, encryptBlob, isExpired } from "../../../src/crypto/blob.ts";
 
-const CLIENT_KEY = "test-client-key-2024";
+const CLIENT_KEY = "test-client-key-2024-padding";
 const SERVER_SALT = "test-server-salt-xyz";
 
 function makeConfig(overrides?: Partial<BlobConfig>): BlobConfig {

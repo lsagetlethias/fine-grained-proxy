@@ -36,15 +36,7 @@ import {
 import { renderLlmsTxt } from "./llms.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
 import { ASSET_VERSION } from "../ui/asset-version.ts";
-import {
-  type BodyFilter,
-  checkAccess,
-  matchBodyFilter,
-  matchPath,
-  parseScope,
-  type Scope,
-  splitPathAndQuery,
-} from "../middleware/scopes.ts";
+import { checkRequestAccess, type Scope, splitPathAndQuery } from "../middleware/scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../constants.ts";
 
 function getRequestOrigin(c: Context): string {
@@ -118,7 +110,6 @@ const ListAddonsError502Schema = errorSchema(
   "ListAddonsError502",
 );
 
-const TestScopeError400Schema = errorSchema(["invalid_body"], "TestScopeError400");
 const TestProxyError400Schema = errorSchema(["invalid_body"], "TestProxyError400");
 
 const ObjectValueSchema = z.union([
@@ -296,30 +287,6 @@ const ListAddonsResponseSchema = z.object({
   }),
 }).openapi("ListAddonsResponse");
 
-const TestScopeBodySchema = z.object({
-  method: z.string().min(1).openapi({ example: "GET" }),
-  path: z.string().min(1).openapi({ example: "/v1/apps/my-app" }),
-  scopes: z.array(ScopeSchema).min(1).openapi({
-    example: ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"],
-  }),
-  body: z.unknown().optional().openapi({
-    description: "Optional JSON body for body filter testing",
-  }),
-}).openapi("TestScopeBody");
-
-const TestScopeResultSchema = z.object({
-  index: z.number(),
-  matched: z.boolean(),
-  methodMatch: z.boolean(),
-  pathMatch: z.boolean(),
-  bodyMatch: z.boolean().nullable(),
-}).openapi("TestScopeResult");
-
-const TestScopeResponseSchema = z.object({
-  allowed: z.boolean(),
-  results: z.array(TestScopeResultSchema),
-}).openapi("TestScopeResponse");
-
 const TestProxyBodySchema = z.object({
   method: z.string().min(1).openapi({ example: "GET" }),
   path: z.string().min(1).openapi({ example: "/v1/apps/my-app" }),
@@ -382,7 +349,9 @@ const ShareEncodeResponseSchema = z.object({
 }).openapi("ShareEncodeResponse");
 
 const ShareDecodeBodySchema = z.object({
-  encoded: z.string().min(1),
+  // Seul transport de ce payload : le parametre d'URL /?c=... . 8192 est la limite de
+  // fait des serveurs en frontal, au-dela le lien de partage est deja casse en tant que lien.
+  encoded: z.string().min(1).max(8192),
 }).openapi("ShareDecodeBody");
 
 const ShareDecodeResponseSchema = z.object({
@@ -592,31 +561,6 @@ const listAddonsRoute = createRoute({
       description:
         "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing addons",
       content: { "application/json": { schema: ListAddonsError502Schema } },
-    },
-  },
-});
-
-const testScopeRoute = createRoute({
-  method: "post",
-  path: "/api/test-scope",
-  tags: ["Configuration"],
-  summary: "Test scope matching",
-  description:
-    "Tests whether a method + path + optional body would be allowed by the given scopes.",
-  request: {
-    body: {
-      required: true as const,
-      content: { "application/json": { schema: TestScopeBodySchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Test results per scope",
-      content: { "application/json": { schema: TestScopeResponseSchema } },
-    },
-    400: {
-      description: "Invalid body (missing or malformed fields)",
-      content: { "application/json": { schema: TestScopeError400Schema } },
     },
   },
 });
@@ -1002,63 +946,18 @@ uiRoutes.openapi(listAddonsRoute, async (c) => {
   return c.json({ addons: normalizeAddons(data?.addons) }, 200);
 });
 
-uiRoutes.openapi(testScopeRoute, (c) => {
-  const { method, path, scopes, body } = c.req.valid("json");
-  const upperMethod = method.toUpperCase();
-
-  const results = scopes.map((scope, index) => {
-    if (typeof scope === "string") {
-      const parsed = parseScope(scope);
-      const methodMatch = parsed.methods.includes("*") ||
-        parsed.methods.includes(upperMethod);
-      const pathMatch = matchPath(parsed.pattern, path);
-      return {
-        index,
-        matched: methodMatch && pathMatch,
-        methodMatch,
-        pathMatch,
-        bodyMatch: null,
-      };
-    }
-
-    const methodMatch = scope.methods.some((m: string) =>
-      m === "*" || m.toUpperCase() === upperMethod
-    );
-    const pathMatch = matchPath(scope.pattern, path);
-
-    if (!methodMatch || !pathMatch) {
-      return { index, matched: false, methodMatch, pathMatch, bodyMatch: null };
-    }
-
-    if (!scope.bodyFilters || scope.bodyFilters.length === 0) {
-      return { index, matched: true, methodMatch, pathMatch, bodyMatch: null };
-    }
-
-    if (body === undefined) {
-      return {
-        index,
-        matched: false,
-        methodMatch,
-        pathMatch,
-        bodyMatch: false,
-      };
-    }
-
-    const bodyMatch = scope.bodyFilters.every((f) =>
-      matchBodyFilter(f as unknown as BodyFilter, body)
-    );
-    return { index, matched: bodyMatch, methodMatch, pathMatch, bodyMatch };
-  });
-
-  const allowed = results.some((r) => r.matched);
-  return c.json({ allowed, results }, 200);
-});
-
 uiRoutes.openapi(testProxyRoute, async (c) => {
   const { method, path, token, target, auth, scopes, body } = c.req.valid("json");
   const upperMethod = method.toUpperCase();
 
-  if (!checkAccess(scopes as Scope[], upperMethod, path, body)) {
+  // Aucune expression reguliere n'est compilee avant que les scopes recus n'aient passe
+  // les plafonds : c'est ce qui ferme le vecteur de 37,9 secondes (ADR-0010 D1).
+  const scopeError = validateScopeLimits(scopes as Scope[]);
+  if (scopeError) {
+    return c.json({ error: "invalid_body" as const, message: scopeError }, 400);
+  }
+
+  if (!checkRequestAccess(scopes as Scope[], upperMethod, path, body).allowed) {
     return c.json({ allowed: false, reason: "scope_denied" }, 200);
   }
 

@@ -2,12 +2,14 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { serveStatic } from "hono/deno";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
+import { bodyLimit } from "hono/body-limit";
 
 import { blobHeaderProxy, proxyMiddleware } from "./middleware/proxy.ts";
 import { uiRoutes } from "./routes/ui.tsx";
 import { logsRoutes } from "./routes/logs.tsx";
 import { logsEnabled } from "./logs/config.ts";
 import { purge } from "./logs/store.ts";
+import { purgeExpiredKeys } from "./crypto/key-cache.ts";
 import {
   FGP_OWNED_PATHS,
   FGP_SECURITY_HEADERS,
@@ -123,6 +125,31 @@ app.onError((err, c) => {
 app.use("*", logger());
 app.use("*", withProxyErrorSecurity(blobHeaderProxy()));
 
+// JAMAIS sur "*" : la route proxy transmet le corps en streaming, un bodyLimit global le
+// mettrait en tampon et casserait les uploads volumineux legitimes a travers le proxy
+// (ADR-0010 D6). Montage sur liste explicite, comme FGP_OWNED_PATHS pour les en-tetes.
+function apiBodyLimit(maxSize: number): MiddlewareHandler {
+  return bodyLimit({
+    maxSize,
+    onError: (c) => {
+      const res = c.json(
+        { error: "payload_too_large", message: "Request body is too large" },
+        413,
+      );
+      res.headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+      return res;
+    },
+  });
+}
+
+// Le plus gros corps qui peut aboutir est celui de /api/generate : au-dela, la generation
+// echouerait de toute facon en blob_too_large.
+app.use("/api/decode", apiBodyLimit(8 * 1024));
+app.use("/api/share/decode", apiBodyLimit(16 * 1024));
+app.use("/api/list-apps", apiBodyLimit(4 * 1024));
+app.use("/api/list-addons", apiBodyLimit(4 * 1024));
+app.use("/api/*", apiBodyLimit(64 * 1024));
+
 // Monte apres blobHeaderProxy et sur des chemins explicites : ADR-0006 impose qu'aucune
 // reponse upstream forwardee (mode header ou mode URL /:blob/*) ne soit enrichie.
 for (const path of FGP_OWNED_PATHS) {
@@ -157,15 +184,16 @@ app.all("/api/*", (c) => {
   return response;
 });
 
-if (logsEnabled()) {
-  setInterval(() => {
-    try {
-      purge();
-    } catch (err) {
-      console.error("[fgp] logs purge failed:", err);
-    }
-  }, 60_000);
-}
+// Le timer n'est plus conditionne a logsEnabled() : le cache de derivation a besoin de
+// sa purge meme quand la feature logs est coupee (ADR-0010 D8).
+setInterval(() => {
+  try {
+    if (logsEnabled()) purge();
+    purgeExpiredKeys();
+  } catch (err) {
+    console.error("[fgp] purge failed:", err);
+  }
+}, 60_000);
 
 app.use("/:blob/*", withProxyErrorSecurity(proxyMiddleware()));
 

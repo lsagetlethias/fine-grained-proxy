@@ -8,7 +8,7 @@ import { _resetStoreForTests } from "../../src/auth/cache.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../../src/constants.ts";
 import type { Auth } from "../../src/auth/spec.ts";
 
-const CLIENT_KEY = "auth-headers-test-key";
+const CLIENT_KEY = "auth-headers-test-key-paddin";
 const SERVER_SALT = "auth-headers-test-salt";
 
 const originalFetch = globalThis.fetch;

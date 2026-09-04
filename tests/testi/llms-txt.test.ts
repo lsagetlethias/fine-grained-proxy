@@ -5,7 +5,7 @@ import { encryptBlob } from "../../src/crypto/blob.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY, FGP_SOURCE_UPSTREAM } from "../../src/constants.ts";
 
-const CLIENT_KEY = "llms-txt-test-key";
+const CLIENT_KEY = "llms-txt-test-key-padding-01";
 const SERVER_SALT = "llms-txt-test-salt";
 
 const originalFetch = globalThis.fetch;

@@ -177,14 +177,43 @@ Deno.test("matchBodyFilter: unknown type defaults to deny", () => {
 
 // --- regex ---
 
-Deno.test("AC-5.17: matchBodyFilter: regex simple match", () => {
+Deno.test("AC-5.17: matchBodyFilter: regex simple match, evaluation ancree", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "regex", value: "^release\\/v\\d+" }],
   };
   assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), true);
-  assertEquals(matchBodyFilter(filter, { ref: "release/v2.0.1" }), true);
+  // CHANGEMENT ASSUME (ADR-0010 D3) : l'evaluation est desormais ancree, un motif de
+  // prefixe ne matche plus une valeur plus longue. Il faut ecrire "^release/v\d+.*"
+  // pour retrouver l'ancien comportement. Le resserrement va toujours dans le sens sur.
+  assertEquals(matchBodyFilter(filter, { ref: "release/v2.0.1" }), false);
   assertEquals(matchBodyFilter(filter, { ref: "main" }), false);
+
+  const prefixe: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "regex", value: "^release\\/v\\d+.*" }],
+  };
+  assertEquals(matchBodyFilter(prefixe, { ref: "release/v2.0.1" }), true);
+});
+
+Deno.test("AC-5.17 bis: l'ancrage ferme le contournement de scope par sous-chaine", () => {
+  // Avant l'ancrage, ce filtre autorisait « not-main-at-all » : un predicat de permission
+  // qui matche en sous-chaine est un contournement de scope qui attend son heure.
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "regex", value: "main" }],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "main" }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "not-main-at-all" }), false);
+});
+
+Deno.test("AC-5.17 ter: une valeur de plus de 128 caracteres n'est plus testee", () => {
+  const filter: BodyFilter = {
+    objectPath: "ref",
+    objectValue: [{ type: "regex", value: "^a*$" }],
+  };
+  assertEquals(matchBodyFilter(filter, { ref: "a".repeat(128) }), true);
+  assertEquals(matchBodyFilter(filter, { ref: "a".repeat(129) }), false);
 });
 
 Deno.test("AC-5.18: matchBodyFilter: regex does not match", () => {

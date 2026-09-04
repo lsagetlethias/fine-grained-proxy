@@ -7,7 +7,7 @@ import { proxyMiddleware } from "../../src/middleware/proxy.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
 import { FGP_SOURCE_UPSTREAM } from "../../src/constants.ts";
 
-const CLIENT_KEY = "retro-compat-test-key";
+const CLIENT_KEY = "retro-compat-test-key-paddin";
 const SERVER_SALT = "retro-compat-test-salt";
 const AUTH_URL = "https://auth.mock.local";
 

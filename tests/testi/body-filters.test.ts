@@ -6,7 +6,7 @@ import { proxyMiddleware } from "../../src/middleware/proxy.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
 import type { Scope } from "../../src/middleware/scopes.ts";
 
-const CLIENT_KEY = "body-filter-test-key";
+const CLIENT_KEY = "body-filter-test-key-padding";
 const SERVER_SALT = "body-filter-test-salt";
 
 const originalFetch = globalThis.fetch;
@@ -898,6 +898,70 @@ Deno.test({
     });
 
     assertEquals(res.status, 403);
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- ADR-0010 D7 : lecture bufferisee plafonnee, streaming preserve ---
+
+Deno.test({
+  name: "AC-47.4: un corps de 1 Mo avec body filter actif est refuse en 413",
+  fn: async () => {
+    setup();
+    mockFetch();
+    const blob = await makeBlob([{
+      methods: ["POST"],
+      pattern: "/v1/apps/my-app/deployments",
+      bodyFilters: [{
+        objectPath: "deployment.git_ref",
+        objectValue: [{ type: "any", value: "main" }],
+      }],
+    }], { auth: "bearer" });
+    const res = await createApp().request(`/${blob}/v1/apps/my-app/deployments`, {
+      method: "POST",
+      headers: { "X-FGP-Key": CLIENT_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ pad: "a".repeat(1024 * 1024) }),
+    });
+    assertEquals(res.status, 413);
+    assertEquals((await res.json()).error, "payload_too_large");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-47.5: NON-REGRESSION, sans body filter ni detailed le corps reste en flux",
+  fn: async () => {
+    setup();
+    let receivedLength = 0;
+    globalThis.fetch = (async (_i: unknown, init?: RequestInit) => {
+      // Le corps doit arriver en flux, pas bufferise par le proxy : on le consomme ici.
+      const body = init?.body as ReadableStream<Uint8Array> | undefined;
+      if (body) {
+        const reader = body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          receivedLength += value.byteLength;
+        }
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof globalThis.fetch;
+
+    // Blob sans aucun body filter : le plafond de 512 Ko ne doit pas s'appliquer.
+    const blob = await makeBlob(["POST:/v1/upload"], { auth: "bearer" });
+    const twoMb = "a".repeat(2 * 1024 * 1024);
+    const res = await createApp().request(`/${blob}/v1/upload`, {
+      method: "POST",
+      headers: { "X-FGP-Key": CLIENT_KEY, "Content-Type": "application/octet-stream" },
+      body: twoMb,
+    });
+    await res.body?.cancel();
+    assertEquals(res.status, 200);
+    assertEquals(receivedLength, 2 * 1024 * 1024);
     teardown();
   },
   sanitizeOps: false,

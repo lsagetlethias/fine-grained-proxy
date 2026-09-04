@@ -154,3 +154,34 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
 });
+
+// --- ADR-0010 D1 : /api/test-scope est supprime ---
+
+Deno.test({
+  name: "AC-49.1: POST /api/test-scope repond 404, la route n'existe plus",
+  fn: async () => {
+    const res = await app.request("/api/test-scope", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: "GET", path: "/v1/items", scopes: ["GET:/v1/items"] }),
+    });
+    assertEquals(res.status, 404);
+    assertEquals((await res.json()).error, "not_found");
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-49.2: /api/test-scope a disparu de la spec OpenAPI",
+  fn: async () => {
+    const res = await app.request("/api/openapi.json");
+    const spec = await res.json() as { paths: Record<string, unknown> };
+    assertEquals("/api/test-scope" in spec.paths, false);
+    // les autres endpoints restent en place
+    assertEquals("/api/test-proxy" in spec.paths, true);
+    assertEquals("/api/generate" in spec.paths, true);
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});

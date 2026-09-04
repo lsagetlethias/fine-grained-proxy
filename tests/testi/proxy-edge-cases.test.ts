@@ -5,7 +5,7 @@ import { encryptBlob } from "../../src/crypto/blob.ts";
 import { proxyMiddleware } from "../../src/middleware/proxy.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
 
-const CLIENT_KEY = "edge-case-test-key";
+const CLIENT_KEY = "edge-case-test-key-padding-0";
 const SERVER_SALT = "edge-case-test-salt";
 
 const originalFetch = globalThis.fetch;

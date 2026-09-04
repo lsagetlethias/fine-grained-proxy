@@ -153,3 +153,91 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
 });
+
+// --- ADR-0010 D1 et D8 ---
+
+Deno.test({
+  name: "AC-49.3: /api/test-proxy refuse un motif catastrophique sans l'evaluer",
+  fn: async () => {
+    setup();
+    const started = performance.now();
+    const res = await post("/api/test-proxy", {
+      method: "POST",
+      path: "/v1/items",
+      token: "t",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [{
+        methods: ["POST"],
+        pattern: "/v1/items",
+        bodyFilters: [{ objectPath: "a", objectValue: [{ type: "regex", value: "^(a+)+$" }] }],
+      }],
+      body: { a: "a".repeat(40) },
+    });
+    const elapsed = performance.now() - started;
+    assertEquals(res.status, 400);
+    assertEquals((await res.json()).error, "invalid_body");
+    // Sans la validation prealable, ce motif coutait 37,9 secondes.
+    assertEquals(elapsed < 100, true);
+    assertEquals(fetchCount, 0);
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-50.5: une requete proxy avec logs detailed ne derive la cle qu'une fois",
+  fn: async () => {
+    setup();
+    Deno.env.set("FGP_LOGS_ENABLED", "1");
+    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
+    const { _resetKeyCacheForTests } = await import("../../src/crypto/key-cache.ts");
+    _resetKeyCacheForTests();
+
+    const original = crypto.subtle.deriveKey.bind(crypto.subtle);
+    let calls = 0;
+    // deno-lint-ignore no-explicit-any
+    (crypto.subtle as any).deriveKey = (...args: unknown[]) => {
+      calls++;
+      // deno-lint-ignore no-explicit-any
+      return (original as any)(...args);
+    };
+    try {
+      const { encryptBlob } = await import("../../src/crypto/blob.ts");
+      const key = "cle-pour-derivation-unique-01";
+      const blob = await encryptBlob(
+        {
+          v: 2,
+          token: "tok",
+          target: "https://api.example.com",
+          auth: "bearer",
+          scopes: ["*:*"],
+          ttl: 3600,
+          createdAt: Math.floor(Date.now() / 1000),
+          logs: { enabled: true, detailed: true },
+        },
+        key,
+        "egress-policy-salt",
+      );
+      calls = 0;
+      _resetKeyCacheForTests();
+
+      const res = await app.request(`/${blob}/v1/items`, {
+        method: "POST",
+        headers: { "X-FGP-Key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({ a: 1 }),
+      });
+      await res.body?.cancel();
+      // Une seule derivation : la cle descend par le contexte au lieu d'etre recalculee.
+      assertEquals(calls, 1);
+    } finally {
+      // deno-lint-ignore no-explicit-any
+      (crypto.subtle as any).deriveKey = original;
+      Deno.env.delete("FGP_LOGS_ENABLED");
+      teardown();
+    }
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});

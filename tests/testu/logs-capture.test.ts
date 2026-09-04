@@ -9,7 +9,7 @@ import {
 import { deriveKey } from "../../src/crypto/blob.ts";
 import { decodeBase64Url } from "@std/encoding/base64url";
 
-const CLIENT_KEY = "test-client-key";
+const CLIENT_KEY = "test-client-key-padding-0123";
 const SERVER_SALT = "test-server-salt";
 
 async function makeKey() {

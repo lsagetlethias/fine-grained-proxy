@@ -1,7 +1,13 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import { BlobConfig, decryptBlob, encryptBlob, isExpired } from "../../../src/crypto/blob.ts";
+import {
+  BlobConfig,
+  BlobPolicyError,
+  decryptBlob,
+  encryptBlob,
+  isExpired,
+} from "../../../src/crypto/blob.ts";
 
-const CLIENT_KEY = "validation-test-key";
+const CLIENT_KEY = "validation-test-key-padding-";
 const SERVER_SALT = "validation-test-salt";
 
 function makeConfig(overrides?: Partial<BlobConfig>): BlobConfig {
@@ -205,7 +211,7 @@ Deno.test("AC-5.17: decrypt accepts blob with valid regex ObjectValue", async ()
   assertEquals(config.v, 3);
 });
 
-Deno.test("decrypt rejects blob with regex exceeding 200 chars", async () => {
+Deno.test("decrypt rejects blob with regex exceeding 200 chars (code dedie)", async () => {
   const longRegex = "a".repeat(201);
   const raw = makeConfig({
     v: 3,
@@ -219,11 +225,8 @@ Deno.test("decrypt rejects blob with regex exceeding 200 chars", async () => {
     }] as unknown as BlobConfig["scopes"],
   });
   const blob = await encryptRaw(raw);
-  await assertRejects(
-    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
-    Error,
-    "malformed BlobConfig",
-  );
+  const err = await assertRejects(() => decryptBlob(blob, CLIENT_KEY, SERVER_SALT));
+  assertEquals(err instanceof BlobPolicyError, true);
 });
 
 Deno.test("AC-5.19: decrypt rejects blob with invalid regex pattern", async () => {
@@ -239,11 +242,9 @@ Deno.test("AC-5.19: decrypt rejects blob with invalid regex pattern", async () =
     }] as unknown as BlobConfig["scopes"],
   });
   const blob = await encryptRaw(raw);
-  await assertRejects(
-    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
-    Error,
-    "malformed BlobConfig",
-  );
+
+  const err = await assertRejects(() => decryptBlob(blob, CLIENT_KEY, SERVER_SALT));
+  assertEquals(err instanceof BlobPolicyError, true);
 });
 
 Deno.test("AC-6.1: decrypt rejects blob with deeply nested and exceeding depth limit", async () => {
@@ -660,4 +661,84 @@ Deno.test("AC-43.12: un target avec chemin de base legitime reste accepte", asyn
   const blob = await encryptRaw(makeConfig({ target: "https://api.example.com/base" }));
   const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
   assertEquals(config.target, "https://api.example.com/base");
+});
+
+// --- ADR-0010 lot 2 : plafonds verifies au dechiffrement, pas seulement a la generation.
+// Les blobs sont forges directement avec encryptBlob : le salt etant public, c'est ainsi
+// qu'un attaquant procede, et c'est donc le seul chemin qui protege reellement.
+
+function scopeWith(objectValue: unknown[]) {
+  return [{
+    methods: ["POST"],
+    pattern: "/v1/x",
+    bodyFilters: [{ objectPath: "a", objectValue }],
+  }];
+}
+
+Deno.test("AC-48.11: un blob avec 5 valeurs regex est refuse, 4 passe", async () => {
+  const four = scopeWith(Array.from({ length: 4 }, () => ({ type: "regex", value: "^a$" })));
+  const okBlob = await encryptRaw(makeConfig({ v: 3, scopes: four as never }));
+  assertEquals((await decryptBlob(okBlob, CLIENT_KEY, SERVER_SALT)).v, 3);
+
+  const five = scopeWith(Array.from({ length: 5 }, () => ({ type: "regex", value: "^a$" })));
+  const koBlob = await encryptRaw(makeConfig({ v: 3, scopes: five as never }));
+  await assertRejects(
+    () => decryptBlob(koBlob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("AC-48.12: un 'and' de 9 elements est refuse", async () => {
+  const wide = scopeWith([{
+    type: "and",
+    value: Array.from({ length: 9 }, (_, i) => ({ type: "any", value: `v${i}` })),
+  }]);
+  const blob = await encryptRaw(makeConfig({ v: 3, scopes: wide as never }));
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("AC-48.13: un blob de plus de 256 ObjectValue est refuse", async () => {
+  const many = scopeWith(Array.from({ length: 257 }, (_, i) => ({ type: "any", value: `v${i}` })));
+  const blob = await encryptRaw(makeConfig({ v: 3, scopes: many as never }));
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("AC-48.14: un 'any' sur objet ou tableau est refuse au dechiffrement", async () => {
+  for (const value of [{ a: 1 }, [1, 2]]) {
+    const blob = await encryptRaw(
+      makeConfig({ v: 3, scopes: scopeWith([{ type: "any", value }]) as never }),
+    );
+    await assertRejects(
+      () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+      Error,
+      "malformed BlobConfig",
+    );
+  }
+  // les scalaires restent acceptes
+  for (const value of ["s", 1, true, null]) {
+    const blob = await encryptRaw(
+      makeConfig({ v: 3, scopes: scopeWith([{ type: "any", value }]) as never }),
+    );
+    assertEquals((await decryptBlob(blob, CLIENT_KEY, SERVER_SALT)).v, 3);
+  }
+});
+
+Deno.test("AC-48.15: une regex hors dialecte est refusee avec un code dedie", async () => {
+  const blob = await encryptRaw(
+    makeConfig({ v: 3, scopes: scopeWith([{ type: "regex", value: "^(a+)+$" }]) as never }),
+  );
+  // Pas « malformed BlobConfig » : un 401 invalid_credentials enverrait le porteur
+  // verifier sa cle alors que le probleme est dans son motif.
+  const err = await assertRejects(() => decryptBlob(blob, CLIENT_KEY, SERVER_SALT));
+  assertEquals(err instanceof BlobPolicyError, true);
+  assertEquals((err as BlobPolicyError).code, "unsupported_regex");
 });

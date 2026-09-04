@@ -1,17 +1,54 @@
 import { Context, MiddlewareHandler } from "hono";
 
-import { BlobConfig, decryptBlob, deriveKey, isExpired } from "../crypto/blob.ts";
+import { BlobConfig, BlobPolicyError, decryptBlobWithKey, isExpired } from "../crypto/blob.ts";
+import { checkClientKey } from "../crypto/client-key.ts";
 import { obtainAddonToken, obtainBearerViaExchange } from "../auth/credentials.ts";
 import { isAuthSpec, isScalingoAddonSpec } from "../auth/spec.ts";
 import { assertPublicHost, buildUpstreamUrl, egressFetch, parseTargetUrl } from "../net/egress.ts";
 import { checkRequestAccess, type Scope } from "./scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY, FGP_SOURCE_UPSTREAM } from "../constants.ts";
-import { logsEnabled } from "../logs/config.ts";
+import { logsEnabled, readLogsConfig } from "../logs/config.ts";
 import { computeBlobId } from "../logs/blob-id.ts";
 import { captureDetailed, captureNetwork } from "../logs/capture.ts";
 import { extractClientIp, truncateIp } from "../logs/ip.ts";
 
 const MAX_BLOB_LENGTH = 4096;
+
+// Plafond de la lecture bufferisee du corps (ADR-0010 D7). JSON.parse de 337 Ko coute
+// 0,92 ms, donc 512 Ko environ 1,4 ms, un ordre de grandeur sous les 11,60 ms de la
+// derivation obligatoire. Ne s'applique QUE quand un body filter ou la capture detailed
+// a besoin du corps : sans eux le corps reste en flux et n'est jamais bufferise.
+const MAX_BUFFERED_BODY = 512 * 1024;
+
+async function readBodyBounded(
+  stream: ReadableStream<Uint8Array>,
+  limit: number,
+): Promise<Uint8Array | null> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
 
 function jsonError(c: Context, status: number, error: string, message: string): Response {
   const response = c.json({ error, message }, status as 401);
@@ -164,12 +201,26 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     return jsonError(c, 401, "missing_key", "X-FGP-Key header is required");
   }
 
+  // Pre-validation gratuite avant PBKDF2 : une cle hors format n'a jamais pu generer de
+  // blob, et un blob sous le plancher structurel (IV 12 + tag GCM 16 + gzip minimal 20)
+  // ne peut rien contenir. Filtre les sondes malformees, ne deplace pas le plafond d'un
+  // attaquant delibere qui envoie une cle bien formee (ADR-0010 D8).
+  if (checkClientKey(clientKey) !== null || blobRaw.length < 64) {
+    return jsonError(c, 401, "invalid_credentials", "Unable to decrypt token");
+  }
+
   const serverSalt = getServerSalt();
 
   let config;
+  let derivedKey: CryptoKey;
   try {
-    config = await decryptBlob(blobRaw, clientKey, serverSalt);
-  } catch {
+    const decrypted = await decryptBlobWithKey(blobRaw, clientKey, serverSalt);
+    config = decrypted.config;
+    derivedKey = decrypted.derivedKey;
+  } catch (err) {
+    if (err instanceof BlobPolicyError) {
+      return jsonError(c, 400, err.code, err.message);
+    }
     return jsonError(c, 401, "invalid_credentials", "Unable to decrypt token");
   }
 
@@ -205,8 +256,16 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
   let rawBodyBytes: Uint8Array | null = null;
 
   if (needsRawBody) {
-    const buf = await c.req.raw.clone().arrayBuffer();
-    rawBodyBytes = new Uint8Array(buf);
+    // Quand seule la capture detailed a besoin du corps, inutile de lire au-dela de ce
+    // qui sera de toute facon tronque.
+    const limit = (hasBodyMethod && scopesHaveBodyFilters)
+      ? MAX_BUFFERED_BODY
+      : readLogsConfig().detailedMaxKb * 1024 + 1;
+    const cloned = c.req.raw.clone().body;
+    rawBodyBytes = cloned ? await readBodyBounded(cloned, limit) : new Uint8Array(0);
+    if (rawBodyBytes === null) {
+      return jsonError(c, 413, "payload_too_large", "Request body is too large to inspect");
+    }
     if (hasBodyMethod && scopesHaveBodyFilters) {
       if (isJsonContent) {
         try {
@@ -216,8 +275,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
             c,
             config,
             blobRaw,
-            clientKey,
-            serverSalt,
+            derivedKey,
             proxyPath,
             startedAt,
             logsActive,
@@ -231,8 +289,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
           c,
           config,
           blobRaw,
-          clientKey,
-          serverSalt,
+          derivedKey,
           proxyPath,
           startedAt,
           logsActive,
@@ -256,8 +313,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
       c,
       config,
       blobRaw,
-      clientKey,
-      serverSalt,
+      derivedKey,
       proxyPath,
       startedAt,
       logsActive,
@@ -275,8 +331,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
       c,
       config,
       blobRaw,
-      clientKey,
-      serverSalt,
+      derivedKey,
       proxyPath,
       startedAt,
       logsActive,
@@ -291,8 +346,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
       c,
       config,
       blobRaw,
-      clientKey,
-      serverSalt,
+      derivedKey,
       proxyPath,
       startedAt,
       logsActive,
@@ -316,8 +370,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
       c,
       config,
       blobRaw,
-      clientKey,
-      serverSalt,
+      derivedKey,
       proxyPath,
       startedAt,
       logsActive,
@@ -335,8 +388,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
       c,
       config,
       blobRaw,
-      clientKey,
-      serverSalt,
+      derivedKey,
       proxyPath,
       startedAt,
       logsActive,
@@ -351,8 +403,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     c,
     config,
     blobRaw,
-    clientKey,
-    serverSalt,
+    derivedKey,
     proxyPath,
     startedAt,
     logsActive,
@@ -366,8 +417,7 @@ async function finishWithCapture(
   c: Context,
   _config: BlobConfig,
   blobRaw: string,
-  clientKey: string,
-  serverSalt: string,
+  derivedKey: CryptoKey,
   proxyPath: string,
   startedAt: number,
   logsActive: boolean,
@@ -399,7 +449,6 @@ async function finishWithCapture(
     });
 
     if (shouldCaptureDetailed && rawBodyBytes) {
-      const derivedKey = await deriveKey(clientKey, serverSalt);
       await captureDetailed({
         blobId,
         method,

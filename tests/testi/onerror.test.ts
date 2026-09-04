@@ -3,7 +3,7 @@ import { assertEquals } from "@std/assert";
 import { app } from "../../src/main.ts";
 import { encryptBlob } from "../../src/crypto/blob.ts";
 
-const CLIENT_KEY = "onerror-test-key";
+const CLIENT_KEY = "onerror-test-key-padding-012";
 const SERVER_SALT = "onerror-test-salt";
 
 function nowUnix(): number {

@@ -1,4 +1,10 @@
-import type { Scope, ScopeEntry } from "./scopes.ts";
+import type { ObjectValue, Scope, ScopeEntry } from "./scopes.ts";
+import {
+  MAX_AND_WIDTH,
+  MAX_OBJECT_VALUES_PER_BLOB,
+  MAX_REGEX_VALUES_PER_BLOB,
+} from "../crypto/blob.ts";
+import { checkRegexSource, regexIssueMessage } from "../crypto/regex-policy.ts";
 
 // Limites verifiees a la generation. Elles doublent celles appliquees au dechiffrement
 // dans crypto/blob.ts : ici pour un message actionnable, la-bas pour refuser un blob crafte.
@@ -33,7 +39,52 @@ function validateObjectValue(ov: unknown, depth: number): string | null {
   return null;
 }
 
+interface Budget {
+  regexes: number;
+  total: number;
+}
+
+// Miroir des plafonds de crypto/blob.ts. Ici pour un message actionnable a la generation,
+// la-bas pour refuser un blob crafte : le salt etant public, seul le second protege.
+function validateObjectValueBudget(ov: ObjectValue, budget: Budget): string | null {
+  budget.total++;
+  if (budget.total > MAX_OBJECT_VALUES_PER_BLOB) {
+    return `Maximum ${MAX_OBJECT_VALUES_PER_BLOB} object values allowed per blob`;
+  }
+  if (ov.type === "any") {
+    const v = ov.value;
+    const scalar = v === null || typeof v === "string" || typeof v === "number" ||
+      typeof v === "boolean";
+    if (!scalar) {
+      return "An 'any' filter only accepts a string, number, boolean or null: comparing " +
+        "objects depends on the caller's key order, which makes the result non deterministic";
+    }
+  }
+  if (ov.type === "regex") {
+    budget.regexes++;
+    if (budget.regexes > MAX_REGEX_VALUES_PER_BLOB) {
+      return `Maximum ${MAX_REGEX_VALUES_PER_BLOB} regex values allowed per blob`;
+    }
+    const issue = checkRegexSource(ov.value);
+    if (issue) return regexIssueMessage(issue);
+  }
+  if (ov.type === "and") {
+    if (ov.value.length > MAX_AND_WIDTH) {
+      return `An 'and' filter accepts at most ${MAX_AND_WIDTH} conditions`;
+    }
+    for (const sub of ov.value) {
+      const err = validateObjectValueBudget(sub, budget);
+      if (err) return err;
+    }
+  }
+  if (ov.type === "not") {
+    return validateObjectValueBudget(ov.value, budget);
+  }
+  return null;
+}
+
 export function validateScopeLimits(scopes: Scope[]): string | null {
+  const budget: Budget = { regexes: 0, total: 0 };
   const structured = scopes.filter((s): s is ScopeEntry => typeof s !== "string");
   if (structured.length > 10) {
     return "Maximum 10 structured scopes allowed, got " + structured.length;
@@ -55,6 +106,8 @@ export function validateScopeLimits(scopes: Scope[]): string | null {
       for (const ov of bf.objectValue) {
         const err = validateObjectValue(ov, 0);
         if (err) return err + " (field: " + bf.objectPath + ")";
+        const budgetErr = validateObjectValueBudget(ov, budget);
+        if (budgetErr) return budgetErr + " (field: " + bf.objectPath + ")";
       }
     }
   }

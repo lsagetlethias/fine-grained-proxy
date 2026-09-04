@@ -6,7 +6,7 @@ import { proxyMiddleware } from "../../src/middleware/proxy.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../../src/constants.ts";
 
-const CLIENT_KEY = "scalingo-addon-test-key";
+const CLIENT_KEY = "scalingo-addon-test-key-padd";
 const SERVER_SALT = "scalingo-addon-test-salt";
 const AUTH_URL = "https://auth.mock.local";
 const API_URL = "https://api.mock.local";

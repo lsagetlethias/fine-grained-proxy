@@ -343,8 +343,10 @@ Deno.test({
   fn: async () => {
     setup();
 
+    // Sous les 64 Ko du bodyLimit, donc c'est bien blob_too_large qui doit repondre :
+    // au-dela, le 413 arrive avant et masquerait le palier fonctionnel qu'on teste ici.
     const massiveScopes = Array.from(
-      { length: 5000 },
+      { length: 300 },
       (_, i) =>
         `GET:/v1/apps/${crypto.randomUUID()}-${crypto.randomUUID()}-${i}/containers/${crypto.randomUUID()}/restart`,
     );
@@ -365,6 +367,64 @@ Deno.test({
     assertEquals(res.status, 400);
     assertEquals(body.error, "blob_too_large");
 
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- ADR-0010 D6 : bodyLimit sur /api/*, jamais sur * ---
+
+Deno.test({
+  name: "AC-47.1: /api/generate refuse un corps au-dela de 64 Ko en 413",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "tk-us-test",
+        target: "https://api.example.com",
+        auth: "bearer",
+        scopes: ["GET:/" + "a".repeat(70 * 1024)],
+        ttl: 3600,
+      }),
+    });
+    assertEquals(res.status, 413);
+    assertEquals((await res.json()).error, "payload_too_large");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-47.2: /api/share/decode refuse au-dela de son propre palier de 16 Ko",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/share/decode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ encoded: "a".repeat(20 * 1024) }),
+    });
+    assertEquals(res.status, 413);
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-47.3: /api/share/decode refuse un encoded de plus de 8192 caracteres en 400",
+  fn: async () => {
+    setup();
+    const res = await app.request("/api/share/decode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ encoded: "a".repeat(8193) }),
+    });
+    assertEquals(res.status, 400);
+    assertEquals((await res.json()).error, "invalid_body");
     teardown();
   },
   sanitizeOps: false,

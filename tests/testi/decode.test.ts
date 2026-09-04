@@ -5,7 +5,7 @@ import { app } from "../../src/main.ts";
 import type { ScopeEntry } from "../../src/middleware/scopes.ts";
 
 const SERVER_SALT = "test-decode-salt";
-const CLIENT_KEY = "test-client-key-decode";
+const CLIENT_KEY = "test-client-key-decode-paddi";
 
 function setup() {
   Deno.env.set("FGP_SALT", SERVER_SALT);

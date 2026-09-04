@@ -4,7 +4,7 @@ import { app } from "../../src/main.ts";
 import { encryptBlob } from "../../src/crypto/blob.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
 
-const CLIENT_KEY = "no-leak-test-key";
+const CLIENT_KEY = "no-leak-test-key-padding-012";
 const SERVER_SALT = "no-leak-test-salt";
 const SECRET_TOKEN = "SECRET_TOKEN_ABCDEF";
 

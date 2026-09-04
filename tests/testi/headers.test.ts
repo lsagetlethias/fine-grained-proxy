@@ -5,7 +5,7 @@ import { encryptBlob } from "../../src/crypto/blob.ts";
 import { proxyMiddleware } from "../../src/middleware/proxy.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
 
-const CLIENT_KEY = "headers-test-key";
+const CLIENT_KEY = "headers-test-key-padding-012";
 const SERVER_SALT = "headers-test-salt";
 
 const originalFetch = globalThis.fetch;
