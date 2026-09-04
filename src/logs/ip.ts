@@ -54,3 +54,34 @@ function expandIpv6(addr: string): string[] | null {
     return lower.replace(/^0+/, "") || "0";
   });
 }
+
+// Ne jamais faire confiance a un en-tete de provenance sans savoir combien de sauts amont
+// sont dignes de confiance. Une IP fausse dans un journal est pire qu'une IP absente :
+// elle sera lue comme une preuve (ADR-0009 §5).
+export function trustedProxyHops(): number {
+  const raw = Deno.env.get("FGP_TRUSTED_PROXY_HOPS");
+  const n = raw === undefined ? 0 : Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : 0;
+}
+
+export function extractClientIp(
+  headers: { get(name: string): string | null },
+  remoteAddr: string,
+): string {
+  const hops = trustedProxyHops();
+  if (hops <= 0) return remoteAddr;
+
+  const forwarded = headers.get("x-forwarded-for");
+  if (forwarded) {
+    const list = forwarded.split(",").map((p) => p.trim()).filter(Boolean);
+    // La n-ieme en partant de la droite : la partie gauche est ecrite par l'appelant,
+    // la partie droite par l'infrastructure.
+    const idx = list.length - hops;
+    if (idx >= 0 && idx < list.length) return list[idx];
+    return remoteAddr;
+  }
+
+  const real = headers.get("x-real-ip");
+  if (real && real.trim()) return real.trim();
+  return remoteAddr;
+}

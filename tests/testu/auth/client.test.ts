@@ -23,6 +23,7 @@ Deno.test({
   name: "exchangeToken sends Basic Auth and returns bearer",
   fn: async () => {
     Deno.env.set("SCALINGO_AUTH_URL", "https://auth.test.local");
+    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
 
     stubFetch(200, { token: "bearer-abc-123" }, (input, init) => {
       assertEquals(String(input), "https://auth.test.local/v1/tokens/exchange");
@@ -42,6 +43,7 @@ Deno.test({
   name: "exchangeToken throws on non-200 response",
   fn: async () => {
     Deno.env.set("SCALINGO_AUTH_URL", "https://auth.test.local");
+    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
     stubFetch(401, { error: "unauthorized" });
 
     await assertRejects(
@@ -58,6 +60,7 @@ Deno.test({
   name: "exchangeToken throws on unexpected response format",
   fn: async () => {
     Deno.env.set("SCALINGO_AUTH_URL", "https://auth.test.local");
+    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
     stubFetch(200, { unexpected: "data" });
 
     await assertRejects(
@@ -74,6 +77,7 @@ Deno.test({
   name: "exchangeToken uses default auth URL when env not set",
   fn: async () => {
     Deno.env.delete("SCALINGO_AUTH_URL");
+    Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
 
     stubFetch(200, { token: "bearer-xyz" }, (input) => {
       assertEquals(
@@ -92,4 +96,5 @@ Deno.test({
 globalThis.addEventListener("unload", () => {
   globalThis.fetch = originalFetch;
   Deno.env.delete("SCALINGO_AUTH_URL");
+  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
 });

@@ -3,12 +3,13 @@ import { Context, MiddlewareHandler } from "hono";
 import { BlobConfig, decryptBlob, deriveKey, isExpired } from "../crypto/blob.ts";
 import { obtainAddonToken, obtainBearerViaExchange } from "../auth/credentials.ts";
 import { isAuthSpec, isScalingoAddonSpec } from "../auth/spec.ts";
-import { checkAccess, type Scope } from "./scopes.ts";
+import { assertPublicHost, buildUpstreamUrl, egressFetch, parseTargetUrl } from "../net/egress.ts";
+import { checkRequestAccess, type Scope } from "./scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY, FGP_SOURCE_UPSTREAM } from "../constants.ts";
 import { logsEnabled } from "../logs/config.ts";
 import { computeBlobId } from "../logs/blob-id.ts";
 import { captureDetailed, captureNetwork } from "../logs/capture.ts";
-import { truncateIp } from "../logs/ip.ts";
+import { extractClientIp, truncateIp } from "../logs/ip.ts";
 
 const MAX_BLOB_LENGTH = 4096;
 
@@ -54,6 +55,57 @@ async function buildAuthHeaders(config: BlobConfig): Promise<Headers> {
   return headers;
 }
 
+// Denylist par classe (ADR-0009 §5). Une allowlist casserait l'agnosticisme : Accept,
+// Range, If-None-Match et l'infini des en-tetes proprietaires doivent passer.
+const DENIED_HEADERS = new Set([
+  // hop-by-hop, RFC 9110 §7.6.1, et matiere premiere du request smuggling
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "proxy-connection",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  // authentification de l'appelant : la promesse du produit est qu'il ne detient pas
+  // le credential de la cible, la laisser passer contourne le modele de scopes
+  "authorization",
+  "cookie",
+  // provenance : FGP n'en pose aucun et n'en relaie aucun
+  "forwarded",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-real-ip",
+  "host",
+]);
+
+// Applique a ce que fournit l'appelant, avant que les en-tetes d'auth du blob ne soient
+// poses : sinon cette passe supprimerait l'Authorization legitime issu du blob.
+function stripCallerHeaders(headers: Headers): void {
+  // Connection nomme lui-meme des en-tetes a ne pas relayer.
+  const named = headers.get("connection");
+  if (named) {
+    for (const name of named.split(",")) headers.delete(name.trim());
+  }
+  for (const name of [...headers.keys()]) {
+    const lower = name.toLowerCase();
+    if (DENIED_HEADERS.has(lower) || lower.startsWith("x-fgp-")) {
+      headers.delete(name);
+    }
+  }
+}
+
+// Passe finale, apres les en-tetes d'auth : le protocole du proxy et le Host ne doivent
+// jamais partir, meme si un AuthSpec tentait de les poser.
+function stripTransportHeaders(headers: Headers): void {
+  headers.delete("host");
+  for (const name of [...headers.keys()]) {
+    if (name.toLowerCase().startsWith("x-fgp-")) headers.delete(name);
+  }
+}
+
 async function forwardRequest(
   c: Context,
   config: BlobConfig,
@@ -61,10 +113,12 @@ async function forwardRequest(
   authHeaders: Headers,
 ): Promise<Response> {
   const url = new URL(c.req.url);
-  const target = config.target.replace(/\/+$/, "");
-  const targetUrl = `${target}${proxyPath}${url.search}`;
+  const parsed = parseTargetUrl(config.target);
+  if ("error" in parsed) throw new Error("Invalid target");
+  const targetUrl = buildUpstreamUrl(parsed.url, proxyPath, url.search);
 
   const headers = new Headers(c.req.raw.headers);
+  stripCallerHeaders(headers);
 
   // Ordre impose : les headers d'auth ecrasent ceux de l'appelant (§11.1), puis le strip
   // transport ecrase tout le reste (§11.2). Sans cet ordre, un header d'auth nomme Host
@@ -72,9 +126,7 @@ async function forwardRequest(
   for (const [key, value] of authHeaders) {
     headers.set(key, value);
   }
-  headers.delete("X-FGP-Key");
-  headers.delete("X-FGP-Blob");
-  headers.delete("host");
+  stripTransportHeaders(headers);
 
   const init: RequestInit = {
     method: c.req.method,
@@ -85,7 +137,7 @@ async function forwardRequest(
     init.body = c.req.raw.body;
   }
 
-  return await fetch(targetUrl, init);
+  return await egressFetch(targetUrl, init);
 }
 
 function handleUpstreamResponse(response: Response): Response {
@@ -98,19 +150,6 @@ function handleUpstreamResponse(response: Response): Response {
     statusText: response.statusText,
     headers,
   });
-}
-
-function extractClientIp(c: Context): string {
-  const fwd = c.req.header("x-forwarded-for");
-  if (fwd) {
-    const first = fwd.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  const real = c.req.header("x-real-ip");
-  if (real) return real.trim();
-  const env = c.env as { info?: { remoteAddr?: { hostname?: string } } } | undefined;
-  const host = env?.info?.remoteAddr?.hostname;
-  return host ?? "";
 }
 
 async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Promise<Response> {
@@ -210,7 +249,9 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     }
   }
 
-  if (!checkAccess(config.scopes, c.req.method, proxyPath, parsedBody)) {
+  const proxyPathWithQuery = proxyPath + new URL(c.req.url).search;
+  const verdict = checkRequestAccess(config.scopes, c.req.method, proxyPathWithQuery, parsedBody);
+  if (!verdict.allowed) {
     return await finishWithCapture(
       c,
       config,
@@ -226,8 +267,41 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     );
   }
 
-  // Apres la verification des scopes : un appelant hors scope ne doit jamais declencher
-  // d'appel reseau vers Scalingo.
+  // Apres la verification des scopes : un appelant hors scope ne doit ni declencher de
+  // resolution DNS, ni apprendre quoi que ce soit sur la destination configuree.
+  const parsedTarget = parseTargetUrl(config.target);
+  if ("error" in parsedTarget) {
+    return await finishWithCapture(
+      c,
+      config,
+      blobRaw,
+      clientKey,
+      serverSalt,
+      proxyPath,
+      startedAt,
+      logsActive,
+      false,
+      null,
+      jsonError(c, 403, "target_forbidden", "Target is not reachable by policy"),
+    );
+  }
+  const hostDenial = await assertPublicHost(parsedTarget.url.hostname);
+  if (hostDenial) {
+    return await finishWithCapture(
+      c,
+      config,
+      blobRaw,
+      clientKey,
+      serverSalt,
+      proxyPath,
+      startedAt,
+      logsActive,
+      false,
+      null,
+      jsonError(c, 403, "target_forbidden", hostDenial.message),
+    );
+  }
+
   let authHeaders: Headers;
   try {
     authHeaders = await buildAuthHeaders(config);
@@ -309,7 +383,10 @@ async function finishWithCapture(
   try {
     const blobId = await computeBlobId(blobRaw);
     const method = c.req.method.toUpperCase();
-    const ipPrefix = truncateIp(extractClientIp(c));
+    const env = c.env as { info?: { remoteAddr?: { hostname?: string } } } | undefined;
+    const ipPrefix = truncateIp(
+      extractClientIp(c.req.raw.headers, env?.info?.remoteAddr?.hostname ?? ""),
+    );
 
     captureNetwork({
       blobId,
@@ -359,8 +436,12 @@ export function proxyMiddleware(): MiddlewareHandler {
       return jsonError(c, 400, "invalid_request", "Invalid proxy path");
     }
 
+    // Decoupe du pathname brut apres le premier segment : reconstruire depuis les segments
+    // filtres ecrasait les slashes repetes et le slash final, donnant au mode URL une
+    // surface d'autorisation differente du mode header pour la meme requete.
     const blobRaw = segments[0];
-    const proxyPath = "/" + segments.slice(1).join("/");
+    const blobStart = url.pathname.indexOf(blobRaw);
+    const proxyPath = url.pathname.slice(blobStart + blobRaw.length) || "/";
     return await handleProxy(c, blobRaw, proxyPath);
   };
 }

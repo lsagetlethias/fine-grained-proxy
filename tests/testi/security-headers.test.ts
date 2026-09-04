@@ -35,12 +35,14 @@ const SECURITY_HEADER_NAMES = FGP_SECURITY_HEADERS.map(([name]) => name.toLowerC
 function setup() {
   _resetStoreForTests();
   Deno.env.set("FGP_SALT", SERVER_SALT);
+  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
   Deno.env.set("SCALINGO_AUTH_URL", "https://auth.mock.local");
 }
 
 function teardown() {
   globalThis.fetch = originalFetch;
   Deno.env.delete("FGP_SALT");
+  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
   Deno.env.delete("SCALINGO_AUTH_URL");
 }
 

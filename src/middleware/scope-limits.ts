@@ -60,3 +60,18 @@ export function validateScopeLimits(scopes: Scope[]): string | null {
   }
   return null;
 }
+
+// Un scope portant un « ? » est syntaxiquement mort : le pattern ne porte jamais la query,
+// donc il ne peut rien contraindre. Refuse a la generation seulement : au dechiffrement il
+// reste accepte et jamais matche, casser un blob vivant pour un pattern sans effet serait
+// un cout sans gain (ADR-0009 §4).
+export function validateScopePatterns(scopes: Scope[]): string | null {
+  for (const scope of scopes) {
+    const pattern = typeof scope === "string" ? scope : scope.pattern;
+    if (pattern.includes("?")) {
+      return "A scope pattern cannot carry a query string: " + pattern +
+        ". Query parameters are not constrained by scopes, they are forwarded as sent.";
+    }
+  }
+  return null;
+}

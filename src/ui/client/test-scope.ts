@@ -2,7 +2,7 @@ import { assertElement } from "./elements.ts";
 import { buildScopes } from "./generate.ts";
 import { buildAuthPayload } from "./auth-mode.ts";
 import type { AuthModeDeps } from "./auth-mode.ts";
-import { checkAccess, type Scope } from "../../middleware/scopes.ts";
+import { checkRequestAccess, type Scope, splitPathAndQuery } from "../../middleware/scopes.ts";
 import type { FilterData, SerializedScope } from "./types.ts";
 
 function clearElement(el: HTMLElement): void {
@@ -119,17 +119,25 @@ export function setupTestScope(
     clearElement(resultsContainer);
     let anyMatch = false;
 
+    // Une seule lecture des scopes, la meme que celle du proxy : c'est ce qui empeche
+    // l'interface d'affirmer un refus la ou la production repond 200 (ADR-0009 §4).
     for (let i = 0; i < scopes.length; i++) {
       const scope = scopes[i] as Scope;
-      const matched = checkAccess([scope], method.toUpperCase(), path, body);
+      const matched = checkRequestAccess([scope], method.toUpperCase(), path, body).allowed;
       if (matched) anyMatch = true;
       resultsContainer.appendChild(createResultRow(matched, scopeLabel(scopes[i])));
     }
 
+    const [, rawSearch] = splitPathAndQuery(path);
     if (!anyMatch) {
       btnTest.disabled = true;
       verdictSpan.textContent = "Proxy : acc\u00e8s refus\u00e9";
       verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
+    } else if (rawSearch.length > 0) {
+      btnTest.disabled = false;
+      verdictSpan.textContent =
+        "Acc\u00e8s autoris\u00e9. La query n'est pas contrainte par les scopes, elle est transmise telle quelle.";
+      verdictSpan.className = "text-sm font-medium text-amber-700 dark:text-amber-300";
     } else {
       btnTest.disabled = false;
       verdictSpan.textContent = "";

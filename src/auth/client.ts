@@ -1,3 +1,5 @@
+import { egressFetch, parseTargetUrl } from "../net/egress.ts";
+
 const DEFAULT_AUTH_URL = "https://auth.scalingo.com";
 const DEFAULT_API_URL = "https://api.osc-fr1.scalingo.com";
 
@@ -13,11 +15,26 @@ export function resolveScalingoApiUrl(apiUrl?: string): string {
   return resolved.replace(/\/+$/, "");
 }
 
+// Ce mode presente un bearer de compte a l'hote designe : l'agnosticisme est une
+// propriete de « target », pas d'un mode d'auth proprietaire (ADR-0009 §2).
+export function isScalingoHost(rawUrl: string): boolean {
+  const parsed = parseTargetUrl(rawUrl);
+  if ("error" in parsed) return false;
+  return parsed.url.hostname === "scalingo.com" || parsed.url.hostname.endsWith(".scalingo.com");
+}
+
+// Les valeurs d'origine operateur ne viennent pas d'un appelant : elles echappent a la
+// contrainte d'hote, ce qui permet aussi aux tests de pointer un mock local.
+export function isOperatorScalingoUrl(rawUrl: string): boolean {
+  return rawUrl === (Deno.env.get("SCALINGO_API_URL") ?? "") ||
+    rawUrl === (Deno.env.get("SCALINGO_AUTH_URL") ?? "");
+}
+
 export async function exchangeToken(apiToken: string): Promise<string> {
   const authUrl = Deno.env.get("SCALINGO_AUTH_URL") ?? DEFAULT_AUTH_URL;
   const credentials = btoa(`:${apiToken}`);
 
-  const response = await fetch(`${authUrl}/v1/tokens/exchange`, {
+  const response = await egressFetch(new URL(`${authUrl}/v1/tokens/exchange`), {
     method: "POST",
     headers: {
       "Authorization": `Basic ${credentials}`,
@@ -44,8 +61,13 @@ export async function fetchAddonToken(
   addonId: string,
 ): Promise<string> {
   const base = resolveScalingoApiUrl(apiUrl);
-  const response = await fetch(
-    `${base}/v1/apps/${encodeURIComponent(app)}/addons/${encodeURIComponent(addonId)}/token`,
+  if (!isOperatorScalingoUrl(base) && !isScalingoHost(base)) {
+    throw new Error("Addon token request refused: apiUrl host is not a Scalingo host");
+  }
+  const response = await egressFetch(
+    new URL(
+      `${base}/v1/apps/${encodeURIComponent(app)}/addons/${encodeURIComponent(addonId)}/token`,
+    ),
     {
       method: "POST",
       headers: {

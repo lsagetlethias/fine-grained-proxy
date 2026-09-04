@@ -29,10 +29,12 @@ async function makeBlob(overrides: Partial<BlobConfig> = {}): Promise<string> {
 
 function setEnv(): void {
   Deno.env.set("FGP_SALT", SALT);
+  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
 }
 
 function clearEnv(): void {
   Deno.env.delete("FGP_SALT");
+  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
   Deno.env.delete("FGP_LOGS_ENABLED");
 }
 
@@ -447,6 +449,8 @@ Deno.test({
   fn: async () => {
     setEnv();
     Deno.env.set("FGP_LOGS_ENABLED", "1");
+    // AC-45.11 : X-Forwarded-For n'est plus cru par defaut, il faut declarer un saut amont.
+    Deno.env.set("FGP_TRUSTED_PROXY_HOPS", "1");
     _resetStoreForTests();
     const originalFetch = globalThis.fetch;
     try {
@@ -466,6 +470,7 @@ Deno.test({
       assertEquals(buf[0].status, 200);
       assertEquals(buf[0].ipPrefix, "203.0.113.0/24");
     } finally {
+      Deno.env.delete("FGP_TRUSTED_PROXY_HOPS");
       globalThis.fetch = originalFetch;
       clearEnv();
     }

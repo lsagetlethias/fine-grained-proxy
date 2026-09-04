@@ -626,3 +626,38 @@ Deno.test("decrypt accepts blob with exactly 10 structured scopes", async () => 
   const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
   assertEquals(config.v, 3);
 });
+
+// --- ADR-0009 etape 2 : forme du target verifiee au dechiffrement ---
+
+Deno.test("AC-43.9: blob avec un target portant un fragment est rejete", async () => {
+  const blob = await encryptRaw(makeConfig({ target: "https://api.example.com/#" }));
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("AC-43.10: blob avec un target file:// est rejete", async () => {
+  const blob = await encryptRaw(makeConfig({ target: "file:///etc/passwd" }));
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("AC-43.11: blob avec un target portant un userinfo est rejete", async () => {
+  const blob = await encryptRaw(makeConfig({ target: "https://user:pw@api.example.com" }));
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+  );
+});
+
+Deno.test("AC-43.12: un target avec chemin de base legitime reste accepte", async () => {
+  const blob = await encryptRaw(makeConfig({ target: "https://api.example.com/base" }));
+  const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+  assertEquals(config.target, "https://api.example.com/base");
+});

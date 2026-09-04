@@ -31,8 +31,10 @@ Deno.test({
     "AC-17.31: missing FGP_SALT triggers app.onError → 500 internal_error + X-FGP-Source: proxy",
   fn: async () => {
     Deno.env.set("FGP_SALT", SERVER_SALT);
+    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
     const blob = await makeBlob();
     Deno.env.delete("FGP_SALT");
+    Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
 
     const originalConsoleError = console.error;
     console.error = () => {};

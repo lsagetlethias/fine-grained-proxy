@@ -13,11 +13,13 @@ const originalFetch = globalThis.fetch;
 function setup() {
   _resetStoreForTests();
   Deno.env.set("FGP_SALT", SERVER_SALT);
+  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
 }
 
 function teardown() {
   globalThis.fetch = originalFetch;
   Deno.env.delete("FGP_SALT");
+  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
   Deno.env.delete("FGP_LOGS_ENABLED");
 }
 

@@ -9,7 +9,13 @@ import {
   CLIENT_KEY_MIN_LENGTH,
   validateClientKey,
 } from "../crypto/client-key.ts";
-import { exchangeToken, normalizeAddons, resolveScalingoApiUrl } from "../auth/client.ts";
+import {
+  exchangeToken,
+  isOperatorScalingoUrl,
+  isScalingoHost,
+  normalizeAddons,
+  resolveScalingoApiUrl,
+} from "../auth/client.ts";
 import {
   type Auth,
   type AuthSpec,
@@ -19,7 +25,14 @@ import {
   validateAuthSpecShape,
 } from "../auth/spec.ts";
 import { obtainAddonToken } from "../auth/credentials.ts";
-import { validateScopeLimits } from "../middleware/scope-limits.ts";
+import { validateScopeLimits, validateScopePatterns } from "../middleware/scope-limits.ts";
+import {
+  buildUpstreamUrl,
+  classifyLiteralHost,
+  EgressError,
+  egressFetch,
+  parseTargetUrl,
+} from "../net/egress.ts";
 import { renderLlmsTxt } from "./llms.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
 import { ASSET_VERSION } from "../ui/asset-version.ts";
@@ -30,6 +43,7 @@ import {
   matchPath,
   parseScope,
   type Scope,
+  splitPathAndQuery,
 } from "../middleware/scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../constants.ts";
 
@@ -70,19 +84,33 @@ const ShareDecodeError400Schema = errorSchema(
 );
 
 const GenerateError400Schema = errorSchema(
-  ["invalid_body", "blob_too_large", "scope_limit_exceeded", "auth_limit_exceeded", "invalid_key"],
+  [
+    "invalid_body",
+    "blob_too_large",
+    "scope_limit_exceeded",
+    "auth_limit_exceeded",
+    "invalid_key",
+    "invalid_target",
+    "invalid_scope",
+  ],
   "GenerateError400",
 );
 const GenerateError500Schema = errorSchema(["server_error"], "GenerateError500");
 
-const ListAppsError400Schema = errorSchema(["invalid_body"], "ListAppsError400");
+const ListAppsError400Schema = errorSchema(
+  ["invalid_body", "invalid_target"],
+  "ListAppsError400",
+);
 const ListAppsError401Schema = errorSchema(["token_exchange_failed"], "ListAppsError401");
 const ListAppsError502Schema = errorSchema(
   ["upstream_unreachable", "upstream_list_apps_failed"],
   "ListAppsError502",
 );
 
-const ListAddonsError400Schema = errorSchema(["invalid_body"], "ListAddonsError400");
+const ListAddonsError400Schema = errorSchema(
+  ["invalid_body", "invalid_target"],
+  "ListAddonsError400",
+);
 const ListAddonsError401Schema = errorSchema(["token_exchange_failed"], "ListAddonsError401");
 const ListAddonsError404Schema = errorSchema(["app_not_found"], "ListAddonsError404");
 const ListAddonsError502Schema = errorSchema(
@@ -754,6 +782,22 @@ uiRoutes.openapi(generateRoute, async (c) => {
     return c.json({ error: "server_error" as const, message: "Server misconfigured" }, 500);
   }
 
+  const parsedTarget = parseTargetUrl(body.target);
+  if ("error" in parsedTarget) {
+    return c.json({ error: "invalid_target" as const, message: parsedTarget.error.message }, 400);
+  }
+  // VOLONTAIREMENT INCOMPLET : seule la partie synchrone est appliquee ici, pas la
+  // resolution DNS. Ne pas « completer » cette validation avec assertPublicHost.
+  // Trois raisons : cet endpoint n'emet aucune requete sortante, donc il n'y a rien a
+  // proteger a cet instant ; il n'a pas a dependre du DNS en latence ni en disponibilite ;
+  // et la reponse DNS peut avoir change quand le blob sera reellement utilise, ce qui est
+  // le rebinding que l'ADR-0009 documente comme non-garantie. Le controle de l'adresse
+  // reelle vit au point de sortie, la ou la requete part.
+  const hostDenial = classifyLiteralHost(parsedTarget.url.hostname);
+  if (hostDenial) {
+    return c.json({ error: "invalid_target" as const, message: hostDenial.message }, 400);
+  }
+
   let clientKey: string = crypto.randomUUID();
   if (body.key !== undefined) {
     clientKey = body.key.trim();
@@ -764,6 +808,11 @@ uiRoutes.openapi(generateRoute, async (c) => {
   }
 
   const scopes = body.scopes as Scope[];
+
+  const patternError = validateScopePatterns(scopes);
+  if (patternError) {
+    return c.json({ error: "invalid_scope" as const, message: patternError }, 400);
+  }
 
   const limitError = validateScopeLimits(scopes);
   if (limitError) {
@@ -837,27 +886,36 @@ uiRoutes.openapi(generateRoute, async (c) => {
 uiRoutes.openapi(listAppsRoute, async (c) => {
   const body = c.req.valid("json");
 
+  // Helper Scalingo declare comme tel : la contrainte d'agnosticisme porte sur « target »
+  // du blob, pas sur un endpoint d'aide proprietaire (ADR-0009 §2).
+  const apiUrl = resolveScalingoApiUrl(body.target);
+  if (!isOperatorScalingoUrl(apiUrl) && !isScalingoHost(apiUrl)) {
+    return c.json(
+      { error: "invalid_target" as const, message: "Target host must be a Scalingo host" },
+      400,
+    );
+  }
+
   let bearer: string;
   try {
     bearer = await exchangeToken(body.token);
   } catch {
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
-      { error: "token_exchange_failed", message: "Failed to exchange Scalingo token" },
+      { error: "token_exchange_failed" as const, message: "Failed to exchange Scalingo token" },
       401,
     );
   }
 
-  const apiUrl = resolveScalingoApiUrl(body.target);
   let appsResponse: Response;
   try {
-    appsResponse = await fetch(`${apiUrl}/v1/apps`, {
+    appsResponse = await egressFetch(new URL(`${apiUrl}/v1/apps`), {
       headers: { "Authorization": `Bearer ${bearer}` },
     });
   } catch {
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
-      { error: "upstream_unreachable", message: "Scalingo API unreachable" },
+      { error: "upstream_unreachable" as const, message: "Scalingo API unreachable" },
       502,
     );
   }
@@ -866,7 +924,7 @@ uiRoutes.openapi(listAppsRoute, async (c) => {
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
       {
-        error: "upstream_list_apps_failed",
+        error: "upstream_list_apps_failed" as const,
         message: `Scalingo returned ${appsResponse.status}`,
       },
       502,
@@ -881,28 +939,37 @@ uiRoutes.openapi(listAppsRoute, async (c) => {
 uiRoutes.openapi(listAddonsRoute, async (c) => {
   const body = c.req.valid("json");
 
+  // Helper Scalingo declare comme tel : la contrainte d'agnosticisme porte sur « target »
+  // du blob, pas sur un endpoint d'aide proprietaire (ADR-0009 §2).
+  const apiUrl = resolveScalingoApiUrl(body.target);
+  if (!isOperatorScalingoUrl(apiUrl) && !isScalingoHost(apiUrl)) {
+    return c.json(
+      { error: "invalid_target" as const, message: "Target host must be a Scalingo host" },
+      400,
+    );
+  }
+
   let bearer: string;
   try {
     bearer = await exchangeToken(body.token);
   } catch {
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
-      { error: "token_exchange_failed", message: "Failed to exchange Scalingo token" },
+      { error: "token_exchange_failed" as const, message: "Failed to exchange Scalingo token" },
       401,
     );
   }
 
-  const apiUrl = resolveScalingoApiUrl(body.target);
   let addonsResponse: Response;
   try {
-    addonsResponse = await fetch(
-      `${apiUrl}/v1/apps/${encodeURIComponent(body.app)}/addons`,
+    addonsResponse = await egressFetch(
+      new URL(`${apiUrl}/v1/apps/${encodeURIComponent(body.app)}/addons`),
       { headers: { "Authorization": `Bearer ${bearer}` } },
     );
   } catch {
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
-      { error: "upstream_unreachable", message: "Scalingo API unreachable" },
+      { error: "upstream_unreachable" as const, message: "Scalingo API unreachable" },
       502,
     );
   }
@@ -912,7 +979,10 @@ uiRoutes.openapi(listAddonsRoute, async (c) => {
   if (addonsResponse.status === 404) {
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
-      { error: "app_not_found", message: "Application not found on this Scalingo account" },
+      {
+        error: "app_not_found" as const,
+        message: "Application not found on this Scalingo account",
+      },
       404,
     );
   }
@@ -921,7 +991,7 @@ uiRoutes.openapi(listAddonsRoute, async (c) => {
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
       {
-        error: "upstream_list_addons_failed",
+        error: "upstream_list_addons_failed" as const,
         message: `Scalingo returned ${addonsResponse.status}`,
       },
       502,
@@ -992,6 +1062,11 @@ uiRoutes.openapi(testProxyRoute, async (c) => {
     return c.json({ allowed: false, reason: "scope_denied" }, 200);
   }
 
+  const parsedTarget = parseTargetUrl(target);
+  if ("error" in parsedTarget) {
+    return c.json({ allowed: true, reason: "target_forbidden" }, 200);
+  }
+
   const headers = new Headers();
   const secret = token ?? "";
   if (isAuthSpec(auth as Auth)) {
@@ -1023,7 +1098,8 @@ uiRoutes.openapi(testProxyRoute, async (c) => {
     headers.set(auth.slice("header:".length), secret);
   }
 
-  const targetUrl = `${target.replace(/\/+$/, "")}${path}`;
+  const [rawPath, rawSearch] = splitPathAndQuery(path);
+  const targetUrl = buildUpstreamUrl(parsedTarget.url, rawPath, rawSearch);
   const init: RequestInit = { method: upperMethod, headers };
 
   if (body !== undefined && !["GET", "HEAD"].includes(upperMethod)) {
@@ -1032,13 +1108,16 @@ uiRoutes.openapi(testProxyRoute, async (c) => {
   }
 
   try {
-    const res = await fetch(targetUrl, init);
+    const res = await egressFetch(targetUrl, init);
     const contentType = res.headers.get("content-type") ?? "";
     const responseBody = contentType.includes("application/json")
       ? await res.json()
       : await res.text();
     return c.json({ allowed: true, upstream: { status: res.status, body: responseBody } }, 200);
-  } catch {
+  } catch (err) {
+    if (err instanceof EgressError) {
+      return c.json({ allowed: true, reason: "target_forbidden" }, 200);
+    }
     return c.json({ allowed: true, reason: "upstream_unreachable" }, 200);
   }
 });

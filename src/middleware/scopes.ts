@@ -157,3 +157,80 @@ export function checkAccess(
 
   return false;
 }
+
+// --- ADR-0009 §3 et §4 : forme unique d'autorisation ---
+// Ce fichier est bundle cote navigateur : aucune API Deno ici.
+
+export function splitPathAndQuery(rawPathWithQuery: string): [string, string] {
+  const i = rawPathWithQuery.indexOf("?");
+  if (i === -1) return [rawPathWithQuery, ""];
+  return [rawPathWithQuery.slice(0, i), rawPathWithQuery.slice(i)];
+}
+
+// deno-lint-ignore no-control-regex
+const CONTROL_OR_NUL = /[\x00-\x1F\x7F]/;
+
+export function canonicalizePath(rawPath: string): string {
+  let path = rawPath;
+  // Decodage repete jusqu'au point fixe : %252f devient %2f puis /, sinon un double
+  // encodage suffirait a echapper au controle. Trois tours suffisent en pratique.
+  for (let i = 0; i < 3; i++) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      break;
+    }
+    if (decoded === path) break;
+    path = decoded;
+  }
+  path = path.replace(/\\/g, "/");
+  path = path.replace(/\/{2,}/g, "/");
+
+  const segments = path.split("/");
+  const out: string[] = [];
+  for (const seg of segments) {
+    if (seg === ".") continue;
+    if (seg === "..") {
+      out.pop();
+      continue;
+    }
+    out.push(seg);
+  }
+  let result = out.join("/");
+  if (!result.startsWith("/")) result = "/" + result;
+  return result.replace(/\/{2,}/g, "/");
+}
+
+export interface AccessVerdict {
+  allowed: boolean;
+  denialReason?: "method" | "path" | "path_encoded" | "body" | "query" | "invalid_path";
+  // Toujours false tant que queryFilters n'est pas livre : l'outillage doit pouvoir dire
+  // que la query passe sans contrainte plutot que d'affirmer un refus que le proxy n'applique pas.
+  queryConstrained: boolean;
+}
+
+export function checkRequestAccess(
+  scopes: Scope[],
+  method: string,
+  rawPathWithQuery: string,
+  body?: unknown,
+): AccessVerdict {
+  const [rawPath] = splitPathAndQuery(rawPathWithQuery);
+  const canonical = canonicalizePath(rawPath);
+
+  if (CONTROL_OR_NUL.test(canonical)) {
+    return { allowed: false, denialReason: "invalid_path", queryConstrained: false };
+  }
+
+  const rawAllowed = checkAccess(scopes, method, rawPath, body);
+  if (!rawAllowed) {
+    return { allowed: false, denialReason: "path", queryConstrained: false };
+  }
+  // Le controle porte sur toutes les formes plausibles, l'emission sur la forme brute :
+  // ajouter une forme ne peut que reduire l'ensemble autorise (ADR-0009 §3).
+  if (canonical !== rawPath && !checkAccess(scopes, method, canonical, body)) {
+    return { allowed: false, denialReason: "path_encoded", queryConstrained: false };
+  }
+  return { allowed: true, queryConstrained: false };
+}

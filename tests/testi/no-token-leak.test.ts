@@ -17,6 +17,7 @@ Deno.test({
   fn: async () => {
     _resetStoreForTests();
     Deno.env.set("FGP_SALT", SERVER_SALT);
+    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
     const originalFetch = globalThis.fetch;
 
     const blob = await encryptBlob(
@@ -85,6 +86,7 @@ Deno.test({
       console.debug = originalDebug;
       globalThis.fetch = originalFetch;
       Deno.env.delete("FGP_SALT");
+      Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
     }
   },
   sanitizeOps: false,

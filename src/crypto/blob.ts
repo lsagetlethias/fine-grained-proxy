@@ -1,6 +1,7 @@
 import { decodeBase64Url, encodeBase64Url } from "@std/encoding/base64url";
 
 import type { Scope, ScopeEntry } from "../middleware/scopes.ts";
+import { parseTargetUrl } from "../net/egress.ts";
 import { type Auth, checkHeaderName, isValidAuthSpec } from "../auth/spec.ts";
 
 const LEGACY_HEADER_PREFIX = "header:";
@@ -199,6 +200,12 @@ export async function decryptBlob(
     typeof config.ttl !== "number" ||
     typeof config.createdAt !== "number"
   ) {
+    throw new Error("Invalid blob: malformed BlobConfig");
+  }
+
+  // Le salt etant public, un blob se forge hors ligne : la forme du target doit etre
+  // verifiee ici et pas seulement a la generation (ADR-0009 §2, etape 1).
+  if ("error" in parseTargetUrl(config.target)) {
     throw new Error("Invalid blob: malformed BlobConfig");
   }
 

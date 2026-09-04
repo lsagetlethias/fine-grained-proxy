@@ -9,10 +9,12 @@ const CLIENT_KEY = "test-client-key-decode";
 
 function setup() {
   Deno.env.set("FGP_SALT", SERVER_SALT);
+  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
 }
 
 function teardown() {
   Deno.env.delete("FGP_SALT");
+  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
 }
 
 function postDecode(body: unknown) {
