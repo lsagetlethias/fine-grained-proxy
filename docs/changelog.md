@@ -14,6 +14,9 @@
 - L'interface avertit que réutiliser une clé lie les blobs entre eux, et affiche une jauge de diversité des caractères pour repérer les clés dégénérées
 - Nouvelle page [`/llms.txt`](/llms.txt) : description de FGP lisible par un agent LLM (scopes, modes d'auth, body filters, codes d'erreur, exemples curl)
 - En-têtes de sécurité HTTP (CSP, `nosniff`, `no-referrer`, HSTS) sur les réponses générées par FGP. Les réponses de votre API cible restent forwardées telles quelles, sans ajout. L'interface ne peut plus être affichée dans une iframe
+- Déploiement sur Scalingo par buildpack, avec `Procfile` et guide dédié, en plus de Deno Deploy et Docker. Contribution de [revolunet](https://github.com/revolunet)
+- Correction : un blob dont le nom de header d'authentification est vide ou réservé (`header:`, `header:Host`) est refusé proprement, au lieu de provoquer une erreur 500
+- Correction : une configuration de scopes malformée envoyée à `/api/generate` renvoie une erreur explicite nommant le champ fautif, au lieu d'une erreur 500
 - Correction : la variable `PORT` est de nouveau respectée. Elle était documentée mais sans effet, le serveur écoutait 8000 quoi qu'il arrive. Si votre plateforme définit `PORT`, l'instance écoute désormais réellement sur ce port
 - Correction : l'image Docker embarque les assets compilés. L'interface y sortait sans CSS ni JavaScript
 - Dépendances mises à jour et permissions du runtime resserrées

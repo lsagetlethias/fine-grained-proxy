@@ -276,3 +276,30 @@
   - Recette manuelle du mode Scalingo Database API sur un vrai compte, condition d'entrée du multi-addon
   - Auto-hébergement des assets Swagger dans `/static/` pour supprimer la CSP dédiée de `/api/docs`
   - Tests e2e toujours reportés, premier déploiement Deno Deploy toujours en attente
+
+## 2026-09-04 : Refactor config-page, correctifs de review, déploiement Scalingo
+
+- **Changements** :
+  - Refactor `src/ui/config-page.tsx` : 1962 lignes découpées en douze composants sous `src/ui/config/` (blocs de formulaire, sidebar, panneaux doc, résultat, chrome de page, icônes). Le fichier d'entrée tombe à 54 lignes. Rendu HTML prouvé identique octet pour octet avant et après.
+  - Extraction des règles de limites de scopes vers `src/middleware/scope-limits.ts`, hors de la couche route.
+  - Correctif cache bearer : le hit était testé par truthiness, donc une valeur vide était traitée comme un miss et relançait un exchange. Test explicite sur `null`.
+  - Correctif auth legacy : `auth: "header:"` passait la validation (`startsWith("header:")` est vrai sur la chaîne exacte) puis faisait lever une TypeError à `Headers.set("", token)`, soit un 500 sur un blob malformé. La validation réutilise `checkHeaderName`, déjà écrit pour les AuthSpec structurés. Ferme au passage `header:Host` et les autres noms réservés, jusque-là acceptés par cette voie. Le mode legacy était le seul chemin d'authentification à ne passer par aucune validation de nom.
+  - Correctif `validateScopeLimits` : le schéma Zod type `not.value` en `unknown` et `and.value` en tableau d'`unknown`, mais la validation castait directement et pouvait throw sur l'accès à `.type`, donc un 500 au lieu d'un 400 actionnable. Garde `isRecord` en entrée et checks explicites, vérifiés sur sept formes.
+  - Correctif copy import : le message post-import demandait de fournir le token même en mode headers multiples, où il n'existe pas et où sa section est masquée. Message désormais conditionnel au mode d'authentification.
+  - Correctif guide UI : le panneau doc décrivait encore la sélection multi-base par identifiant dans le chemin, retirée avec l'abandon du multi-addon. Le texte annonçait une fonctionnalité inexistante à l'endroit exact où l'utilisateur découvre le mode.
+  - Correctif dépendances : `@std/testing` et `@std/crypto` étaient déclarés dans `deno.json` sans être importés nulle part. Ils tiraient six entrées transitives dans le lock et le faisaient osciller, `deno install` les exigeant et `deno check` les retirant. Un `check` suivi d'un commit du lock cassait la CI au `--frozen` suivant, ce qui est arrivé une fois. Après retrait, le lock a le même hash après `install`, `check` et `test`.
+  - Correctif rendu des diagrammes Mermaid du deck : les libellés sortaient de leurs boîtes par intermittence. Chromium ne refait pas le layout du texte SVG quand une custom property utilisée seulement dans `transform` change, et la variable d'échelle de Slidev vaut zéro tant que son observateur n'a pas mesuré le conteneur. Correctif d'une ligne dans `presentation/style.css`.
+  - Contribution externe de revolunet (PR #1) : déploiement Scalingo par buildpack. Corrigée en #6, son `Procfile` utilisait `deno serve`, qui ne démarre pas un module sans `export default { fetch }`, donc elle était périmée par notre passage à `Deno.serve()`. Permissions alignées sur le Dockerfile, documentation réalignée sur trois points.
+  - Documentation : entrée de changelog complétée, specs et ADR déjà à jour depuis la synchro précédente.
+- **Décisions** :
+  - Découpage de `src/routes/ui.tsx` **explicitement écarté** et argumenté : 42 des 47 schémas Zod ne servent qu'à un seul endpoint. Le couplage y est vertical, route par route, et un découpage horizontal (schémas d'un côté, handlers de l'autre) éloignerait chaque schéma de son unique consommateur. Ne pas le retenter sans lire cet argument.
+  - Le refactor de `config-page.tsx` est validé par une preuve d'équivalence du HTML rendu, pas par une relecture. C'est ce qui autorise un découpage de cette taille sans changelog : rien ne change pour l'utilisateur, et ça se démontre.
+  - Trois correctifs sur cinq portent sur des chemins jamais sortis en production (copy d'import, guide UI, valeurs malformées d'un endpoint v4), donc hors changelog. Les deux autres touchent du code livré et deviennent des entrées utilisateur.
+- **ADR** : aucun nouveau. Le refactor ne change aucune décision d'architecture, et l'argument sur `ui.tsx` est un choix de découpage de fichiers, pas un pattern structurant.
+- **Process** :
+  - Cinq des correctifs viennent des reviews automatiques de PR, sur du code déjà relu par un humain. Le cache, la validation legacy et le cast de `unknown` sont trois angles morts classiques de la relecture.
+  - Première contribution externe du dépôt, périmée entre son ouverture et son merge par un changement d'infrastructure de notre côté.
+- **Prochaines étapes** :
+  - Recette manuelle du mode Scalingo Database API sur un vrai compte, condition d'entrée du multi-addon
+  - Auto-hébergement des assets Swagger dans `/static/` pour supprimer la CSP dédiée de `/api/docs`
+  - Tests e2e toujours reportés
