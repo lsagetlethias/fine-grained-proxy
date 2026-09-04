@@ -129,6 +129,38 @@ Deno.test("AC-40.8: le contenu de fond couvre les concepts indispensables", () =
   }
 });
 
+Deno.test("AC-40.18: les codes d'erreur du proxy sont tous documentes", () => {
+  for (
+    const code of [
+      "invalid_request",
+      "invalid_auth_mode",
+      "invalid_body",
+      "unsupported_regex",
+      "missing_key",
+      "invalid_credentials",
+      "scope_denied",
+      "target_forbidden",
+      "token_expired",
+      "payload_too_large",
+      "blob_too_large",
+      "internal_error",
+      "upstream_unreachable",
+      "auth_exchange_failed",
+      "auth_addon_failed",
+    ]
+  ) {
+    assertStringIncludes(doc, code);
+  }
+});
+
+Deno.test("AC-40.19: les trois non-garanties de la politique de sortie sont dites", () => {
+  // Un agent qui construit un blob depuis ce document doit lire ces trois faits ici :
+  // les decouvrir en production coute une fuite de credentials ou un scope contourne.
+  assertStringIncludes(doc, "Query string parameters are not\ninspected");
+  assertStringIncludes(doc, "Redirects are not followed");
+  assertStringIncludes(doc, "are stripped before\nforwarding");
+});
+
 Deno.test("AC-40.8: les six modes d'authentification sont nommes", () => {
   for (
     const mode of ["bearer", "basic", "scalingo-exchange", "header:", "headers", "scalingo-addon"]

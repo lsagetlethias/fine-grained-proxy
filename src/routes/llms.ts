@@ -22,7 +22,10 @@ stripped because the proxy is stateless. Errors produced by FGP itself use the
 JSON shape \`{"error": "...", "message": "..."}\`. Every response carries the
 \`X-FGP-Source\` header: \`upstream\` when the payload comes from the target API,
 \`proxy\` when FGP produced it. Use that header to decide who to blame and whether
-retrying makes sense.
+retrying makes sense. Redirects are not followed: a 3xx from the target reaches
+the caller unchanged, \`Location\` header included, and following it is the
+caller's decision. A blob is bound to one target host, so an automatic redirect
+would silently send the upstream credentials to a host nobody scoped.
 
 Calling a proxied endpoint. Two equivalent transports:
 
@@ -44,6 +47,12 @@ POST:/v1/apps/my-app/scale  exact path, exact method
 *:*                         everything, use with a short TTL only
 \`\`\`
 
+Scopes constrain the method and the path only. **Query string parameters are not
+inspected**: a scope on \`POST:/v1/apps/my-app/scale\` also allows
+\`POST /v1/apps/my-app/scale?force=true\`. Grant a path only when every query
+variant of that path is acceptable. Declaring a scope that carries a \`?\` is
+rejected rather than silently ignored.
+
 Authentication modes, set in the \`auth\` field of the blob:
 
 - \`bearer\`: sends \`Authorization: Bearer {token}\`.
@@ -60,7 +69,12 @@ Authentication modes, set in the \`auth\` field of the blob:
   database per blob.
 
 Auth headers are applied after the caller's own headers, so a consumer can never
-override or neutralize the authentication carried by the blob.
+override or neutralize the authentication carried by the blob. The caller's own
+\`Authorization\`, \`Cookie\` and \`Proxy-Authorization\` headers are stripped before
+forwarding: the product promise is that the consumer does not hold the target's
+credential, and relaying its own would sidestep the scope model. An API needing a
+second credential is served by the \`headers\` mode, which puts it in the blob.
+Hop-by-hop and forwarding headers are stripped too; everything else passes.
 
 Body filters restrict the JSON body of POST, PUT and PATCH requests. A scope
 entry carries \`bodyFilters\`, each with an \`objectPath\` (dot-path, 6 segments
@@ -79,10 +93,13 @@ Error codes produced by FGP (\`X-FGP-Source: proxy\`):
 - 400 \`invalid_request\`: the proxy path has fewer than 2 segments.
 - 400 \`invalid_auth_mode\`: the blob declares an auth mode this instance ignores.
 - 400 \`invalid_body\`: body filters are required but the body is not valid JSON.
+- 400 \`unsupported_regex\`: a scope regex falls outside the accepted dialect.
 - 401 \`missing_key\`: the \`X-FGP-Key\` header is absent.
 - 401 \`invalid_credentials\`: wrong client key, or corrupted or malformed blob.
 - 403 \`scope_denied\`: no scope matches the method, path or body.
+- 403 \`target_forbidden\`: the target host is not a public address.
 - 410 \`token_expired\`: the blob TTL has elapsed.
+- 413 \`payload_too_large\`: the request body exceeds the inspection limit.
 - 414 \`blob_too_large\`: the blob exceeds 4096 characters.
 - 500 \`internal_error\`: unexpected proxy failure.
 - 502 \`upstream_unreachable\`: the target API could not be reached at all.

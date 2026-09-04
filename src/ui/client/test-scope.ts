@@ -79,7 +79,15 @@ export function setupTestScope(
   const verdictSpan = assertElement("test-scope-verdict", HTMLElement);
   const jsonContainer = assertElement("test-scope-json", HTMLElement);
   const scopesTextarea = assertElement("scopes", HTMLTextAreaElement);
+  const queryNote = assertElement("test-query-note", HTMLElement);
   const badge = document.getElementById("test-scope-badge");
+
+  // La note se retire d'elle-meme le jour ou un scope contraint la query : elle est
+  // pilotee par le verdict, pas par une constante a retrouver (§18.4).
+  function updateQueryNote(queryConstrained: boolean): void {
+    const [, rawSearch] = splitPathAndQuery(pathInput.value);
+    queryNote.hidden = rawSearch.length === 0 || queryConstrained;
+  }
 
   function updateBadge(): void {
     if (!badge) return;
@@ -105,6 +113,7 @@ export function setupTestScope(
 
     jsonContainer.textContent = "";
     jsonContainer.classList.add("hidden");
+    updateQueryNote(false);
 
     if (rawScopes.length === 0 || path.length === 0) {
       clearElement(resultsContainer);
@@ -118,26 +127,24 @@ export function setupTestScope(
 
     clearElement(resultsContainer);
     let anyMatch = false;
+    let queryConstrained = false;
 
     // Une seule lecture des scopes, la meme que celle du proxy : c'est ce qui empeche
     // l'interface d'affirmer un refus la ou la production repond 200 (ADR-0009 §4).
     for (let i = 0; i < scopes.length; i++) {
       const scope = scopes[i] as Scope;
-      const matched = checkRequestAccess([scope], method.toUpperCase(), path, body).allowed;
-      if (matched) anyMatch = true;
-      resultsContainer.appendChild(createResultRow(matched, scopeLabel(scopes[i])));
+      const verdict = checkRequestAccess([scope], method.toUpperCase(), path, body);
+      if (verdict.allowed) anyMatch = true;
+      if (verdict.queryConstrained) queryConstrained = true;
+      resultsContainer.appendChild(createResultRow(verdict.allowed, scopeLabel(scopes[i])));
     }
 
-    const [, rawSearch] = splitPathAndQuery(path);
+    updateQueryNote(queryConstrained);
+
     if (!anyMatch) {
       btnTest.disabled = true;
       verdictSpan.textContent = "Proxy : acc\u00e8s refus\u00e9";
       verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
-    } else if (rawSearch.length > 0) {
-      btnTest.disabled = false;
-      verdictSpan.textContent =
-        "Acc\u00e8s autoris\u00e9. La query n'est pas contrainte par les scopes, elle est transmise telle quelle.";
-      verdictSpan.className = "text-sm font-medium text-amber-700 dark:text-amber-300";
     } else {
       btnTest.disabled = false;
       verdictSpan.textContent = "";

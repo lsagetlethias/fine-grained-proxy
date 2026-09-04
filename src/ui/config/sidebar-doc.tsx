@@ -152,6 +152,17 @@ export function DocPanel() {
                   limite : elle porte sur la taille du blob, pas sur son transport.
                 </dd>
               </div>
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">unsupported_regex</code> (400)
+                </dt>
+                <dd>
+                  Une expression r&eacute;guli&egrave;re de ce blob n'est plus autoris&eacute;e :
+                  les groupes quantifi&eacute;s, les backr&eacute;f&eacute;rences et les lookarounds
+                  sont refus&eacute;s. Le blob doit &ecirc;tre r&eacute;g&eacute;n&eacute;r&eacute;
+                  avec un motif plus simple.
+                </dd>
+              </div>
             </dl>
           </div>
 
@@ -190,6 +201,32 @@ export function DocPanel() {
                   <code class="font-mono text-xs">Content-Type</code> vaut bien{" "}
                   <code class="font-mono text-xs">application/json</code>, sinon la requ&ecirc;te
                   est refus&eacute;e en <code class="font-mono text-xs">scope_denied</code>.
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">payload_too_large</code> (413)
+                </dt>
+                <dd>
+                  Le corps de la requ&ecirc;te d&eacute;passe la taille inspectable, 512 Ko, quand
+                  un body filter ou la capture des logs d&eacute;taill&eacute;s est actif. Sans ces
+                  deux fonctions, le corps est transmis en flux et n'est pas plafonn&eacute;.
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="mt-3">
+            <p class="font-medium text-gray-700 dark:text-gray-300">La cible du blob</p>
+            <dl class="mt-1 space-y-2">
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">target_forbidden</code> (403)
+                </dt>
+                <dd>
+                  La cible de ce blob n'est pas une adresse publique. FGP refuse de joindre les
+                  r&eacute;seaux priv&eacute;s, la boucle locale et les adresses de
+                  m&eacute;tadonn&eacute;es. V&eacute;rifiez l'URL cible du blob.
                 </dd>
               </div>
             </dl>
@@ -251,6 +288,17 @@ export function DocPanel() {
             </p>
           </div>
         </details>
+
+        <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">
+          Les param&egrave;tres de query ne sont pas contr&ocirc;l&eacute;s
+        </p>
+        <p class="mt-1">
+          Les scopes contraignent la m&eacute;thode et le chemin, pas les param&egrave;tres de
+          query. Un blob autoris&eacute; sur <code class="font-mono text-xs">/v1/items</code>{" "}
+          accepte{" "}
+          <code class="font-mono text-xs">/v1/items?action=delete</code>. Si votre API cible expose
+          des actions par la query, scopez le chemin le plus &eacute;troitement possible.
+        </p>
 
         <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">
           Tout le reste vient de votre API

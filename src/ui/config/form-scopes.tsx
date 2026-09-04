@@ -1,4 +1,12 @@
-import { CONTROL_H_SM, HINT_CLASS, LABEL_CLASS, SUB_LABEL_CLASS } from "./constants.ts";
+import {
+  ALERT_INFO_CLASS,
+  CONTROL_H_SM,
+  HINT_CLASS,
+  LABEL_CLASS,
+  SUB_LABEL_CLASS,
+} from "./constants.ts";
+import { AlertInfoIcon } from "./icons.tsx";
+
 export function ScopesSection() {
   return (
     <section>
@@ -100,6 +108,13 @@ export function TestScopeSection() {
             />
           </div>
         </div>
+
+        <p id="test-query-note" hidden aria-live="polite" class={ALERT_INFO_CLASS}>
+          <AlertInfoIcon />
+          <span>
+            La query n'est pas contrainte par les scopes : tous les param&egrave;tres passent.
+          </span>
+        </p>
 
         <div id="test-body-section" class="hidden">
           <label
