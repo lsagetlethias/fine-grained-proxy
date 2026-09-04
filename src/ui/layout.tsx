@@ -7,7 +7,7 @@ const FGP_LOGO_SVG =
 const FGP_FAVICON_URI = `data:image/svg+xml,${encodeURIComponent(FGP_LOGO_SVG)}`;
 
 const FGP_DESCRIPTION =
-  "Fine-Grained Proxy — proxy HTTP stateless qui ajoute des tokens fine-grained (scoping par app, par action) devant n'importe quelle API.";
+  "Fine-Grained Proxy : proxy HTTP stateless qui ajoute des tokens fine-grained (scoping par app, par action) devant n'importe quelle API.";
 
 const FGP_URL = "https://fgp-proxy.lsagetlethias.deno.net/";
 
@@ -32,21 +32,22 @@ export function Layout({ children }: { children: Child }) {
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>FGP — Fine-Grained Proxy</title>
+          <title>FGP (Fine-Grained Proxy)</title>
 
           <meta name="description" content={FGP_DESCRIPTION} />
           <meta name="theme-color" content="#4c6ef5" />
           <link rel="canonical" href={FGP_URL} />
           <link rel="icon" type="image/svg+xml" href={FGP_FAVICON_URI} />
+          <link rel="describedby" type="text/markdown" href="/llms.txt" />
 
           <meta property="og:type" content="website" />
           <meta property="og:url" content={FGP_URL} />
-          <meta property="og:title" content="FGP — Fine-Grained Proxy" />
+          <meta property="og:title" content="FGP (Fine-Grained Proxy)" />
           <meta property="og:description" content={FGP_DESCRIPTION} />
           <meta property="og:image" content={FGP_FAVICON_URI} />
 
           <meta name="twitter:card" content="summary" />
-          <meta name="twitter:title" content="FGP — Fine-Grained Proxy" />
+          <meta name="twitter:title" content="FGP (Fine-Grained Proxy)" />
           <meta name="twitter:description" content={FGP_DESCRIPTION} />
 
           <link rel="stylesheet" href="/static/styles.css" />
