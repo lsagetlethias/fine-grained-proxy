@@ -138,6 +138,10 @@ Un AND sur zero conditions est trivialement vrai (vacuous truth). Ca revient a u
 | Champ `encoded` de `/api/share/decode` | 8192 chars | schéma Zod |
 | Corps bufferisé sur le proxy | 512 Ko | uniquement si body filter ou capture detailed |
 | Corps sur `/api/*` | 64 Ko par défaut | 8 Ko decode, 16 Ko share/decode, 4 Ko helpers Scalingo |
+| `queryFilters` par ScopeEntry | 8 max | validation blob, v5 |
+| Valeurs OR par query filter | 16 max | validation blob, v5 |
+| Occurrences d'un paramètre de query évaluées par requête | 4 max | matching, v5 (charge de la requête, pas du blob) |
+| Type `any` sur un query filter | `string` uniquement | validation blob, v5 |
 | `not(wildcard)` | interdit | `isValidObjectValue` |
 | `not(not(...))` | interdit | `isValidObjectValue` |
 | `and([])` | interdit | `isValidObjectValue` |
@@ -273,3 +277,55 @@ Effet sur `/api/share/decode` : 265 Ko d'entrée pour 320 Mo de RSS deviennent 8
 ### 11.6 Ce que ces limites ne font pas
 
 Elles bornent le **coût d'une requête**, jamais le **nombre de requêtes**. La limitation de débit est hors de l'application, pour une raison écrite dans les specs §18.6 et dans les guides de déploiement.
+
+---
+
+## 12. Limites des query filters (v5)
+
+`queryFilters` réutilise l'union `ObjectValue` des body filters (section 9 exceptée sur `any`, ci-dessous) et hérite donc de toutes les limites déjà posées sur cette union : profondeur `and`/`not` à 4 niveaux, combinaisons interdites, dialecte et ancrage des regex. Cette section documente uniquement ce qui est **propre** à `queryFilters` : ses deux plafonds structurels, sa restriction sur `any`, et son plafond d'occurrences, qui est d'une nature différente de tout ce qui précède dans ce document.
+
+### 12.1 `queryFilters` par ScopeEntry
+
+**Valeur : 8 max**, identique au plafond de body filters par scope (section 2), pour la même raison : un scope qui contraint 8 paramètres différents couvre largement les cas réels de pagination, tri, filtrage par statut. Au-delà, c'est un signal qu'il faut scinder en plusieurs scopes plutôt que tout empiler sur un seul.
+
+### 12.2 Valeurs OR par query filter
+
+**Valeur : 16 max**, identique au plafond de body filters (section 3), même union `ObjectValue`, même raison : au-delà de 16 alternatives listées une à une, `stringwildcard` couvre mieux l'intention.
+
+### 12.3 Budgets globaux partagés avec les body filters (ADR-0010)
+
+Les plafonds de dénombrement de l'ADR-0010 (section 11.1 et 11.3 de ce document) sont **globaux au blob**, comptés sur l'union des `bodyFilters` et des `queryFilters`, pas par axe séparément :
+
+- **4 valeurs `regex` au total**, `bodyFilters` et `queryFilters` confondus.
+- **256 `ObjectValue` au total**, toutes portées confondues.
+- **8 éléments maximum par `and`**, où qu'il apparaisse.
+
+Il n'existe pas de budget séparé pour les query filters : un `queryFilter` de type `regex` consomme exactement le même quota qu'un `bodyFilter` de type `regex`. Sans cette règle, `queryFilters` rouvrirait le vecteur que l'ADR-0010 a fermé pour les body filters, simplement déplacé sur un autre champ (interaction documentée explicitement dans l'ADR-0010).
+
+### 12.4 Le type `any` est restreint aux chaînes
+
+**Valeur : `string` uniquement.** `number`, `boolean` et `null`, acceptés par `any` dans les body filters (section 9), sont refusés sur un query filter, à la génération et au déchiffrement.
+
+**Pourquoi.** Un paramètre de query est toujours une chaîne sur le fil. `{"type":"any","value":1}` appliqué à `?page=1` comparerait le nombre `1` (dans le blob) à la chaîne `"1"` (dans la requête), qui ne sont jamais égales : un piège silencieux, invisible à l'auteur au moment où il écrit le filtre, qui produit un scope mort exactement comme le `?` dans un pattern (ADR-0009 §4).
+
+La restriction plutôt que la coercion suit le précédent déjà posé pour `any` sur objets et tableaux (section 11.3 de ce document, ADR-0010 D4) : dans les deux cas, une comparaison implicite dépendrait de quelque chose que l'auteur du blob ne contrôle pas au moment où il écrit la valeur (l'ordre de sérialisation du client dans un cas, la forme exacte que prendra une valeur de query pour un `null` ou un booléen dans l'autre, `?flag`, `?flag=` et `?flag=null` n'ayant pas d'équivalent canonique unique en JSON). Restreindre à `string` supprime la question : ce que l'auteur écrit est exactement ce qui sera comparé.
+
+**Conséquence UI** : le sous-type Texte / Nombre / Booléen / Null du type « Valeur exacte » n'existe pas pour les query filters, y compris dans les conditions imbriquées d'un `and` ou d'un `not`. Un champ texte simple, sans sélecteur.
+
+### 12.5 Occurrences d'un paramètre répété
+
+**Valeur : 4 occurrences évaluées au maximum, par requête et par paramètre.**
+
+**Nature différente de toutes les autres limites de ce document.** Chaque limite précédente, dans ce fichier, borne ce que **l'auteur du blob** peut écrire, et se vérifie donc à la génération (message actionnable) et au déchiffrement (rejet du blob). Le plafond d'occurrences borne ce qu'**un appelant** peut envoyer dans sa requête : un paramètre de query, contrairement à une clé JSON dans un body, peut apparaître plusieurs fois (`?tag=a&tag=b&tag=c`), et chaque occurrence est évaluée indépendamment contre les valeurs du filtre (AND entre occurrences, ADR-0009 §4). Ce facteur multiplicatif n'existe dans aucune donnée du blob : aucun plafond structurel de la section 12.3 ne le couvre, puisqu'il se manifeste uniquement au moment du forward, sur le chemin chaud. Il n'y a donc **pas de message de génération possible** pour cette limite : elle ne peut se vérifier qu'à chaque requête.
+
+**Pourquoi 4.** Choisi par symétrie avec le plafond de 4 valeurs `regex` par blob (ADR-0010 D2) : c'est la même primitive coûteuse, un `queryFilter` de type `regex` appliqué à un paramètre répété, qui motive les deux plafonds. Le pire cas construit délibérément (16 valeurs OR d'un même filtre, dont les 4 `regex` du budget global entier concentrées sur ce seul filtre, appliqué à un paramètre répété 4 fois) donne un ordre de grandeur de 4 × 4 × 2,54 ms ≈ 40 ms, au-dessus du budget D0 isolé (11,6 ms) mais très en dessous des temps qui ont motivé l'ADR-0010 avant durcissement (3 248 ms à 37 900 ms), et surtout **borné** : ni exponentiel, ni dépendant d'une entrée non plafonnée.
+
+**Ce chiffre est un raisonnement d'ordre de grandeur, pas une mesure.** Contrairement aux plafonds de l'ADR-0010, qui reposent sur des benchmarks exécutés et consignés, celui-ci en extrapole les résultats à un axe qui n'existait pas au moment de ces mesures. **Il doit être confirmé par un test de performance dédié avant d'être considéré comme définitif**, avec le même sérieux que l'ADR-0010 a appliqué à chacun de ses propres chiffres. Si la mesure dépasse ce qui est acceptable au regard du critère D0, la variable d'ajustement est ce plafond de 4, pas le critère lui-même.
+
+**Comportement au dépassement : fail-closed.** Au-delà de 4 occurrences d'un paramètre couvert par un `queryFilter`, ce filtre échoue et le `ScopeEntry` qui le porte ne matche pas la requête, quelles que soient les valeurs envoyées. Ce n'est jamais un troncage silencieux (évaluer les 4 premières occurrences et ignorer le reste) : un tel comportement laisserait passer une occurrence non couverte au-delà du plafond, ce qui serait un contournement de scope, pas une limite de charge.
+
+**Portée du plafond : uniforme, indépendante du type de filtre.** Il s'applique identiquement à `any`, `wildcard`, `stringwildcard`, `regex`, `and` et `not` : il ne dépend d'aucune analyse du contenu du filtre, à l'image de la couche 1 de l'ADR-0010 D2 (le plafond de longueur de la valeur testée par une regex), qui ne dépend elle non plus d'aucune analyse du motif et ne peut donc jamais se tromper.
+
+### 12.6 Ce que ces limites ne font pas
+
+Comme celles de la section 11, elles bornent le **coût d'une requête**. Le plafond d'occurrences (12.5) va plus loin que les autres limites de ce document : il borne aussi une forme de **répétition côté appelant** qu'aucune limite précédente n'avait à couvrir, puisque les body filters n'ont pas d'équivalent (une clé JSON ne se répète pas dans un même objet).
