@@ -133,8 +133,10 @@ export function setupImportConfig(authDeps: AuthModeDeps): void {
       const data = await res.json() as DecodeResponse;
       applyDecodedConfig(data, authDeps);
 
-      importStatus.textContent =
-        `Config import\u00e9e, token: ${data.tokenRedacted} (fournir le token pour g\u00e9n\u00e9rer/tester)`;
+      const usesHeaders = typeof data.auth !== "string" && data.auth.type === "headers";
+      importStatus.textContent = usesHeaders
+        ? "Config import\u00e9e. Ressaisissez les valeurs des headers pour g\u00e9n\u00e9rer ou tester."
+        : `Config import\u00e9e, token: ${data.tokenRedacted} (fournir le token pour g\u00e9n\u00e9rer/tester)`;
       importStatus.className = "text-sm font-medium text-green-600 dark:text-green-400";
     } catch {
       importStatus.textContent = "Erreur r\u00e9seau";
