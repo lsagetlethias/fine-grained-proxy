@@ -132,37 +132,60 @@ export function matchBodyFilter(filter: BodyFilter, body: unknown): boolean {
   return filter.objectValue.some((ov) => matchObjectValue(ov, value));
 }
 
+type BodyDecision = "allow" | "skip" | "deny";
+
+function decideBodyFilters(scope: ScopeEntry, body: unknown): BodyDecision {
+  if (!scope.bodyFilters || scope.bodyFilters.length === 0) return "allow";
+  if (body === undefined) return "deny";
+  return scope.bodyFilters.every((f) => matchBodyFilter(f, body)) ? "allow" : "skip";
+}
+
+type PathMatcher = (method: string, path: string) => boolean;
+
+// Ce qui ne depend pas de la forme du chemin, aujourd'hui les filtres de corps, est decide
+// une fois par scope et partage entre les passes de checkRequestAccess. Sans ce partage,
+// l'appelant declenche la seconde passe en envoyant un chemin non canonique et fait payer
+// deux fois le budget d'evaluation calibre par l'ADR-0010 D2.
+function createPathMatcher(scopes: Scope[], body: unknown): PathMatcher {
+  const bodyDecisions: (BodyDecision | undefined)[] = [];
+
+  return (method, path) => {
+    const upperMethod = method.toUpperCase();
+
+    for (let i = 0; i < scopes.length; i++) {
+      const scope = scopes[i];
+
+      if (typeof scope === "string") {
+        const parsed = parseScope(scope);
+        const methodMatch = parsed.methods.includes("*") || parsed.methods.includes(upperMethod);
+        if (methodMatch && matchPath(parsed.pattern, path)) return true;
+        continue;
+      }
+
+      const methodMatch = scope.methods.some((m) => m === "*" || m.toUpperCase() === upperMethod);
+      if (!methodMatch) continue;
+      if (!matchPath(scope.pattern, path)) continue;
+
+      let decision = bodyDecisions[i];
+      if (decision === undefined) {
+        decision = decideBodyFilters(scope, body);
+        bodyDecisions[i] = decision;
+      }
+      if (decision === "allow") return true;
+      if (decision === "deny") return false;
+    }
+
+    return false;
+  };
+}
+
 export function checkAccess(
   scopes: Scope[],
   method: string,
   path: string,
   body?: unknown,
 ): boolean {
-  const upperMethod = method.toUpperCase();
-
-  for (const scope of scopes) {
-    if (typeof scope === "string") {
-      const parsed = parseScope(scope);
-      const methodMatch = parsed.methods.includes("*") || parsed.methods.includes(upperMethod);
-      if (methodMatch && matchPath(parsed.pattern, path)) return true;
-    } else {
-      const methodMatch = scope.methods.some((m) => m === "*" || m.toUpperCase() === upperMethod);
-      if (!methodMatch) continue;
-      if (!matchPath(scope.pattern, path)) continue;
-
-      if (!scope.bodyFilters || scope.bodyFilters.length === 0) {
-        return true;
-      }
-
-      if (body === undefined) return false;
-
-      if (scope.bodyFilters.every((f) => matchBodyFilter(f, body))) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return createPathMatcher(scopes, body)(method, path);
 }
 
 // --- ADR-0009 §3 et §4 : forme unique d'autorisation ---
@@ -230,13 +253,14 @@ export function checkRequestAccess(
     return { allowed: false, denialReason: "invalid_path", queryConstrained: false };
   }
 
-  const rawAllowed = checkAccess(scopes, method, rawPath, body);
-  if (!rawAllowed) {
+  const matchesPath = createPathMatcher(scopes, body);
+
+  if (!matchesPath(method, rawPath)) {
     return { allowed: false, denialReason: "path", queryConstrained: false };
   }
   // Le controle porte sur toutes les formes plausibles, l'emission sur la forme brute :
   // ajouter une forme ne peut que reduire l'ensemble autorise (ADR-0009 §3).
-  if (canonical !== rawPath && !checkAccess(scopes, method, canonical, body)) {
+  if (canonical !== rawPath && !matchesPath(method, canonical)) {
     return { allowed: false, denialReason: "path_encoded", queryConstrained: false };
   }
   return { allowed: true, queryConstrained: false };
