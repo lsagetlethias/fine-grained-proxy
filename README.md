@@ -23,11 +23,16 @@ Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de gen
 | `SCALINGO_API_URL` | non | URL de l'API Scalingo | `https://api.osc-fr1.scalingo.com` |
 | `SCALINGO_AUTH_URL` | non | URL du service auth Scalingo | `https://auth.scalingo.com` |
 | `FGP_GITHUB_REPO` | non | Repo GitHub (`owner/name`) pour la resolution du SHA de build (utile pour les forks sans git) | auto-detecte via git remote ou `lsagetlethias/fine-grained-proxy` |
+| `FGP_EGRESS_ALLOW_PRIVATE` | non | **Interrupteur de developpement.** `1` desactive le refus des destinations non publiques. Voir l'avertissement ci-dessous. | off |
+| `FGP_TRUSTED_PROXY_HOPS` | non | Nombre de proxys de confiance en amont, pour lire `X-Forwarded-For`. `0` ignore l'en-tete et utilise l'adresse du pair | `0` |
 | `FGP_LOGS_ENABLED` | non | Kill switch feature `/logs` (`1` active les routes `/logs` + `/logs/stream` et la capture, sinon 404) | off |
 | `FGP_LOGS_BUFFER_NETWORK` | non | Taille du ring buffer network par blob | `50` |
 | `FGP_LOGS_BUFFER_DETAILED` | non | Taille du ring buffer detailed (body chiffre) par blob | `10` |
 | `FGP_LOGS_INACTIVITY_MIN` | non | Minutes d'inactivite avant purge du buffer d'un blob | `10` |
 | `FGP_LOGS_DETAILED_MAX_KB` | non | Taille max du body capture en detailed (KB) avant troncature | `32` |
+
+> **`FGP_EGRESS_ALLOW_PRIVATE=1` ne doit jamais etre actif en production.**
+> Il desactive la classification des destinations, donc la garantie G1 de la politique de sortie. L'instance redevient exactement la SSRF non authentifiee que cette politique corrige : n'importe qui peut lui faire emettre des requetes vers le reseau prive de l'hebergeur, service de metadonnees compris, et en recuperer le corps de reponse. Il existe pour le developpement local et la suite de tests, rien d'autre. Le serveur ecrit un avertissement au demarrage quand il est actif.
 
 ### Lancer en dev
 
@@ -113,7 +118,6 @@ Retourne la configuration complete avec le token redacte. Utile pour inspecter o
 | `/api/generate` | POST | Generation d'URL FGP. Champ `key` optionnel pour fournir sa propre cle client (24 a 256 caracteres) |
 | `/api/list-apps` | POST | Helper Scalingo : listing des apps |
 | `/api/list-addons` | POST | Helper Scalingo : listing des bases de donnees d'une app |
-| `/api/test-scope` | POST | Test scope matching : verifie si methode + path + body est autorise par des scopes |
 | `/api/test-proxy` | POST | Test end-to-end : appel reel vers l'API cible avec verification scopes et body filters |
 | `/api/decode` | POST | Decode un blob chiffre avec sa cle, retourne la config (token redacte) |
 | `/api/share/encode` | POST | Encode une config (target, auth, scopes, TTL, body filters) en string gzip+base64url pour partage |
@@ -153,6 +157,17 @@ Quatre modes string (blob v2/v3) et deux modes structures (blob v4, champ `auth`
 | `{ type: "scalingo-addon" }` | AuthSpec | Token d'addon Scalingo obtenu en trois temps et renouvele automatiquement (1h). Affiche « Scalingo Database API » dans l'UI |
 
 Les blobs v2 et v3 restent lisibles sans changement : le passage en v4 n'intervient que si `auth` est un objet. Voir [ADR 0008](docs/adr/0008-auth-structuree-blob-v4.md).
+
+### Politique de sortie
+
+Toute requete sortante emise par FGP passe par un point de sortie unique qui applique quatre garanties (ADR-0009) : destination publique uniquement, chemin autorise egal au chemin emis, authentification issue du blob et jamais de l'appelant, et un etat de la query dit explicitement par l'outillage.
+
+Consequences visibles :
+
+- Les cibles non publiques (loopback, reseaux prives, link-local, metadonnees) sont refusees en 403 `target_forbidden`.
+- Les redirections ne sont plus suivies : un 3xx amont est forwarde tel quel.
+- Les en-tetes `Authorization` et `Cookie` de l'appelant ne sont plus transmis. Pour envoyer un `Authorization` fixe a l'upstream, le declarer dans l'AuthSpec `headers` du blob (v4).
+- **Les parametres de query ne sont pas contraints par les scopes.** Un blob scope sur `/v1/items` accepte `/v1/items?action=delete`. C'est une dette datee, pas un non-goal : voir `docs/specs.md` section 18.4.
 
 ### Scopes METHOD:PATH + body filters
 
@@ -232,7 +247,7 @@ Feature opt-in gatee par `FGP_LOGS_ENABLED=1`. Activee par blob via le champ `lo
 - [Criteres d'acceptation](docs/acceptance-criteria.md)
 - [Limites fonctionnelles body filters et auth structuree](docs/limits.md)
 - [Changelog](docs/changelog.md)
-- [Architecture Decision Records](docs/adr/)
+- [Architecture Decision Records](docs/adr/), dont [ADR-0009 politique de sortie](docs/adr/0009-politique-de-sortie-du-proxy.md) et [ADR-0010 limites de ressources](docs/adr/0010-politique-limites-ressources.md)
 - [Guide deploiement Deno Deploy](docs/deno-deploy.md)
 - [Guide deploiement Scalingo](docs/scalingo-deploy.md)
 

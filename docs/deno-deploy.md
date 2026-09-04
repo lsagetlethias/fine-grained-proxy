@@ -44,10 +44,31 @@ Configurer dans la console Deno Deploy ([console.deno.com](https://console.deno.
 | `SCALINGO_API_URL` | Non | URL API Scalingo (defaut: `https://api.osc-fr1.scalingo.com`) |
 | `SCALINGO_AUTH_URL` | Non | URL auth Scalingo (defaut: `https://auth.scalingo.com`) |
 | `FGP_GITHUB_REPO` | Non | Repo GitHub `owner/name` pour le SHA de build (defaut: `lsagetlethias/fine-grained-proxy`) |
+| `FGP_EGRESS_ALLOW_PRIVATE` | Non | **Ne jamais activer en production.** Voir l'avertissement ci-dessous |
+| `FGP_TRUSTED_PROXY_HOPS` | Non | Nombre de proxys de confiance en amont pour lire `X-Forwarded-For` (defaut `0`, l'en-tete est ignore) |
 
 `PORT` n'est pas necessaire (gere par Deno Deploy).
 
 > **SHA de build** : git n'est pas disponible sur Deno Deploy. Le script `build:version` fallback sur l'API GitHub pour resoudre le SHA du dernier commit. Si vous deployez un fork, positionnez `FGP_GITHUB_REPO` sur votre repo pour que le lien dans le footer pointe au bon endroit.
+
+> **`FGP_EGRESS_ALLOW_PRIVATE=1` annule la garantie de destination.**
+> Il desactive le refus des adresses non publiques. Une instance qui tourne avec cet interrupteur redevient une SSRF non authentifiee : n'importe qui lui fait emettre des requetes vers le reseau prive de l'hebergeur, service de metadonnees compris, et en recupere la reponse. Il existe pour le developpement local et les tests. Sur une instance publique, il ne doit pas etre positionne.
+
+## Limitation de debit
+
+**FGP n'implemente aucune limitation de debit, et c'est un choix documente** (ADR-0010). Un limiteur en memoire du processus est quasi inoperant sur Deno Deploy : l'etat est par isolate, les isolates sont ephemeres, et les requetes se repartissent entre eux. Livrer un limiteur qui ne fonctionne que sur une cible de deploiement sur deux donnerait une fausse couverture, ce qui est pire que pas de couverture.
+
+**La borne doit donc etre posee devant l'instance**, dans un CDN ou un WAF.
+
+L'ordre de grandeur qui justifie de ne pas s'en passer : avant les correctifs de l'ADR-0010, **1 900 requetes suffisaient a epuiser les 20 heures de CPU mensuelles du plan gratuit**. Les correctifs ont supprime le cout unitaire aberrant, ils n'ont pas supprime le besoin d'une borne sur le nombre de requetes. Une vingtaine d'heures d'inondation suffit toujours a consommer le quota mensuel.
+
+A configurer en frontal :
+
+- une limite par IP sur `/api/*`, ou vivent les endpoints de generation et les helpers ;
+- une limite plus large sur la route proxy `/{blob}/*`, qui porte le trafic utile ;
+- un plafond de taille de requete, en complement des plafonds applicatifs.
+
+**Le filtrage d'egress au niveau reseau** est par ailleurs la seule defense reelle contre le rebinding DNS, que la politique de sortie ne ferme pas (specs section 18.2). Si votre frontal ou votre reseau le permet, restreindre les destinations sortantes de l'instance complete utilement la politique applicative.
 
 ## Deployer via CLI
 

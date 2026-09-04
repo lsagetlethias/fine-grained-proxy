@@ -46,6 +46,17 @@ scalingo --app fgp-proxy env-set SCALINGO_AUTH_URL="https://auth.scalingo.com"
 
 `PORT` est automatiquement fourni par Scalingo.
 
+Deux variables optionnelles mais importantes :
+
+```bash
+# Nombre de proxys de confiance en amont, pour que les logs voient la vraie IP.
+# Defaut 0 : X-Forwarded-For est ignore et l'adresse du pair est utilisee.
+scalingo --app fgp-proxy env-set FGP_TRUSTED_PROXY_HOPS="1"
+```
+
+> **Ne jamais positionner `FGP_EGRESS_ALLOW_PRIVATE=1` sur une instance publique.**
+> Cet interrupteur desactive le refus des destinations non publiques, donc la garantie de destination de la politique de sortie. L'instance redevient une SSRF non authentifiee : n'importe qui lui fait emettre des requetes vers le reseau prive de l'hebergeur, service de metadonnees compris, et en recupere la reponse. Il existe pour le developpement local et les tests.
+
 ### 5. Optionnel : fixer la version Deno
 
 Creer un fichier `.deno-version` a la racine :
@@ -80,6 +91,24 @@ Le log de build doit montrer le build des assets avant le demarrage du dyno :
 curl https://fgp-proxy.osc-fr1.scalingo.io/healthz
 # {"status":"ok"}
 ```
+
+## Limitation de debit
+
+**FGP n'implemente aucune limitation de debit** (ADR-0010). La decision tient a la portabilite : un limiteur en memoire est inoperant sur Deno Deploy, ou l'etat est par isolate. Livrer un limiteur efficace sur une cible sur deux donnerait une fausse couverture.
+
+**En auto-hebergement, la situation est plus favorable** : le processus est unique et durable, donc un `limit_req` nginx en frontal fonctionne reellement, et un limiteur en processus fonctionnerait aussi si le besoin se confirmait.
+
+Configuration recommandee en frontal, sur le reverse proxy qui expose l'app :
+
+- `limit_req` par IP sur `/api/*` ;
+- une zone plus large sur la route proxy `/{blob}/*` ;
+- un plafond de taille de corps, en complement des plafonds applicatifs.
+
+**Une note qui compte pour cette cible** : sur un processus unique, une requete emballee n'est pas une requete lente, c'est une **indisponibilite totale**. Le runtime est mono-thread, toute milliseconde de CPU synchrone consommee par une requete est une milliseconde pendant laquelle aucune autre n'avance. Les plafonds de l'ADR-0010 bornent le cout d'une requete precisement pour cette raison, mais ils ne bornent pas leur nombre.
+
+Ordre de grandeur : avant ces correctifs, 1 900 requetes suffisaient a epuiser 20 heures de CPU.
+
+**Le filtrage d'egress au niveau reseau** complete par ailleurs la politique de sortie, et reste la seule defense reelle contre le rebinding DNS (specs section 18.2).
 
 ## Risques et limites
 

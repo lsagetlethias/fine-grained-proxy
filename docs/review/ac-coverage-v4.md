@@ -161,6 +161,8 @@ Convention appliquee : virgule dans les noms de test (ils portent deja le deux-p
 | AC-40.15 | Pas de `Link` sur une reponse forwardee | `llms-txt` (testi) | **OK** |
 | AC-40.16 | Paths a un seul segment, comportement observe | `llms-txt` (testi, x2) | **OK** |
 | AC-40.17 | `/llms.txt` durci | `llms-txt` (testi) + `security-headers` | **OK** |
+| AC-40.18 | Les 15 codes d'erreur du proxy sont dans `/llms.txt` | `llms-txt` (testu) | **OK** |
+| AC-40.19 | Les 3 non-garanties de sortie sont dites dans `/llms.txt` | `llms-txt` (testu) | **OK** |
 
 ## AC-41 : Headers de securite et transparence
 

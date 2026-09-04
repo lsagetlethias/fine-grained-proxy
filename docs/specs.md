@@ -562,12 +562,17 @@ Les messages des erreurs FGP (`X-FGP-Source: proxy`) sont **volontairement gén�
 | **401 Unauthorized** | Déchiffrement échoué (clé invalide ou blob corrompu) | `{"error": "invalid_credentials", "message": "Unable to decrypt token"}` |
 | **403 Forbidden** | La méthode/path/body ne matchent aucun scope | `{"error": "scope_denied", "message": "Insufficient permissions for this action"}` |
 | **403 Forbidden** | Body filters requis mais content-type non JSON | `{"error": "scope_denied", "message": "Body filters require application/json content type"}` |
+| **400 Bad Request** | Le blob porte une regex hors du dialecte autorisé (ADR-0010) | `{"error": "unsupported_regex", "message": "..."}` |
+| **403 Forbidden** | La cible du blob n'est pas une destination publique (ADR-0009) | `{"error": "target_forbidden", "message": "Target is not reachable by policy"}` |
+| **413 Payload Too Large** | Corps de requête trop volumineux pour être inspecté, quand un body filter ou la capture detailed est actif | `{"error": "payload_too_large", "message": "Request body is too large to inspect"}` |
 | **410 Gone** | Le TTL du blob est expiré | `{"error": "token_expired", "message": "This token has expired"}` |
 | **414 URI Too Long** | Blob base64url > 4 KB | `{"error": "blob_too_large", "message": "Encrypted blob exceeds maximum size"}` |
 | **500 Internal Server Error** | Exception non catchée dans le proxy (bug FGP) | `{"error": "internal_error", "message": "Internal proxy error"}` |
 | **502 Bad Gateway** | L'API cible est injoignable (fetch throw : DNS, timeout, connexion refusée, TLS) | `{"error": "upstream_unreachable", "message": "Target API is unreachable"}` |
 | **502 Bad Gateway** | Mode `scalingo-exchange` : l'échange du token de compte contre un bearer a échoué | `{"error": "auth_exchange_failed", "message": "Unable to exchange Scalingo token"}` |
 | **502 Bad Gateway** | Mode `scalingo-addon` : FGP n'a pas pu obtenir de token d'addon (exchange refusé, API Scalingo en erreur ou injoignable) | `{"error": "auth_addon_failed", "message": "Unable to obtain addon token"}` |
+
+`unsupported_regex` est volontairement distinct de `invalid_credentials`. Un blob dont une regex sort du dialecte est parfaitement déchiffrable : le signaler comme un problème d'identifiants enverrait son porteur vérifier sa clé, ce qui est un diagnostic mensonger. Il doit régénérer son blob, pas retrouver sa clé.
 
 Trois 502 sont légitimes côté proxy, et elles ne se recouvrent pas :
 
@@ -585,6 +590,14 @@ Les endpoints internes du proxy qui tapent eux-mêmes des APIs externes (ex : `P
 
 - Échec réseau (fetch throw) → 502 `upstream_unreachable` + `X-FGP-Source: proxy`.
 - Échec d'exchange token (pour `list-apps` et `list-addons`) → 401 `token_exchange_failed` + `X-FGP-Source: proxy`.
+
+Trois codes supplémentaires apparaissent sur ces endpoints. Les deux premiers leur sont propres, ils n'existent pas sur la route proxy. Le troisième vit sur les deux surfaces, avec un plafond différent de chaque côté (§18.5) :
+
+| Status | Code | Endpoint | Condition |
+|--------|------|----------|-----------|
+| 400 | `invalid_target` | `/api/generate`, `/api/list-apps`, `/api/list-addons` | La cible ne respecte pas la forme exigée, ou son hôte n'est pas public (ADR-0009) |
+| 400 | `invalid_scope` | `/api/generate` | Un pattern de scope porte un `?`, ce que le langage de scopes ne contraint pas (cf. §18.4) |
+| 413 | `payload_too_large` | tout `/api/*` | Corps de requête au-delà du plafond de la route |
 
 Ne pas confondre `token_exchange_failed` (401, endpoints internes `/api/list-apps` et `/api/list-addons`) avec `auth_exchange_failed` (502, proxy principal en mode `scalingo-exchange`). Les deux décrivent un échange de token Scalingo qui a échoué, mais ils ne s'adressent pas au même public : le premier dit à l'utilisateur de l'UI que **son** token est mauvais, au moment où il le saisit, et il peut le corriger. Le second dit au consommateur d'une URL FGP que le proxy n'a pas pu s'authentifier pour lui, ce qui n'est pas de son ressort et ne se corrige pas côté client. Deux publics, deux statuts, deux codes.
 
@@ -607,11 +620,12 @@ Le proxy vérifie dans cet ordre, et renvoie la première erreur rencontrée :
 6. Validité du mode d'auth → 400 `invalid_auth_mode` (`X-FGP-Source: proxy`)
 7. Parsing du body (si body filters requis) → 400 `invalid_body` ou 403 `scope_denied` (`X-FGP-Source: proxy`)
 8. Vérification du scope (méthode + path + body) → 403 `scope_denied` (`X-FGP-Source: proxy`)
-9. Obtention des credentials upstream → 502 `auth_exchange_failed` en mode `scalingo-exchange`, 502 `auth_addon_failed` en mode `scalingo-addon` (`X-FGP-Source: proxy`)
-10. Forward vers l'API cible :
+9. Application de la politique de sortie sur la cible du blob (§18) → 403 `target_forbidden` (`X-FGP-Source: proxy`)
+10. Obtention des credentials upstream → 502 `auth_exchange_failed` en mode `scalingo-exchange`, 502 `auth_addon_failed` en mode `scalingo-addon` (`X-FGP-Source: proxy`)
+11. Forward vers l'API cible :
     - Si `fetch` throw (réseau) → 502 `upstream_unreachable` (`X-FGP-Source: proxy`)
     - Sinon → status/body/headers upstream forwardés transparents (`X-FGP-Source: upstream`)
-11. Exception inattendue à n'importe quelle étape → 500 `internal_error` via `app.onError` (`X-FGP-Source: proxy`)
+12. Exception inattendue à n'importe quelle étape → 500 `internal_error` via `app.onError` (`X-FGP-Source: proxy`)
 
 L'obtention des credentials intervient **après** la vérification des scopes : un appelant hors scope ne doit jamais provoquer d'appel réseau vers Scalingo.
 
@@ -659,7 +673,6 @@ Le mode `scalingo-addon` ajoute un **second cache**, indépendant du premier, po
 | `/api/share/decode` | POST | Décode une configuration publique partageable |
 | `/api/list-apps` | POST | Helper Scalingo : listing des apps via token exchange |
 | `/api/list-addons` | POST | Helper Scalingo : listing des bases de données d'une app pour en sélectionner une (cf. §12.8) |
-| `/api/test-scope` | POST | Test de scopes : vérifie si une requête (méthode + path + body) est autorisée par un jeu de scopes |
 | `/api/test-proxy` | POST | Test end-to-end : rejoue une requête réelle vers l'API cible avec la configuration en cours |
 | `/api/openapi.json` | GET | Spec OpenAPI 3.0 (auto-générée depuis les schemas Zod) |
 | `/api/docs` | GET | Swagger UI (documentation interactive) |
@@ -798,11 +811,21 @@ Le comportement singleflight est inchangé : quand plusieurs requêtes concurren
 
 ### 11.2 Headers de requête
 
-Le proxy forward tous les headers du client vers la cible, sauf :
-- `X-FGP-Key` (consommé par le proxy, jamais transmis à la cible)
-- `Host` (supprimé pour laisser le runtime résoudre le bon host)
+Le proxy forward les headers du client vers la cible, **sauf cinq classes** retirées systématiquement (ADR-0009, garantie G3). Une denylist par classe, et non une allowlist, parce qu'il n'existe pas de liste finie d'en-têtes utiles à toutes les APIs : `Accept`, `Range`, `If-None-Match`, `Idempotency-Key` et l'infini des en-têtes propriétaires doivent passer.
 
-Le header `Authorization` (ou le header custom) est défini selon le mode d'auth.
+| Classe | En-têtes | Raison |
+|--------|----------|--------|
+| Contrôle FGP | `X-FGP-Key`, `X-FGP-Blob`, tout `X-FGP-*` | Appartiennent au protocole du proxy, pas à l'upstream |
+| Hop-by-hop | `Connection` et ceux qu'il nomme, `Keep-Alive`, `Proxy-*`, `TE`, `Trailer`, `Transfer-Encoding`, `Upgrade` | Aucun proxy conforme ne les relaie (RFC 9110 §7.6.1). C'est aussi la matière première du request smuggling. |
+| Authentification de l'appelant | `Authorization`, `Cookie` | Voir ci-dessous |
+| Provenance | `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Real-IP`, `Forwarded` | FGP n'en pose aucun et n'en relaie aucun |
+| Host | `Host` | Supprimé pour laisser le runtime résoudre le bon hôte |
+
+**Pourquoi `Authorization` et `Cookie` de l'appelant ne passent plus.** La promesse de FGP est que l'appelant ne détient pas le credential de l'API cible. Laisser l'appelant poser son propre `Authorization` sur une requête dont le mode d'auth ne l'écrase pas (`header:{name}`, mode `headers`) permet d'atteindre l'upstream avec une identité que le blob n'a jamais accordée, sur une API qui accepte plusieurs schémas d'authentification. C'est une escalade de privilège qui contourne entièrement le modèle de scopes.
+
+**La porte de sortie légitime existe déjà** : qui a besoin d'envoyer un `Authorization` fixe à l'upstream le déclare dans l'AuthSpec `headers` du blob (v4, §6.3). La valeur vit alors dans le blob, chiffrée, au lieu d'être posée par l'appelant. C'est précisément ce pour quoi l'ADR-0008 a été écrit.
+
+Ordre d'application : les headers d'auth issus du blob écrasent ceux de l'appelant, puis le strip passe en dernier et écrase tout.
 
 ### 11.3 Headers de réponse
 
@@ -885,44 +908,27 @@ Pour `not` et `and`, l'UI propose des sous-types (exact, glob, existe) pour comp
 
 ### 12.5 Test de scopes (UI)
 
-L'UI propose une section dépliable "Tester un scope" sous les body filters. Elle permet de vérifier en temps réel si une requête (méthode + path + body optionnel) est autorisée par les scopes configurés.
+L'UI propose une section dépliable "Tester un scope" sous les body filters. Elle permet de vérifier si une requête (méthode + path + body optionnel) est autorisée par les scopes configurés.
 
 #### Fonctionnement
 
 1. **Highlight temps réel** : à mesure que l'utilisateur tape un path et sélectionne une méthode, les scopes matchant sont mis en surbrillance visuellement (indicateurs ✓/✗ par scope).
-2. **Run** : un bouton "Tester" envoie la requête de test à l'API `POST /api/test-scope` pour un résultat détaillé incluant les body filters.
+2. **Évaluation locale** : le test s'exécute **dans le navigateur**, sur la même fonction d'autorisation que celle du proxy. Il n'y a pas d'appel réseau.
 3. **Body JSON** : un textarea JSON optionnel (affiché pour POST/PUT/PATCH) permet de tester les body filters.
 
-#### API `POST /api/test-scope`
+#### `POST /api/test-scope` est supprimé
 
-**Input** :
+**Changement de contrat public.** La route figurait dans l'OpenAPI, le README, ces specs et `/llms.txt`. Elle n'avait aucun appelant dans le produit : l'UI faisait déjà son test dans le navigateur en important directement la fonction d'autorisation. Maintenir une copie serveur d'une logique que le produit exécute côté client, c'était payer une surface d'attaque publique et non authentifiée pour zéro valeur (ADR-0010 D1).
 
-```json
-{
-  "method": "string",
-  "path": "string",
-  "scopes": "Scope[]",
-  "body": "unknown (optionnel)"
-}
-```
+Un intégrateur tiers qui l'aurait câblée doit migrer vers `POST /api/test-proxy`, qui teste la configuration de bout en bout, ou reproduire la vérification chez lui.
 
-**Output** :
+#### Une seule fonction d'autorisation
 
-```json
-{
-  "allowed": "boolean",
-  "results": [
-    {
-      "index": "number",
-      "scope": "Scope",
-      "matched": "boolean",
-      "methodMatch": "boolean",
-      "pathMatch": "boolean",
-      "bodyMatch": "boolean | null"
-    }
-  ]
-}
-```
+Le testeur de scopes **mentait**, et pas par accident de code : il possédait sa propre lecture des scopes, en parallèle de celle du proxy. Sur `/v1/items?action=delete`, il répondait « Accès refusé » là où la production répondait 200. Un outil de vérification qui se trompe dans le sens permissif est pire que pas d'outil.
+
+Le correctif est structurel : **une seule fonction d'autorisation**, exportée par `src/middleware/scopes.ts`, appelée par le proxy et par le highlight client. Elle prend le chemin brut avec sa query éventuelle, applique la règle des deux formes (§18.3), et retourne un verdict dont un champ indique si la query est contrainte. Trois lectures des scopes ne peuvent pas rester d'accord dans le temps, une seule ne peut pas diverger.
+
+Ce champ vaut aujourd'hui toujours « query non contrainte » (§18.4). L'UI doit le refléter, et ne jamais afficher un refus fondé sur une query.
 
 #### Labels UI (copy)
 
@@ -936,6 +942,9 @@ L'UI propose une section dépliable "Tester un scope" sous les body filters. Ell
 | Bouton | "Tester" |
 | Résultat autorisé | "Accès autorisé" (vert) |
 | Résultat refusé | "Accès refusé" (rouge) |
+| Note query, affichée dès que le chemin de test contient un `?` | « La query n'est pas contrainte par les scopes : tous les paramètres passent. » |
+
+La note sur la query est **permanente tant que `queryFilters` n'est pas livré** (§18.4). Elle existe parce que l'ancien testeur affirmait le contraire et refusait des requêtes que la production acceptait.
 
 ### 12.6 Sécurité de l'UI
 
@@ -1228,8 +1237,9 @@ La section se compose de trois blocs, dans cet ordre :
 | Libellé du `<summary>` | « Les erreurs de FGP » |
 | Sous-titre du groupe 1 | « La clé ou le blob » |
 | Sous-titre du groupe 2 | « Le périmètre du blob » |
-| Sous-titre du groupe 3 | « FGP n'a pas pu joindre l'API cible » |
-| Sous-titre du groupe 4 | « Anomalies » |
+| Sous-titre du groupe 3 | « La cible du blob » |
+| Sous-titre du groupe 4 | « FGP n'a pas pu obtenir de credentials ou joindre l'API cible » |
+| Sous-titre du groupe 5 | « Anomalies » |
 
 **Groupe 1, « La clé ou le blob »** :
 
@@ -1238,6 +1248,7 @@ La section se compose de trois blocs, dans cet ordre :
 | `missing_key` (401) | « L'en-tête `X-FGP-Key` est absent de la requête. Sans la clé client, le blob ne peut pas être déchiffré. » |
 | `invalid_credentials` (401) | « Le déchiffrement a échoué. La clé ne correspond pas à ce blob, le blob a été tronqué ou modifié, ou il a été généré sur une autre instance FGP. » |
 | `blob_too_large` (414) | « Le blob dépasse 4 Ko. Réduisez le nombre de scopes, de body filters ou de headers d'authentification. Le mode en-tête ne contourne pas cette limite : elle porte sur la taille du blob, pas sur son transport. » |
+| `unsupported_regex` (400) | « Une expression régulière de ce blob n'est plus autorisée : les groupes quantifiés, les backréférences et les lookarounds sont refusés. Le blob doit être régénéré avec un motif plus simple. » |
 
 **Groupe 2, « Le périmètre du blob »** :
 
@@ -1246,8 +1257,15 @@ La section se compose de trois blocs, dans cet ordre :
 | `scope_denied` (403) | « La méthode ou le chemin demandé ne correspond à aucun scope du blob. Si des body filters sont configurés, le contenu de la requête peut aussi être en cause. La section « Tester un scope » rejoue le cas sans consommer d'appel. » |
 | `token_expired` (410) | « Le TTL du blob est dépassé. Une URL expirée ne se prolonge pas, il faut en générer une nouvelle. » |
 | `invalid_body` (400) | « Des body filters sont configurés mais le corps de la requête n'est pas du JSON valide. Vérifiez aussi que l'en-tête `Content-Type` vaut bien `application/json`, sinon la requête est refusée en `scope_denied`. » |
+| `payload_too_large` (413) | « Le corps de la requête dépasse la taille inspectable, 512 Ko, quand un body filter ou la capture des logs détaillés est actif. Sans ces deux fonctions, le corps est transmis en flux et n'est pas plafonné. » |
 
-**Groupe 3, « FGP n'a pas pu obtenir de credentials ou joindre l'API cible »** :
+**Groupe 3, « La cible du blob »** :
+
+| Code et status | Texte de remédiation |
+|----------------|----------------------|
+| `target_forbidden` (403) | « La cible de ce blob n'est pas une adresse publique. FGP refuse de joindre les réseaux privés, la boucle locale et les adresses de métadonnées. Vérifiez l'URL cible du blob. » |
+
+**Groupe 4, « FGP n'a pas pu obtenir de credentials ou joindre l'API cible »** :
 
 | Code et status | Texte de remédiation |
 |----------------|----------------------|
@@ -1256,11 +1274,22 @@ La section se compose de trois blocs, dans cet ordre :
 | `auth_exchange_failed` (502) | « Mode Scalingo API : impossible de s'authentifier auprès de Scalingo. Le token de compte du blob est invalide ou révoqué, ou l'API d'authentification Scalingo est indisponible. » |
 | `auth_addon_failed` (502) | « Mode Scalingo Database API : impossible d'obtenir un token de base de données. Le token de compte est invalide, ou il n'a pas accès à la base configurée dans ce blob. » |
 
-**Groupe 4, « Anomalies »** : trois codes rares, regroupés en une seule entrée pour ne pas allonger la liste.
+**Groupe 5, « Anomalies »** : trois codes rares, regroupés en une seule entrée pour ne pas allonger la liste.
 
 | Élément | Texte |
 |---------|-------|
 | Entrée unique | « `invalid_request` (400) quand l'URL ne contient pas de chemin après le blob, `invalid_auth_mode` (400) quand le mode d'authentification du blob n'est pas reconnu par cette instance, et `internal_error` (500) qui signale un bug de FGP et mérite un rapport. » |
+
+#### Bloc 2 bis : la query n'est pas contrainte (visible)
+
+À placer sous la liste des codes, hors du `<details>`, parce que ce n'est pas une erreur mais une absence de refus, et que personne ne la cherchera dans une liste de codes.
+
+| Élément | Texte |
+|---------|-------|
+| Titre du bloc | « Les paramètres de query ne sont pas contrôlés » |
+| Texte | « Les scopes contraignent la méthode et le chemin, pas les paramètres de query. Un blob autorisé sur `/v1/items` accepte `/v1/items?action=delete`. Si votre API cible expose des actions par la query, scopez le chemin le plus étroitement possible. » |
+
+Ce bloc disparaît le jour où `queryFilters` est livré (§18.4). Tant qu'il est là, il dit la vérité opérationnelle du produit à l'endroit où quelqu'un construit un blob en croyant le restreindre.
 
 #### Bloc 3 : « Tout le reste vient de votre API » (visible)
 
@@ -1323,6 +1352,18 @@ La distinction n'est pas cosmétique : « notez cette clé maintenant » adress�
 
 Traitement visuel : même registre que l'avertissement de mutualisation, pas plus fort. C'est une consigne, pas une alerte de sécurité.
 
+### 12.13 Blocs d'alerte : pas de titre
+
+**Règle confirmée** : un bloc d'alerte n'a pas de titre. Le niveau est porté par l'icône et la couleur, le texte dit ce qui se passe.
+
+Le titre « Attention » en gras a donc disparu de l'encadré de la clé client, et ne doit pas revenir. Il ne portait aucune information : c'est une étiquette de catégorie, pas un contenu, exactement le même défaut que « cliquez ici » sur un lien (§12.11, règle 1). Il coûtait une troisième ligne, ce qui faisait sortir le bloc de son budget de hauteur.
+
+Le corollaire du designer est la partie la plus utile de la règle, et elle vaut au-delà de ce bloc : **si un bloc d'alerte a besoin d'un titre pour être compris, son texte relève de la documentation.** Un titre qui rend un avertissement lisible est le symptôme d'un avertissement trop long.
+
+**Une condition d'accessibilité s'y ajoute, et elle n'est pas optionnelle.** L'icône est décorative donc `aria-hidden`, et la couleur n'est pas un canal d'information pour qui ne la perçoit pas. Ni l'une ni l'autre n'atteint un lecteur d'écran. **La gravité doit donc rester déductible du texte seul.** Elle l'est pour l'encadré de la clé client : « Réutiliser une clé lie les blobs : sa fuite rend déchiffrables tous ceux générés avec elle » porte sa propre alarme, sans avoir besoin qu'on la qualifie.
+
+Un texte d'alerte qui ne se comprendrait comme une alerte qu'en voyant sa couleur est mal écrit, et retirer son titre a le mérite de le révéler.
+
 ---
 
 ## 13. Limites et non-goals (v4)
@@ -1338,6 +1379,11 @@ Traitement visuel : même registre que l'avertissement de mutualisation, pas plu
 - **Pas de rotation de clé client** : changer la clé d'un blob impose de le regénérer. FGP ne connaît pas la clé et ne peut pas rechiffrer un blob existant.
 - **Pas de valeurs dynamiques dans les headers d'auth** : les valeurs sont statiques, figées au moment de la génération. Pas de templating, pas de variables d'environnement, pas d'interpolation depuis la requête entrante.
 - **Pas de `/llms-full.txt` ni de `/robots.txt`** : un seul document `/llms.txt` (cf. §16).
+- **Aucune contrainte sur les paramètres de query**, tant que `queryFilters` n'est pas livré. Non-garantie **datée**, pas oubli : la décision est prise, son implémentation est différée (§18.4).
+- **Pas de limitation de débit dans l'application** : l'axe relève de l'opérateur (§18.6 et les guides de déploiement).
+- **Pas de protection contre le rebinding DNS** : la politique de sortie est un ralentisseur, pas une preuve (§18.2).
+- **FGP n'est pas un WAF** : hors des filtres déclarés dans le scope, le contenu de la requête n'est pas examiné.
+- **FGP ne protège pas le créateur d'un blob contre la cible publique qu'il a lui-même choisie.** Le blob est une délégation : la politique de sortie protège l'hôte FGP et son réseau, pas l'utilisateur contre lui-même.
 - **Aucun secret d'auth n'est récupérable** : ni `token`, ni les valeurs de headers ne sont réaffichables après génération. Les endpoints de décodage renvoient des valeurs redactées (cf. §11.1.4).
 
 ---
@@ -1888,3 +1934,98 @@ L'UI ne contient aucun script ni style inline : la CSP passe sans `unsafe-inline
 Swagger UI charge ses assets depuis un CDN externe et pose un script inline non nonçable. La CSP de §17.2 le casserait. Cette route reçoit donc une **CSP dédiée**, plus permissive mais toujours explicite : `script-src` et `style-src` limités à `'self'`, `'unsafe-inline'` et l'origine du CDN, `img-src` et `font-src` étendus à cette même origine. Tout le reste (dont `frame-ancestors 'none'` et `default-src 'none'`) est conservé.
 
 `/api/docs` n'est jamais servie sans CSP. La cible à terme reste l'auto-hébergement des assets Swagger dans `/static/`, ce qui permettrait de lui appliquer la CSP commune et de supprimer la dépendance à un CDN tiers. C'est un chantier séparé, non bloquant pour ce lot.
+
+---
+
+## 18. Politique de sortie et limites de ressources
+
+Cette section résume les contrats établis par l'ADR-0009 (sortie du proxy) et l'ADR-0010 (limites de ressources). Les ADR font foi sur le raisonnement, cette section sur le comportement observable.
+
+### 18.1 Les quatre garanties
+
+Le contrat vaut pour **tout appel réseau sortant émis par FGP**, sans exception : forward du proxy, endpoints d'aide de l'UI, obtention de credentials upstream. Tous passent par un point de sortie unique.
+
+| Garantie | Énoncé |
+|----------|--------|
+| **G1, destination** | Toute requête sortante vise un schéma `http` ou `https` et une adresse **publique**. FGP ne se laisse pas utiliser comme relais vers le réseau privé de son hébergeur. |
+| **G2, chemin** | Le chemin autorisé par les scopes est le chemin émis vers l'upstream, octet pour octet. Aucune forme décodée ou normalisée n'échappe au contrôle. Indépendant du mode de livraison du blob. |
+| **G3, en-têtes** | L'authentification que voit l'upstream vient du blob, jamais de l'appelant. Aucun en-tête de transport, d'authentification ou de provenance fourni par l'appelant n'atteint l'upstream (§11.2). |
+| **G4, query** | Les paramètres de query sont soit contraints par le scope, soit transmis librement, et l'outillage dit lequel des deux s'applique. Il n'existe aucun cas où l'interface affirme une contrainte que le proxy n'applique pas. |
+
+Les non-garanties sont énumérées en §13, au même titre que les garanties. Une politique de sécurité qui ne dit pas ce qu'elle ne couvre pas invite à lui prêter des propriétés qu'elle n'a pas.
+
+### 18.2 Hôte : refus par nature de l'adresse
+
+FGP est agnostique par conception, donc **pas d'allowlist de cibles** : elle transformerait un proxy générique en passerelle configurée. La décision est prise à l'envers, **tout hôte public est autorisé, toute destination non publique est refusée**, ce qui ne restreint aucun usage légitime.
+
+Trois temps :
+
+1. **Forme**, purement syntaxique. Le `target` doit être une URL absolue en `http` ou `https`, sans userinfo, sans query, sans fragment, avec un chemin de base ne contenant ni `%2f`, ni `..`, ni `\`. Vérifié à la génération (400 `invalid_target`) et au déchiffrement (blob malformé, donc 401 `invalid_credentials`).
+2. **Adresse**, après résolution. Les plages loopback, privées, link-local, CGNAT, unique-local, multicast et réservées sont refusées, en IPv4 comme en IPv6 et dans toutes leurs notations, ainsi que les noms en `.internal`, `.local`, `.localhost`, `.home.arpa` et les noms sans point. Pour un nom, **toutes** les adresses résolues doivent être publiques. Refus en 403 `target_forbidden`.
+3. **Redirections non suivies** (`redirect: "manual"`). Sans cela la classification ne vaut rien : un hôte public autorisé redirigerait vers l'adresse de métadonnées, et les en-têtes d'auth y seraient rejoués.
+
+Un échec de résolution DNS n'est **pas** un refus de politique : la requête continue et échoue naturellement en 502 `upstream_unreachable`. Un nom qui ne résout pas ne joint rien, et transformer chaque incident DNS en refus opaque n'apporterait rien.
+
+Le champ `apiUrl` du mode `scalingo-addon`, ainsi que le `target` de `/api/list-apps` et `/api/list-addons`, reçoivent une contrainte plus forte : leur hôte doit se terminer par `.scalingo.com`. Ce n'est pas une entorse à l'agnosticisme, qui est une propriété de `target` et non des modes d'auth propriétaires : ce mode présente un bearer de compte à l'hôte désigné, un `apiUrl` libre serait un canal d'exfiltration de credential.
+
+**Le rebinding DNS reste ouvert.** Entre la résolution de contrôle et le `fetch`, le nom est résolu une seconde fois par le runtime et rien ne garantit la même réponse. La défense réelle est le filtrage d'egress au niveau réseau, au déploiement. La politique de code est un ralentisseur solide, elle n'est pas une preuve.
+
+### 18.3 Chemin : contrôle sur toutes les formes, émission de la forme brute
+
+Le contrôle porte sur **deux formes** du chemin, l'émission sur une seule.
+
+```
+formeBrute      = le chemin tel que reçu, à l'octet près
+formeCanonique  = décodage percent répété jusqu'au point fixe (3 tours max),
+                  puis `\` remplacé par `/`, slashes répétés écrasés,
+                  puis résolution des segments `.` et `..`
+
+accès autorisé  <=>  autorisé(formeBrute) ET autorisé(formeCanonique)
+émission        =    formeBrute
+```
+
+La règle est **fail-closed et monotone** : ajouter une forme au jeu de vérification ne peut que réduire l'ensemble autorisé, jamais l'élargir. L'ADR-0006 est intact, ce qui part sur le fil est inchangé.
+
+Les deux voies naturelles ont été écartées et méritent d'être connues, parce qu'elles reviendront : **refuser `%2f`** casse les APIs qui encodent un `/` dans un identifiant (GitLab en tête), et **décoder avant de forwarder** casse les mêmes APIs plus profondément, silencieusement, en émettant une route différente de celle demandée.
+
+Conséquences observables :
+
+- L'attaque tombe : brut `/v1/public/..%2f..%2fadmin`, canonique `/admin`, le scope `GET:/v1/public/*` ne couvre pas la seconde forme, donc 403 `scope_denied`.
+- Le cas légitime passe : brut `/api/v4/projects/groupe%2Fprojet`, canonique `/api/v4/projects/groupe/projet`, le scope `GET:/api/v4/projects/*` couvre les deux.
+- **Certains scopes en correspondance exacte deviennent plus stricts.** Un scope `GET:/projects/groupe%2Fprojet` ne suffit plus seul, la forme décodée doit être couverte aussi. C'est le coût ergonomique assumé de la décision.
+- Un chemin contenant un octet NUL ou un caractère de contrôle après décodage est rejeté en 400 `invalid_request`.
+- Les deux modes de livraison du blob produisent désormais la **même** chaîne pour la même requête. Auparavant `/v1//public//x` était évalué différemment en mode URL et en mode header, soit deux surfaces d'autorisation pour un seul blob.
+
+### 18.4 Query : non contrainte, et c'est écrit
+
+**État actuel, sans détour : un blob scopé sur un chemin autorise toutes les querys de ce chemin.** Un scope `GET:/v1/items` laisse passer `/v1/items?action=delete&scope=all`. Les paramètres destructeurs (`?force=true`, `?recursive=true`, `?permanent=true`) ne sont contraints par rien.
+
+Ce n'est pas un non-goal, c'est une **dette datée**. La décision est prise : la query entre dans le modèle de scopes, sous la forme d'un axe `queryFilters` sur `ScopeEntry`, calqué sur les body filters, opt-in, avec déni par défaut à l'intérieur du scope, et un bump du blob en v5. Tout cela est arbitré dans l'ADR-0009 §4 et n'aura pas à être rejoué.
+
+**Son implémentation est différée en feature séparée**, pour une raison de périmètre et non de doute : le lot de sécurité corrigeait des vulnérabilités en production et devait partir vite, un nouveau format de blob allonge la review et élargit la surface de régression. Mélanger les deux aurait fait payer au correctif urgent le prix de la feature.
+
+Entre les deux livraisons, trois choses seulement sont acquises :
+
+1. **Un `?` dans un pattern de scope est refusé à la génération** (400 `invalid_scope`). Il produisait un scope mort dont l'auteur croyait qu'il contraignait quelque chose. Au déchiffrement en revanche, un blob qui en porte un reste valide, le pattern est simplement sans effet : refuser casserait des blobs vivants sur leurs autres scopes pour un gain de sécurité nul.
+2. **La non-contrainte est dite partout** : ici, dans le panneau Doc et dans `/llms.txt`.
+3. **Le testeur de scopes ne ment plus** (§12.5).
+
+### 18.5 Limites de ressources
+
+Toutes calibrées sur un critère unique : **aucune primitive optionnelle ne doit coûter plus cher que la dérivation de clé obligatoire déjà présente sur le chemin**, soit environ 11,6 ms. Une fonctionnalité optionnelle qui dépasse ce plancher devient le coût dominant de l'instance. Le détail chiffré est dans `docs/limits.md`, les mesures dans l'ADR-0010.
+
+Ce qui est observable côté client :
+
+- **413 `payload_too_large`** sur `/api/*` au-delà du plafond de la route, et sur le proxy au-delà de 512 Ko de corps quand un body filter ou la capture detailed est actif.
+- **Le streaming du corps proxy est préservé** quand aucun body filter ni capture detailed n'est actif : les gros uploads à travers le proxy continuent de passer sans être mis en mémoire. C'est une propriété du proxy transparent qu'il ne fallait pas perdre en posant la limite au mauvais endroit.
+- **400 `unsupported_regex`** quand une regex du blob sort du dialecte autorisé.
+
+### 18.6 Limitation de débit : hors de l'application, et pourquoi
+
+Toutes les limites ci-dessus bornent le **coût d'une requête**. Aucune ne borne le **nombre de requêtes**. C'est un choix.
+
+Un limiteur en mémoire du processus est **quasi inopérant sur Deno Deploy** : l'état est par isolate, les isolates sont éphémères, et les requêtes se répartissent entre eux. Il fonctionnerait en auto-hébergement, où le processus est unique et durable. Livrer un limiteur applicatif efficace sur une cible de déploiement sur deux donnerait une **fausse couverture**, ce qui est pire que pas de couverture : l'opérateur croirait le problème réglé.
+
+La limitation de débit est donc documentée **côté opérateur**, par cible de déploiement, dans `docs/deno-deploy.md` et `docs/scalingo-deploy.md`.
+
+L'ordre de grandeur qui justifie qu'on ne l'ignore pas : avant les correctifs de l'ADR-0010, **1 900 requêtes suffisaient à épuiser les 20 heures de CPU mensuelles** du plan gratuit de la plateforme. Les correctifs suppriment le coût unitaire aberrant, ils ne suppriment pas la nécessité d'une borne sur le débit.

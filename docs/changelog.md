@@ -1,5 +1,24 @@
 # Changelog
 
+## 4 septembre 2026
+
+- **Breaking** : `POST /api/test-scope` est supprimé. L'interface testait déjà les scopes dans le navigateur, la route serveur n'avait aucun appelant
+- **Breaking** : les en-têtes `Authorization` et `Cookie` de l'appelant ne sont plus transmis à la cible. Pour en envoyer un fixe, déclarez-le dans les headers multiples du blob
+- **Breaking** : les regex des body filters sont désormais ancrées. Un filtre `main` n'autorise plus `not-main-at-all`, c'était un contournement de scope
+- **Breaking** : les regex du blob suivent un dialecte restreint, sans groupe quantifié ni lookaround. Un blob concerné renvoie `unsupported_regex` et doit être régénéré
+- **Breaking** : une regex ne teste plus que les valeurs jusqu'à 128 caractères, contre 1000 avant. Au-delà, utilisez un pattern glob
+- **Breaking** : un filtre `any` sur un objet ou un tableau est refusé. La comparaison dépendait de l'ordre des clés du client, donc du hasard
+- **Breaking** : un `?` dans un pattern de scope est refusé à la génération (`invalid_scope`). Il produisait un scope mort qui ne contraignait rien
+- **Breaking** : les cibles non publiques sont refusées (`target_forbidden`) : boucle locale, réseaux privés, link-local, métadonnées cloud
+- **Breaking** : les redirections de l'API cible ne sont plus suivies. Un 3xx vous est transmis tel quel, avec son `Location`
+- **Breaking** : les corps de requête trop volumineux renvoient `payload_too_large` (413). Le streaming à travers le proxy reste sans plafond
+- **Les paramètres de query ne sont pas contraints par les scopes** : un blob autorisé sur `/v1/items` accepte `/v1/items?action=delete`, en attendant la feature
+- Le testeur de scopes de l'interface ne ment plus : il refusait des requêtes que le proxy acceptait. Une seule fonction d'autorisation, partagée avec le proxy
+- Nouvelle variable `FGP_TRUSTED_PROXY_HOPS` pour lire `X-Forwarded-For` derrière un proxy de confiance. Sans elle, les logs utilisent l'adresse du pair
+- Nouvelle variable `FGP_EGRESS_ALLOW_PRIVATE`, réservée au développement : l'activer en production rouvre l'accès au réseau privé de votre hébergeur
+- La limitation de débit est documentée côté opérateur, dans les guides Deno Deploy et Scalingo. FGP n'en implémente pas, un limiteur en mémoire serait inopérant sur Deploy
+- Les assets de l'interface portent une empreinte de contenu : plus de CSS ni de JavaScript périmé après une mise à jour
+
 ## 3 septembre 2026
 
 - Nouveau mode d'auth « Headers multiples » : envoyez plusieurs headers d'authentification vers l'API cible (par exemple `X-API-Key` et `X-Client-Id`) depuis une seule URL FGP
