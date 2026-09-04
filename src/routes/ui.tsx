@@ -112,6 +112,17 @@ const ListAddonsError502Schema = errorSchema(
 
 const TestProxyError400Schema = errorSchema(["invalid_body"], "TestProxyError400");
 
+// Le 413 n'est produit par aucun handler mais par le bodyLimit monte sur /api/* dans
+// src/main.ts : createRoute ne voit que le handler, la reponse doit donc etre declaree a la
+// main sur chaque route plafonnee. Schema partage, le code est le meme pour toutes puisqu'il
+// sort du meme middleware.
+const PayloadTooLargeErrorSchema = errorSchema(["payload_too_large"], "PayloadTooLargeError");
+
+const payloadTooLargeResponse = {
+  description: "Request body exceeds the body size cap of this route",
+  content: { "application/json": { schema: PayloadTooLargeErrorSchema } },
+};
+
 const ObjectValueSchema = z.union([
   z.object({ type: z.literal("any"), value: z.unknown() }),
   z.object({ type: z.literal("wildcard") }),
@@ -394,6 +405,7 @@ const decodeRoute = createRoute({
       description: "Unable to decrypt blob (wrong key or corrupted blob)",
       content: { "application/json": { schema: DecodeError401Schema } },
     },
+    413: payloadTooLargeResponse,
     500: {
       description: "Server misconfigured (FGP_SALT missing)",
       content: { "application/json": { schema: DecodeError500Schema } },
@@ -423,6 +435,7 @@ const shareEncodeRoute = createRoute({
       description: "Invalid body (missing or malformed fields)",
       content: { "application/json": { schema: ShareEncodeError400Schema } },
     },
+    413: payloadTooLargeResponse,
   },
 });
 
@@ -447,6 +460,7 @@ const shareDecodeRoute = createRoute({
       description: "Invalid body or unable to decode the shared config string",
       content: { "application/json": { schema: ShareDecodeError400Schema } },
     },
+    413: payloadTooLargeResponse,
   },
 });
 
@@ -487,6 +501,7 @@ const generateRoute = createRoute({
         "Invalid body, generated blob exceeds 4KB, or scope limits violated (body filters, depth, etc.)",
       content: { "application/json": { schema: GenerateError400Schema } },
     },
+    413: payloadTooLargeResponse,
     500: {
       description: "Server misconfigured (FGP_SALT missing)",
       content: { "application/json": { schema: GenerateError500Schema } },
@@ -519,6 +534,7 @@ const listAppsRoute = createRoute({
       description: "Scalingo token exchange failed (token invalid or unauthorized)",
       content: { "application/json": { schema: ListAppsError401Schema } },
     },
+    413: payloadTooLargeResponse,
     502: {
       description:
         "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing apps",
@@ -557,6 +573,7 @@ const listAddonsRoute = createRoute({
       description: "The application does not exist on this Scalingo account",
       content: { "application/json": { schema: ListAddonsError404Schema } },
     },
+    413: payloadTooLargeResponse,
     502: {
       description:
         "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing addons",
@@ -587,6 +604,7 @@ const testProxyRoute = createRoute({
       description: "Invalid body (missing or malformed fields)",
       content: { "application/json": { schema: TestProxyError400Schema } },
     },
+    413: payloadTooLargeResponse,
   },
 });
 
