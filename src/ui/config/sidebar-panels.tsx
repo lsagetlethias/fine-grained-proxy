@@ -100,6 +100,23 @@ export function ExamplesPanel() {
             </li>
             <li>
               <a
+                href="/llms.txt"
+                class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
+              >
+                llms.txt
+              </a>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {" "}: documentation destin&eacute;e aux agents LLM, au format markdown de la
+                convention llmstxt.org. Elle d&eacute;crit la syntaxe des scopes, les modes d'auth
+                et les codes d'erreur, pour qu'un agent produise une URL FGP correcte sans lire
+                cette interface. Les pages de FGP la signalent par une balise{" "}
+                <code class="font-mono">link rel="describedby"</code> et par l'en-t&ecirc;te HTTP
+                {" "}
+                <code class="font-mono">Link</code>.
+              </span>
+            </li>
+            <li>
+              <a
                 href="https://github.com/lsagetlethias/fine-grained-proxy"
                 target="_blank"
                 rel="noopener"

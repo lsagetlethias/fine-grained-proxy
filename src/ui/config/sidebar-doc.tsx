@@ -54,6 +54,23 @@ export function DocPanel() {
             &eacute;viter les probl&egrave;mes de limite de 255 caract&egrave;res par segment d'URL
             impos&eacute;e par certains services.
           </p>
+          <p class="mt-2 text-xs">
+            Dans ce mode, <strong>tous</strong>{" "}
+            les chemins sont transmis &agrave; l'API cible, y compris{" "}
+            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+              /llms.txt
+            </code>{" "}
+            et{" "}
+            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">/api/*</code>.
+            Seules les pages{" "}
+            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">/logs</code>
+            {" "}
+            restent servies par FGP. Pour consulter une page de FGP, envoyez la requ&ecirc;te sans
+            le header{" "}
+            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+              X-FGP-Blob
+            </code>.
+          </p>
         </div>
       </section>
 
@@ -168,6 +185,34 @@ POST:/v1/apps/my-app/scale`}</pre>
             <dd>
               Dur&eacute;e pendant laquelle l'URL g&eacute;n&eacute;r&eacute;e est utilisable.
               Pass&eacute; ce d&eacute;lai, le proxy refuse les requ&ecirc;tes.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-medium text-gray-800 dark:text-gray-200">Cl&eacute; client</dt>
+            <dd>
+              Par d&eacute;faut, FGP tire une cl&eacute; al&eacute;atoire diff&eacute;rente pour
+              chaque blob et vous la renvoie une seule fois. Le bloc &laquo; Utiliser ma propre
+              cl&eacute; client &raquo; permet de fournir la v&ocirc;tre &agrave; la place.
+            </dd>
+            <dd class="mt-1">
+              L'int&eacute;r&ecirc;t est la mutualisation : un pipeline CI qui utilise plusieurs
+              URLs FGP ne g&egrave;re alors qu'un seul secret dans son coffre, au lieu d'une
+              cl&eacute; par blob. En contrepartie, une cl&eacute; partag&eacute;e qui fuite rend
+              d&eacute;chiffrables d'un coup tous les blobs g&eacute;n&eacute;r&eacute;s avec elle,
+              y compris ceux cr&eacute;&eacute;s avant la fuite et encore valides.
+            </dd>
+            <dd class="mt-1">
+              Mutualiser une cl&eacute; ne partage pas les autorisations : chaque blob garde ses
+              propres scopes, son propre TTL et sa propre cible.
+            </dd>
+            <dd class="mt-1">
+              Contrainte : 24 caract&egrave;res minimum, 256 maximum, ASCII imprimable sans espace.
+              Le plancher de 24 vient du fait que le salt serveur est public, expos&eacute; par{" "}
+              <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+                /api/salt
+              </code>{" "}
+              : la cl&eacute; client est donc la seule inconnue qui prot&egrave;ge un blob
+              intercept&eacute; contre un cassage hors ligne.
             </dd>
           </div>
         </dl>
