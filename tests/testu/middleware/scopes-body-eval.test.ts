@@ -55,13 +55,13 @@ Deno.test("T4: le budget est d'une evaluation par scope, pas d'une par passe", (
   assertEquals(reads(), 2);
 });
 
-Deno.test("T4: le refus par filtre de corps reste un refus, cause inchangee", () => {
+Deno.test("T4: le refus par filtre de corps reste un refus, sur l'axe body", () => {
   const { body, reads } = countingBody({ branch: "dev" });
 
   const v = checkRequestAccess([filtered("/v1/*", "branch", "main")], "POST", "/v1/./items", body);
 
   assertEquals(v.allowed, false);
-  assertEquals(v.denialReason, "path");
+  assertEquals(v.denial?.axis, "body");
   assertEquals(reads(), 1);
 });
 
@@ -76,7 +76,7 @@ Deno.test("T4: un scope filtre autorise en forme brute reste refuse sur la forme
   );
 
   assertEquals(v.allowed, false);
-  assertEquals(v.denialReason, "path_encoded");
+  assertEquals(v.denial?.axis, "path_encoded");
   assertEquals(reads(), 1);
 });
 
@@ -84,5 +84,5 @@ Deno.test("T4: un scope filtre sans corps refuse immediatement, forme brute non 
   const v = checkRequestAccess([filtered("/v1/*", "branch", "main")], "POST", "/v1/./items");
 
   assertEquals(v.allowed, false);
-  assertEquals(v.denialReason, "path");
+  assertEquals(v.denial?.axis, "body");
 });

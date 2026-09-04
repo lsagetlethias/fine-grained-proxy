@@ -26,6 +26,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
 
   const state: BodyFiltersState = {
     bodyFiltersData: {},
+    queryFiltersData: {},
     nextFilterId: 1,
     expandedScopes: {},
   };
@@ -59,12 +60,14 @@ import type { AppsPermissionsState } from "./client/types.ts";
 
   els.btnAddBodyFilters.addEventListener("click", function () {
     els.bodyFiltersPanel.classList.remove("hidden");
+    els.btnAddBodyFilters.setAttribute("aria-expanded", "true");
     doUpdateVisibility();
     els.bodyFiltersPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
 
   els.btnCloseBodyFilters.addEventListener("click", function () {
     els.bodyFiltersPanel.classList.add("hidden");
+    els.btnAddBodyFilters.setAttribute("aria-expanded", "false");
   });
 
   const authDeps: AuthModeDeps = {
@@ -75,7 +78,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
   };
   const byok = setupByok();
 
-  setupShareConfig(state.bodyFiltersData, authDeps);
+  setupShareConfig(state, authDeps);
 
   els.authSelect.addEventListener("change", function () {
     syncAuthModeVisibility();
@@ -89,9 +92,9 @@ import type { AppsPermissionsState } from "./client/types.ts";
   setupApps(els, state, appsPerms, showError, hideError, doUpdateVisibility, authDeps.addons);
   setupTtl(els);
   const getLogsConfig = setupLogsTab();
-  setupGenerate(els, state.bodyFiltersData, showError, hideError, getLogsConfig, authDeps, byok);
+  setupGenerate(els, state, showError, hideError, getLogsConfig, authDeps, byok);
   setupClipboard();
-  setupTestScope(state.bodyFiltersData, authDeps);
+  setupTestScope(state, authDeps);
   setupImportConfig(authDeps);
   setupTabs();
   setupDocLinks();

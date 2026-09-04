@@ -4,13 +4,13 @@ import { canonicalizePath, checkRequestAccess } from "../../../src/middleware/sc
 Deno.test("AC-44.1: le percent-encoding ne contourne pas le scope", () => {
   const v = checkRequestAccess(["GET:/v1/public/*"], "GET", "/v1/public/..%2f..%2fadmin");
   assertEquals(v.allowed, false);
-  assertEquals(v.denialReason, "path_encoded");
+  assertEquals(v.denial?.axis, "path_encoded");
 });
 
 Deno.test("AC-44.2: la contre-oblique encodee ne contourne pas non plus", () => {
   const v = checkRequestAccess(["GET:/v1/public/*"], "GET", "/v1/public/..%5c..%5cadmin");
   assertEquals(v.allowed, false);
-  assertEquals(v.denialReason, "path_encoded");
+  assertEquals(v.denial?.axis, "path_encoded");
 });
 
 Deno.test("AC-44.3: le double encodage est refuse", () => {
@@ -44,7 +44,7 @@ Deno.test("AC-44.5: table de canonicalisation", () => {
 Deno.test("AC-44.6: un caractere de controle apres decodage est refuse", () => {
   const v = checkRequestAccess(["*:*"], "GET", "/v1/items%00.json");
   assertEquals(v.allowed, false);
-  assertEquals(v.denialReason, "invalid_path");
+  assertEquals(v.denial?.axis, "invalid_path");
 });
 
 Deno.test("AC-44.7: un chemin sans encodage donne le meme verdict qu'avant", () => {

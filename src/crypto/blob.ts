@@ -1,7 +1,12 @@
 import { decodeBase64Url, encodeBase64Url } from "@std/encoding/base64url";
 import { readBounded } from "./bounded.ts";
 
-import type { Scope, ScopeEntry } from "../middleware/scopes.ts";
+import {
+  MAX_QUERY_FILTERS_PER_SCOPE,
+  MAX_QUERY_VALUES_PER_FILTER,
+  type Scope,
+  type ScopeEntry,
+} from "../middleware/scopes.ts";
 import { parseTargetUrl } from "../net/egress.ts";
 import { checkRegexSource, regexIssueMessage } from "./regex-policy.ts";
 import { fingerprint, getCachedKey, setCachedKey } from "./key-cache.ts";
@@ -121,7 +126,12 @@ function isScalar(value: unknown): boolean {
     typeof value === "boolean";
 }
 
-function isValidObjectValue(ov: unknown, budget: BlobBudget, depth = 0): boolean {
+function isValidObjectValue(
+  ov: unknown,
+  budget: BlobBudget,
+  depth = 0,
+  queryScoped = false,
+): boolean {
   if (depth > 4) return false;
   if (typeof ov !== "object" || ov === null) return false;
   const o = ov as Record<string, unknown>;
@@ -132,6 +142,11 @@ function isValidObjectValue(ov: unknown, budget: BlobBudget, depth = 0): boolean
 
   switch (o.type) {
     case "any":
+      // Sur un query filter, la valeur comparee est toujours une chaine. Un « any » typé
+      // autrement ne matche jamais, et sous « not » il matche TOUJOURS : l'auteur ecrit
+      // « exclure la page 1 » et obtient « accepter tout » (§19.3). Le contexte descend
+      // donc a toute profondeur, comme le budget.
+      if (queryScoped) return typeof o.value === "string";
       // La comparaison par JSON.stringify depend de l'ordre d'insertion des cles, qui
       // vient du serialiseur de l'appelant : sur un objet ce n'est pas un predicat de
       // permission, c'est un tirage (ADR-0010 D4).
@@ -152,10 +167,12 @@ function isValidObjectValue(ov: unknown, budget: BlobBudget, depth = 0): boolean
       if (!Array.isArray(o.value)) return false;
       if (o.value.length < 2) return false;
       if (o.value.length > MAX_AND_WIDTH) return false;
-      return o.value.every((sub: unknown) => isValidObjectValue(sub, budget, depth + 1));
+      return o.value.every((sub: unknown) =>
+        isValidObjectValue(sub, budget, depth + 1, queryScoped)
+      );
     }
     case "not": {
-      if (!isValidObjectValue(o.value, budget, depth + 1)) return false;
+      if (!isValidObjectValue(o.value, budget, depth + 1, queryScoped)) return false;
       const inner = o.value as Record<string, unknown>;
       if (inner.type === "wildcard") return false;
       if (inner.type === "not") return false;
@@ -176,6 +193,28 @@ function isValidBodyFilter(bf: unknown, budget: BlobBudget): boolean {
   return f.objectValue.every((ov: unknown) => isValidObjectValue(ov, budget));
 }
 
+function isValidQueryFilters(raw: unknown, budget: BlobBudget): boolean {
+  if (!Array.isArray(raw)) return false;
+  if (raw.length > MAX_QUERY_FILTERS_PER_SCOPE) return false;
+
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) return false;
+    const qf = item as Record<string, unknown>;
+    if (typeof qf.param !== "string" || qf.param.length === 0) return false;
+    // Deux filtres sur un meme parametre creent une ambiguite non resolvable a priori :
+    // il n'y a rien a definir, seulement a rejeter. Miroir de l'unicite des noms de
+    // headers d'auth, deja exigee ici et pas seulement a la generation (§19.5).
+    if (seen.has(qf.param)) return false;
+    seen.add(qf.param);
+    if (qf.required !== undefined && typeof qf.required !== "boolean") return false;
+    if (!Array.isArray(qf.values) || qf.values.length === 0) return false;
+    if (qf.values.length > MAX_QUERY_VALUES_PER_FILTER) return false;
+    if (!qf.values.every((ov: unknown) => isValidObjectValue(ov, budget, 0, true))) return false;
+  }
+  return true;
+}
+
 function isValidScopeEntry(s: unknown, budget: BlobBudget): s is ScopeEntry {
   if (typeof s !== "object" || s === null) return false;
   const entry = s as Record<string, unknown>;
@@ -190,7 +229,16 @@ function isValidScopeEntry(s: unknown, budget: BlobBudget): s is ScopeEntry {
     if (entry.bodyFilters.length > 8) return false;
     if (!entry.bodyFilters.every((bf: unknown) => isValidBodyFilter(bf, budget))) return false;
   }
+  if (entry.queryFilters !== undefined && !isValidQueryFilters(entry.queryFilters, budget)) {
+    return false;
+  }
   return true;
+}
+
+function carriesQueryFilters(s: unknown): boolean {
+  if (typeof s !== "object" || s === null) return false;
+  const filters = (s as Record<string, unknown>).queryFilters;
+  return Array.isArray(filters) && filters.length > 0;
 }
 
 export interface DecryptedBlob {
@@ -252,7 +300,7 @@ export async function decryptBlobWithKey(
   const config = parsed as BlobConfig;
   if (
     typeof config.v !== "number" ||
-    (config.v !== 2 && config.v !== 3 && config.v !== 4) ||
+    (config.v !== 2 && config.v !== 3 && config.v !== 4 && config.v !== 5) ||
     typeof config.target !== "string" || !config.target ||
     !Array.isArray(config.scopes) ||
     typeof config.ttl !== "number" ||
@@ -280,7 +328,10 @@ export async function decryptBlobWithKey(
       throw new Error("Invalid blob: malformed BlobConfig");
     }
   } else {
-    if (config.v !== 4 || !isValidAuthSpec(auth)) {
+    // Plancher, jamais egalite : un blob v5 a auth structuree doit rester lisible. Teste
+    // en « v === 4 », la regle rejetait le premier blob combinant headers multiples (v4) et
+    // queryFilters (v5), avec pour symptome un 401 qui envoie verifier une cle innocente (§19.7).
+    if (config.v < 4 || !isValidAuthSpec(auth)) {
       throw new Error("Invalid blob: malformed BlobConfig");
     }
     tokenRequired = auth.type !== "headers";
@@ -312,6 +363,12 @@ export async function decryptBlobWithKey(
         (s: unknown) => typeof s === "string" || isValidScopeEntry(s, budget),
       )
     ) {
+      throw new Error("Invalid blob: malformed BlobConfig");
+    }
+    // Symetrie du plancher : un « v » sous-declare face a des queryFilters reellement
+    // presents est une capacite non couverte par sa propre version. L'accepter reviendrait
+    // a ignorer la contrainte en silence, exactement le fail-open que le bump ferme (§19.7).
+    if (config.v < 5 && config.scopes.some(carriesQueryFilters)) {
       throw new Error("Invalid blob: malformed BlobConfig");
     }
   }

@@ -274,8 +274,8 @@ Deno.test("AC-6.1: decrypt rejects blob with deeply nested and exceeding depth l
   );
 });
 
-Deno.test("decrypt rejects blob with v: 5", async () => {
-  const raw = makeConfig({ v: 5 });
+Deno.test("decrypt rejects blob with v: 6", async () => {
+  const raw = makeConfig({ v: 6 });
   const blob = await encryptRaw(raw);
 
   await assertRejects(

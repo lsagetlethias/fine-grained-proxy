@@ -1,4 +1,4 @@
-import type { FilterData, ParsedScope } from "./types.ts";
+import type { FilterData, ParsedScope, QueryFilterData } from "./types.ts";
 
 const ELIGIBLE_METHODS = ["POST", "PUT", "PATCH", "*"];
 
@@ -33,6 +33,18 @@ export function getEligibleScopes(scopesTextarea: HTMLTextAreaElement): string[]
   return result;
 }
 
+// Toute methode porte une query, GET compris, et c'est meme le cas d'usage principal de la
+// v5 : le panneau liste donc tous les scopes, pas seulement ceux qui peuvent porter un corps.
+export function getAllScopes(scopesTextarea: HTMLTextAreaElement): string[] {
+  const lines = scopesTextarea.value.split("\n");
+  const result: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const p = parseScope(lines[i]);
+    if (p) result.push(p.raw);
+  }
+  return result;
+}
+
 export function getScopesWithFilters(bodyFiltersData: Record<string, FilterData[]>): string[] {
   const keys = Object.keys(bodyFiltersData);
   const result: string[] = [];
@@ -42,6 +54,60 @@ export function getScopesWithFilters(bodyFiltersData: Record<string, FilterData[
     }
   }
   return result;
+}
+
+export function getScopesWithQueryFilters(
+  queryFiltersData: Record<string, QueryFilterData[]>,
+): string[] {
+  const keys = Object.keys(queryFiltersData);
+  const result: string[] = [];
+  for (let i = 0; i < keys.length; i++) {
+    if (queryFiltersData[keys[i]] && queryFiltersData[keys[i]].length > 0) {
+      result.push(keys[i]);
+    }
+  }
+  return result;
+}
+
+export function querySummary(
+  scopeKey: string,
+  queryFiltersData: Record<string, QueryFilterData[]>,
+): string {
+  const filters = queryFiltersData[scopeKey] || [];
+  const parts: string[] = [];
+  for (let i = 0; i < filters.length; i++) {
+    const f = filters[i];
+    // Le suffixe « * » marque « requis » dans le texte tronque ; le titre du chip porte la
+    // mention complete, il transporte deja le texte non tronque (design §8).
+    const field = (f.param || "?") + (f.required ? "*" : "");
+    if (f.filterType === "wildcard") {
+      parts.push(field + " exists");
+    } else if (f.filterType === "not") {
+      const innerVal = (f.notInnerValue || "").trim();
+      parts.push(field + " ≠ " + (innerVal || "?"));
+    } else if (f.filterType === "and") {
+      const andParts: string[] = [];
+      const conds = f.andConditions || [];
+      for (let ai = 0; ai < conds.length; ai++) {
+        const c = conds[ai];
+        if (c.conditionType === "wildcard") {
+          andParts.push("exists");
+        } else if (c.conditionType === "not") {
+          andParts.push("pas " + ((c.notInnerValue || "").trim() || "?"));
+        } else {
+          andParts.push((c.value || "").trim() || "?");
+        }
+      }
+      parts.push(field + " = (" + (andParts.length > 0 ? andParts.join(" ET ") : "vide") + ")");
+    } else {
+      const vals: string[] = [];
+      for (let j = 0; j < f.values.length; j++) {
+        if (f.values[j].trim()) vals.push(f.values[j].trim());
+      }
+      parts.push(vals.length > 0 ? field + " = " + vals.join(" | ") : field);
+    }
+  }
+  return parts.join(", ");
 }
 
 export function truncatePath(raw: string, maxLen: number): string {

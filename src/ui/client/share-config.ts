@@ -4,7 +4,14 @@ import {
   type PublicConfig,
 } from "../../crypto/share.ts";
 import { buildScopes } from "./generate.ts";
-import type { AndCondition, FilterData, SerializedFilterValue } from "./types.ts";
+import type {
+  AndCondition,
+  FilterData,
+  QueryFilterData,
+  ScopeFiltersData,
+  SerializedFilterValue,
+  SerializedQueryFilter,
+} from "./types.ts";
 import { applyAuthToForm, buildShareAuth } from "./auth-mode.ts";
 import type { AuthModeDeps } from "./auth-mode.ts";
 
@@ -57,20 +64,95 @@ function deserializeFilterValue(ov: SerializedFilterValue): Partial<FilterData> 
   };
 }
 
-function restoreBodyFilters(
+// Une valeur de query est toujours une chaine, y compris sous « not » et dans un « and » :
+// la restauration n'a donc aucun sous-type a deduire (§19.3).
+function deserializeQueryValue(ov: SerializedFilterValue): { type: string; value: string } {
+  if (ov.type === "wildcard") return { type: "wildcard", value: "" };
+  return { type: ov.type, value: ov.value != null ? String(ov.value) : "" };
+}
+
+function restoreQueryFilter(sqf: SerializedQueryFilter): QueryFilterData | null {
+  if (!sqf.param || !Array.isArray(sqf.values) || sqf.values.length === 0) return null;
+  const filter: QueryFilterData = {
+    id: nextRestoreId++,
+    param: sqf.param,
+    required: sqf.required === true,
+    filterType: "any",
+    values: [],
+  };
+
+  const first = sqf.values[0];
+  if (first.type === "not") {
+    const inner = deserializeQueryValue(first.value as SerializedFilterValue);
+    filter.filterType = "not";
+    filter.notInnerType = inner.type;
+    filter.notInnerValue = inner.value;
+    return filter;
+  }
+  if (first.type === "and") {
+    filter.filterType = "and";
+    filter.andConditions = (first.value as SerializedFilterValue[]).map((sub) => {
+      if (sub.type === "not") {
+        const inner = deserializeQueryValue(sub.value as SerializedFilterValue);
+        return {
+          id: nextRestoreId++,
+          conditionType: "not",
+          value: "",
+          notInnerType: inner.type,
+          notInnerValue: inner.value,
+        };
+      }
+      const plain = deserializeQueryValue(sub);
+      return {
+        id: nextRestoreId++,
+        conditionType: plain.type,
+        value: plain.value,
+        notInnerType: null,
+        notInnerValue: null,
+      };
+    });
+    return filter;
+  }
+  if (first.type === "wildcard") {
+    filter.filterType = "wildcard";
+    return filter;
+  }
+
+  filter.filterType = first.type;
+  for (const value of sqf.values) {
+    filter.values.push(value.value != null ? String(value.value) : "");
+  }
+  return filter;
+}
+
+function restoreScopeFilters(
   scopes: unknown[],
-  bodyFiltersData: Record<string, FilterData[]>,
+  data: ScopeFiltersData,
 ): void {
+  const bodyFiltersData = data.bodyFiltersData;
   for (const scope of scopes) {
     if (typeof scope === "string") continue;
     const entry = scope as {
       methods?: string[];
       pattern?: string;
       bodyFilters?: { objectPath: string; objectValue: SerializedFilterValue[] }[];
+      queryFilters?: SerializedQueryFilter[];
     };
-    if (!entry.methods || !entry.pattern || !entry.bodyFilters?.length) continue;
+    if (!entry.methods || !entry.pattern) continue;
+    const scopeKeyBase = `${entry.methods.join("|")}:${entry.pattern}`;
 
-    const scopeKey = `${entry.methods.join("|")}:${entry.pattern}`;
+    if (entry.queryFilters?.length) {
+      const restored: QueryFilterData[] = [];
+      for (const sqf of entry.queryFilters) {
+        const filter = restoreQueryFilter(sqf);
+        if (filter) restored.push(filter);
+      }
+      if (restored.length > 0) data.queryFiltersData[scopeKeyBase] = restored;
+    }
+
+    if (!entry.bodyFilters?.length) continue;
+
+    const scopeKey = scopeKeyBase;
     const filters: FilterData[] = [];
 
     for (const bf of entry.bodyFilters) {
@@ -107,7 +189,7 @@ function restoreBodyFilters(
 }
 
 function readCurrentConfig(
-  bodyFiltersData: Record<string, FilterData[]>,
+  filtersData: ScopeFiltersData,
   authDeps: AuthModeDeps,
 ): PublicConfig | null {
   const target = (document.getElementById("target") as HTMLInputElement | null)?.value ?? "";
@@ -115,7 +197,7 @@ function readCurrentConfig(
 
   const scopesTextarea = document.getElementById("scopes") as HTMLTextAreaElement | null;
   const rawLines = scopesTextarea?.value.split("\n").filter((l) => l.trim() !== "") ?? [];
-  const scopes = scopesTextarea ? buildScopes(scopesTextarea, bodyFiltersData) : [];
+  const scopes = scopesTextarea ? buildScopes(scopesTextarea, filtersData) : [];
 
   const ttlRadio = document.querySelector<HTMLInputElement>("input[name=ttl]:checked");
   let ttl = 86400;
@@ -204,10 +286,10 @@ function applyConfig(config: PublicConfig, authDeps: AuthModeDeps): void {
 }
 
 async function updateShareUrl(
-  bodyFiltersData: Record<string, FilterData[]>,
+  filtersData: ScopeFiltersData,
   authDeps: AuthModeDeps,
 ): Promise<void> {
-  const config = readCurrentConfig(bodyFiltersData, authDeps);
+  const config = readCurrentConfig(filtersData, authDeps);
   if (!config) {
     const url = new URL(window.location.href);
     url.searchParams.delete("c");
@@ -222,7 +304,7 @@ async function updateShareUrl(
 }
 
 export function setupShareConfig(
-  bodyFiltersData: Record<string, FilterData[]>,
+  filtersData: ScopeFiltersData,
   authDeps: AuthModeDeps,
 ): void {
   let initializing = false;
@@ -233,7 +315,7 @@ export function setupShareConfig(
     initializing = true;
     decodePublicConfig(encoded).then((config) => {
       applyConfig(config, authDeps);
-      restoreBodyFilters(config.scopes, bodyFiltersData);
+      restoreScopeFilters(config.scopes, filtersData);
       const scopesTa = document.getElementById("scopes");
       if (scopesTa) scopesTa.dispatchEvent(new Event("input"));
       const testMethod = document.getElementById("test-method");
@@ -253,7 +335,7 @@ export function setupShareConfig(
     if (initializing) return;
     if (debounceTimer !== null) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      updateShareUrl(bodyFiltersData, authDeps);
+      updateShareUrl(filtersData, authDeps);
     }, 500);
   }
 

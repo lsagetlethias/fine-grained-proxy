@@ -135,13 +135,24 @@ const ObjectValueSchema = z.union([
 const BodyFilterSchema = z.object({
   objectPath: z.string().min(1),
   objectValue: z.array(ObjectValueSchema).min(1),
-});
+}).strict();
 
+const QueryFilterSchema = z.object({
+  param: z.string().min(1),
+  values: z.array(ObjectValueSchema).min(1),
+  required: z.boolean().optional(),
+}).strict();
+
+// Strict, et pas seulement etendu : une cle mal placee ou mal orthographiee doit etre
+// refusee, jamais strippee en silence. Un blob amputé de sa contrainte, ou une configuration
+// partagee qui perd son filtre en route, sont le meme fail-open que le deni par defaut
+// existe pour fermer, rouvert par la porte d'a cote (§19.5).
 const ScopeEntrySchema = z.object({
   methods: z.array(z.string().min(1)).min(1),
   pattern: z.string(),
   bodyFilters: z.array(BodyFilterSchema).optional(),
-});
+  queryFilters: z.array(QueryFilterSchema).optional(),
+}).strict();
 
 const ScopeSchema = z.union([z.string(), ScopeEntrySchema]);
 
@@ -802,7 +813,21 @@ uiRoutes.openapi(generateRoute, async (c) => {
     );
   }
 
-  const hasStructuredScope = scopes.some((s) => typeof s !== "string");
+  // Un tableau vide n'est pas une capacite utilisee : le serialiser bumperait le blob en v5
+  // et le rendrait illisible par un proxy anterieur pour une contrainte nulle (§19.7).
+  const serializedScopes: Scope[] = scopes.map((s) => {
+    if (typeof s === "string") return s;
+    if (Array.isArray(s.queryFilters) && s.queryFilters.length === 0) {
+      const { queryFilters: _empty, ...rest } = s;
+      return rest;
+    }
+    return s;
+  });
+
+  const hasStructuredScope = serializedScopes.some((s) => typeof s !== "string");
+  const hasQueryFilters = serializedScopes.some(
+    (s) => typeof s !== "string" && Array.isArray(s.queryFilters) && s.queryFilters.length > 0,
+  );
   const config: {
     v: number;
     token?: string;
@@ -814,10 +839,17 @@ uiRoutes.openapi(generateRoute, async (c) => {
     name?: string;
     logs?: { enabled: boolean; detailed: boolean };
   } = {
-    v: isAuthSpec(normalized.auth) ? 4 : (hasStructuredScope ? 3 : 2),
+    // Chaque axe impose un plancher, « v » est le maximum des planchers, jamais une egalite
+    // testee contre un seul axe : un blob v5 peut n'avoir qu'une auth string (§19.7).
+    v: Math.max(
+      2,
+      hasStructuredScope ? 3 : 2,
+      isAuthSpec(normalized.auth) ? 4 : 2,
+      hasQueryFilters ? 5 : 2,
+    ),
     target: body.target,
     auth: normalized.auth,
-    scopes,
+    scopes: serializedScopes,
     ttl: body.ttl,
     createdAt: Math.floor(Date.now() / 1000),
   };

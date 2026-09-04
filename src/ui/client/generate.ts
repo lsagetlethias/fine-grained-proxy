@@ -1,16 +1,84 @@
-import type { FilterData, SerializedFilterValue, SerializedScope } from "./types.ts";
+import type {
+  QueryFilterData,
+  ScopeFiltersData,
+  SerializedFilterValue,
+  SerializedQueryFilter,
+  SerializedScope,
+} from "./types.ts";
 import { assertElement } from "./elements.ts";
 import type { Elements } from "./elements.ts";
-import { getScopesWithFilters, parseScope } from "./scopes.ts";
+import { getScopesWithFilters, getScopesWithQueryFilters, parseScope } from "./scopes.ts";
 import { buildAuthPayload } from "./auth-mode.ts";
 import type { AuthModeDeps } from "./auth-mode.ts";
 import { markKeyOrigin } from "./byok.ts";
 import type { ByokApi } from "./byok.ts";
 
+// Une valeur de query est toujours une chaine : aucun sous-type a lire, a aucune
+// profondeur d'imbrication (§19.3).
+function serializeQueryValue(type: string, raw: string): SerializedFilterValue | null {
+  if (type === "wildcard") return { type: "wildcard", value: "*" };
+  const value = raw.trim();
+  if (!value) return null;
+  if (type === "regex") return { type: "regex", value };
+  if (type === "stringwildcard") return { type: "stringwildcard", value };
+  return { type: "any", value };
+}
+
+function serializeQueryFilter(filter: QueryFilterData): SerializedQueryFilter | null {
+  const param = (filter.param || "").trim();
+  if (!param) return null;
+
+  const values: SerializedFilterValue[] = [];
+
+  if (filter.filterType === "wildcard") {
+    values.push({ type: "wildcard", value: "*" });
+  } else if (filter.filterType === "not") {
+    const inner = serializeQueryValue(filter.notInnerType || "any", filter.notInnerValue || "");
+    if (inner) values.push({ type: "not", value: inner });
+  } else if (filter.filterType === "and") {
+    const subs: SerializedFilterValue[] = [];
+    for (const cond of filter.andConditions || []) {
+      if (cond.conditionType === "not") {
+        const inner = serializeQueryValue(cond.notInnerType || "any", cond.notInnerValue || "");
+        if (inner) subs.push({ type: "not", value: inner });
+        continue;
+      }
+      const sub = serializeQueryValue(cond.conditionType, cond.value);
+      if (sub) subs.push(sub);
+    }
+    if (subs.length === 1) values.push(subs[0]);
+    else if (subs.length > 1) values.push({ type: "and", value: subs });
+  } else {
+    for (const raw of filter.values) {
+      const value = serializeQueryValue(filter.filterType, raw);
+      if (value) values.push(value);
+    }
+  }
+
+  if (values.length === 0) return null;
+  const serialized: SerializedQueryFilter = { param, values };
+  if (filter.required) serialized.required = true;
+  return serialized;
+}
+
+function serializeQueryFilters(
+  scopeKey: string,
+  queryFiltersData: Record<string, QueryFilterData[]>,
+): SerializedQueryFilter[] {
+  const result: SerializedQueryFilter[] = [];
+  for (const filter of queryFiltersData[scopeKey] || []) {
+    const serialized = serializeQueryFilter(filter);
+    if (serialized) result.push(serialized);
+  }
+  return result;
+}
+
 export function buildScopes(
   scopesTextarea: HTMLTextAreaElement,
-  bodyFiltersData: Record<string, FilterData[]>,
+  data: ScopeFiltersData,
 ): SerializedScope[] {
+  const bodyFiltersData = data.bodyFiltersData;
+  const queryFiltersData = data.queryFiltersData;
   const textareaScopes = scopesTextarea.value
     .split("\n")
     .map(function (l) {
@@ -20,12 +88,15 @@ export function buildScopes(
   const result: SerializedScope[] = [];
 
   const withFilters = getScopesWithFilters(bodyFiltersData);
+  for (const key of getScopesWithQueryFilters(queryFiltersData)) {
+    if (withFilters.indexOf(key) === -1) withFilters.push(key);
+  }
 
   for (let i = 0; i < withFilters.length; i++) {
     const scopeKey = withFilters[i];
     const parsed = parseScope(scopeKey);
     if (!parsed) continue;
-    const filters = bodyFiltersData[scopeKey];
+    const filters = bodyFiltersData[scopeKey] || [];
     const serializedFilters: { objectPath: string; objectValue: SerializedFilterValue[] }[] = [];
     for (let fi = 0; fi < filters.length; fi++) {
       const f = filters[fi];
@@ -158,15 +229,19 @@ export function buildScopes(
         });
       }
     }
-    if (serializedFilters.length > 0) {
+    const serializedQueryFilters = serializeQueryFilters(scopeKey, queryFiltersData);
+
+    if (serializedFilters.length > 0 || serializedQueryFilters.length > 0) {
       const methods = parsed.method === "*"
         ? ["*"]
         : (parsed.method.includes("|") ? parsed.method.split("|") : [parsed.method]);
-      result.push({
+      const entry: SerializedScope = {
         methods: methods,
         pattern: parsed.path,
-        bodyFilters: serializedFilters,
-      });
+      };
+      if (serializedFilters.length > 0) entry.bodyFilters = serializedFilters;
+      if (serializedQueryFilters.length > 0) entry.queryFilters = serializedQueryFilters;
+      result.push(entry);
     } else {
       result.push(scopeKey);
     }
@@ -183,7 +258,7 @@ export function buildScopes(
 
 export function setupGenerate(
   els: Elements,
-  bodyFiltersData: Record<string, FilterData[]>,
+  filtersData: ScopeFiltersData,
   showError: (msg: string) => void,
   hideError: () => void,
   getLogsConfig: (() => { enabled: boolean; detailed: boolean } | null) | undefined,
@@ -217,7 +292,7 @@ export function setupGenerate(
       return;
     }
 
-    const scopes = buildScopes(els.scopesTextarea, bodyFiltersData);
+    const scopes = buildScopes(els.scopesTextarea, filtersData);
     if (scopes.length === 0) {
       showError("Au moins un scope requis.");
       return;

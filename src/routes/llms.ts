@@ -9,25 +9,23 @@ export function renderLlmsTxt(origin: string): string {
 > HTTP method, path and request body) in front of any API. No storage: the
 > target, credentials, scopes and TTL live encrypted inside the token itself.
 
-FGP sits between a caller and a target API. It holds no database: every proxied
-request carries an encrypted blob that contains the target URL, the upstream
-credentials, the allowed scopes and an expiry. The blob is decryptable only with
-a client key that FGP never stores, combined with a server salt. Access is
-deny-all by default: a request is forwarded only if it matches at least one
-declared scope.
+FGP sits between a caller and a target API and holds no database: every proxied
+request carries an encrypted blob holding the target URL, the upstream
+credentials, the allowed scopes and an expiry. It is decryptable only with a
+client key that FGP never stores, combined with a server salt. Access is
+deny-all: a request is forwarded only if it matches a declared scope.
 
 FGP is a transparent proxy. Any HTTP response actually received from the target
-API is forwarded unchanged (status, body, headers), except \`Set-Cookie\` (stripped,
-the proxy is stateless), \`Transfer-Encoding\` (hop-by-hop, never relayed), and, only
-when the runtime already decoded a gzip or br body before FGP received it, the
-now-stale \`Content-Encoding\` and \`Content-Length\` it described. Errors produced by FGP itself use the
+API is forwarded unchanged (status, body, headers), except \`Set-Cookie\` (the
+proxy is stateless), \`Transfer-Encoding\` (hop-by-hop), and, only when the runtime
+already decoded a gzip or br body before FGP received it, the now-stale
+\`Content-Encoding\` and \`Content-Length\`. Errors produced by FGP itself use the
 JSON shape \`{"error": "...", "message": "..."}\`. Every response carries the
 \`X-FGP-Source\` header: \`upstream\` when the payload comes from the target API,
 \`proxy\` when FGP produced it. Use that header to decide who to blame and whether
-retrying makes sense. Redirects are not followed: a 3xx from the target reaches
-the caller unchanged, \`Location\` header included, and following it is the
-caller's decision. A blob is bound to one target host, so an automatic redirect
-would silently send the upstream credentials to a host nobody scoped.
+retrying makes sense. Redirects are not followed: a 3xx reaches the caller
+unchanged, \`Location\` included. A blob is bound to one target host, so following
+one would silently send the upstream credentials to a host nobody scoped.
 
 Calling a proxied endpoint. Two equivalent transports:
 
@@ -49,11 +47,11 @@ POST:/v1/apps/my-app/scale  exact path, exact method
 *:*                         everything, use with a short TTL only
 \`\`\`
 
-Scopes constrain the method and the path only. **Query string parameters are not
-inspected**: a scope on \`POST:/v1/apps/my-app/scale\` also allows
-\`POST /v1/apps/my-app/scale?force=true\`. Grant a path only when every query
-variant of that path is acceptable. Declaring a scope that carries a \`?\` is
-rejected rather than silently ignored.
+By default a scope constrains the method and the path only: a scope on
+\`POST:/v1/apps/my-app/scale\` also allows \`POST /v1/apps/my-app/scale?force=true\`.
+A scope constrains its query only when it declares \`queryFilters\` (see below).
+Declaring a scope whose pattern carries a \`?\` is rejected: the pattern never
+carries the query, \`queryFilters\` does.
 
 Authentication modes, set in the \`auth\` field of the blob:
 
@@ -70,13 +68,11 @@ Authentication modes, set in the \`auth\` field of the blob:
   one-hour Scalingo database addon token and sends it as a bearer. Exactly one
   database per blob.
 
-Auth headers are applied after the caller's own headers, so a consumer can never
-override or neutralize the authentication carried by the blob. The caller's own
-\`Authorization\`, \`Cookie\` and \`Proxy-Authorization\` headers are stripped before
-forwarding: the product promise is that the consumer does not hold the target's
-credential, and relaying its own would sidestep the scope model. An API needing a
-second credential is served by the \`headers\` mode, which puts it in the blob.
-Hop-by-hop and forwarding headers are stripped too; everything else passes.
+Auth headers from the blob are applied after the caller's own, which can never
+override or neutralize them. The caller's \`Authorization\`, \`Cookie\` and
+\`Proxy-Authorization\` are stripped before forwarding: relaying them would
+sidestep the scope model. An API needing a second credential uses the \`headers\`
+mode. Hop-by-hop and forwarding headers are stripped too; everything else passes.
 
 Body filters restrict the JSON body of POST, PUT and PATCH requests. A scope
 entry carries \`bodyFilters\`, each with an \`objectPath\` (dot-path, 6 segments
@@ -89,6 +85,21 @@ values inside one \`objectValue\` are alternatives (OR). Available value types:
 - \`{"type": "regex", "value": "^v\\\\d+$"}\`: regular expression on a string.
 - \`{"type": "not", "value": {...}}\`: negation of a single condition.
 - \`{"type": "and", "value": [{...}, {...}]}\`: conjunction, at least 2 entries.
+
+Query filters restrict query parameters, on any method including GET. A scope
+entry carries \`queryFilters\`, each with a \`param\` (exact name, case sensitive,
+no dot-path), a \`values\` array using the same types as above, and an optional
+\`required\` (default false). Rules:
+
+- **Deny by default**: once a scope declares one query filter, any parameter of
+  the request covered by no filter fails that scope. It is a property of the
+  scope, and \`required: false\` never relaxes it.
+- \`required: true\` also fails the scope when the parameter is absent.
+- A repeated parameter passes only if every occurrence matches \`values\`, up to
+  4 occurrences when the filter holds a \`regex\` at any depth, 64 otherwise.
+- \`any\` accepts a string only, at any depth: a query value is always a string.
+- A blob with a non-empty \`queryFilters\` is version 5, and an older proxy
+  rejects it rather than serving it without the constraint.
 
 Error codes produced by FGP on the proxy route (\`X-FGP-Source: proxy\`):
 
@@ -131,18 +142,11 @@ once and never stored: losing it makes the blob unusable. An optional \`key\` fi
 in the request lets a caller supply its own client key, 24 to 256 printable ASCII
 characters without spaces.
 
-Calling through the proxy, blob in the URL:
+Calling through the proxy, blob in the URL then blob in a header (recommended):
 
 \`\`\`
 curl -H "X-FGP-Key: <key>" ${base}/<blob>/v2/resources/42
-\`\`\`
-
-Calling through the proxy, blob in a header (recommended):
-
-\`\`\`
-curl -H "X-FGP-Key: <key>" \\
-  -H "X-FGP-Blob: <blob>" \\
-  ${base}/v2/resources/42
+curl -H "X-FGP-Key: <key>" -H "X-FGP-Blob: <blob>" ${base}/v2/resources/42
 \`\`\`
 
 ## Documentation

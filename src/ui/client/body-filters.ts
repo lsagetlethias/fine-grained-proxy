@@ -1,10 +1,35 @@
-import type { AndCondition, FilterData, SelectOption } from "./types.ts";
-import { filterSummary, getEligibleScopes, getScopesWithFilters, truncatePath } from "./scopes.ts";
+import type { AndCondition, FilterData, ScopeFiltersData, SelectOption } from "./types.ts";
+import {
+  filterSummary,
+  getAllScopes,
+  getEligibleScopes,
+  getScopesWithFilters,
+  getScopesWithQueryFilters,
+  querySummary,
+  truncatePath,
+} from "./scopes.ts";
+import { renderQuerySubSection } from "./query-filters.ts";
 
-export interface BodyFiltersState {
-  bodyFiltersData: Record<string, FilterData[]>;
+export interface BodyFiltersState extends ScopeFiltersData {
   nextFilterId: number;
   expandedScopes: Record<string, boolean>;
+}
+
+function scopesWithAnyFilter(state: BodyFiltersState): string[] {
+  const result = getScopesWithFilters(state.bodyFiltersData);
+  for (const key of getScopesWithQueryFilters(state.queryFiltersData)) {
+    if (result.indexOf(key) === -1) result.push(key);
+  }
+  return result;
+}
+
+function combinedSummary(scopeKey: string, state: BodyFiltersState): string {
+  const parts: string[] = [];
+  const body = filterSummary(scopeKey, state.bodyFiltersData);
+  if (body) parts.push(body);
+  const query = querySummary(scopeKey, state.queryFiltersData);
+  if (query) parts.push(query);
+  return parts.join(" · ");
 }
 
 function createOption(value: string, label: string, selected: boolean): HTMLOptionElement {
@@ -803,11 +828,12 @@ export function renderBodyFiltersPanel(
   updateVisibility: () => void,
   renderChips: () => void,
 ): void {
-  const eligible = getEligibleScopes(scopesTextarea);
-  const withFilters = getScopesWithFilters(state.bodyFiltersData);
+  const declared = getAllScopes(scopesTextarea);
+  const bodyEligible = getEligibleScopes(scopesTextarea);
+  const withFilters = scopesWithAnyFilter(state);
   const allScopes: string[] = [];
-  for (let i = 0; i < eligible.length; i++) {
-    if (allScopes.indexOf(eligible[i]) === -1) allScopes.push(eligible[i]);
+  for (let i = 0; i < declared.length; i++) {
+    if (allScopes.indexOf(declared[i]) === -1) allScopes.push(declared[i]);
   }
   for (let j = 0; j < withFilters.length; j++) {
     if (allScopes.indexOf(withFilters[j]) === -1) {
@@ -820,7 +846,7 @@ export function renderBodyFiltersPanel(
   if (allScopes.length === 0) {
     const empty = document.createElement("p");
     empty.className = "text-sm text-gray-400 dark:text-gray-500";
-    empty.textContent = "Aucun scope \u00e9ligible (POST, PUT, PATCH).";
+    empty.textContent = "Aucun scope d\u00e9clar\u00e9.";
     bodyFiltersList.appendChild(empty);
     return;
   }
@@ -836,9 +862,11 @@ export function renderBodyFiltersPanel(
 
   for (let s = 0; s < allScopes.length; s++) {
     (function (scopeKey: string) {
-      const inTextarea = eligible.indexOf(scopeKey) !== -1;
-      const filters = state.bodyFiltersData[scopeKey] || [];
-      const filterCount = filters.length;
+      const inTextarea = declared.indexOf(scopeKey) !== -1;
+      const supportsBody = bodyEligible.indexOf(scopeKey) !== -1;
+      const bodyCount = (state.bodyFiltersData[scopeKey] || []).length;
+      const queryCount = (state.queryFiltersData[scopeKey] || []).length;
+      const filterCount = bodyCount + queryCount;
       const isExpanded = !!state.expandedScopes[scopeKey];
       const safeId = "bf-scope-" + scopeKey.replace(/[^a-zA-Z0-9]/g, "_");
       const contentId = safeId + "-content";
@@ -874,13 +902,23 @@ export function renderBodyFiltersPanel(
       const badge = document.createElement("span");
       badge.className =
         "text-xs text-fgp-600 dark:text-fgp-300 font-medium flex items-center gap-1";
-      badge.textContent = filterCount + " filtre" + (filterCount > 1 ? "s" : "");
+      // Le texte distingue les deux axes seulement quand les deux sont actifs : le cas
+      // majoritaire garde la forme compacte existante.
+      badge.textContent = bodyCount > 0 && queryCount > 0
+        ? bodyCount + " body · " + queryCount + " query"
+        : filterCount + " filtre" + (filterCount > 1 ? "s" : "");
 
-      if (filterCount > 0) {
+      if (bodyCount > 0) {
         const dot = document.createElement("span");
         dot.className = "w-2 h-2 rounded-full bg-fgp-500 inline-block";
         dot.setAttribute("aria-hidden", "true");
         badge.appendChild(dot);
+      }
+      if (queryCount > 0) {
+        const queryDot = document.createElement("span");
+        queryDot.className = "w-2 h-2 rounded-full bg-violet-500 dark:bg-violet-400 inline-block";
+        queryDot.setAttribute("aria-hidden", "true");
+        badge.appendChild(queryDot);
       }
 
       header.appendChild(chevron);
@@ -916,47 +954,71 @@ export function renderBodyFiltersPanel(
         content.className =
           "ml-4 mt-2 mb-3 space-y-3 border-l-2 border-gray-200 dark:border-gray-700 pl-4";
 
-        if (!state.bodyFiltersData[scopeKey]) {
-          state.bodyFiltersData[scopeKey] = [];
-        }
-        const scopeFilters = state.bodyFiltersData[scopeKey];
+        // Aucune sous-section body sur un scope qui ne peut pas porter de corps : une
+        // section grisee couterait de la hauteur pour dire exactement ce que son absence dit.
+        if (supportsBody) {
+          const bodyTitle = document.createElement("p");
+          bodyTitle.className =
+            "text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400";
+          bodyTitle.textContent = "Body Filters (avancé)";
+          content.appendChild(bodyTitle);
 
-        for (let fi = 0; fi < scopeFilters.length; fi++) {
-          renderFilterBlock(
-            scopeKey,
-            scopeFilters,
-            fi,
-            safeId,
-            content,
-            state,
-            updateVisibility,
-            renderPanel,
-            renderChips,
-          );
+          if (!state.bodyFiltersData[scopeKey]) {
+            state.bodyFiltersData[scopeKey] = [];
+          }
+          const scopeFilters = state.bodyFiltersData[scopeKey];
+
+          for (let fi = 0; fi < scopeFilters.length; fi++) {
+            renderFilterBlock(
+              scopeKey,
+              scopeFilters,
+              fi,
+              safeId,
+              content,
+              state,
+              updateVisibility,
+              renderPanel,
+              renderChips,
+            );
+          }
+
+          const btnAddFilter = document.createElement("button");
+          btnAddFilter.type = "button";
+          btnAddFilter.id = "bf-add-" + safeId;
+          btnAddFilter.className =
+            "mt-2 text-sm text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline";
+          btnAddFilter.textContent = "+ Ajouter un filtre body";
+          btnAddFilter.addEventListener("click", function () {
+            const newFilter: FilterData = {
+              id: state.nextFilterId++,
+              objectPath: "",
+              filterType: "any",
+              values: [""],
+              valueSubTypes: ["text"],
+            };
+            if (!state.bodyFiltersData[scopeKey]) state.bodyFiltersData[scopeKey] = [];
+            state.bodyFiltersData[scopeKey].push(newFilter);
+            renderPanel();
+            renderChips();
+            const newFieldInput = document.getElementById("bf-field-" + newFilter.id);
+            if (newFieldInput) newFieldInput.focus();
+          });
+          content.appendChild(btnAddFilter);
         }
 
-        const btnAddFilter = document.createElement("button");
-        btnAddFilter.type = "button";
-        btnAddFilter.id = "bf-add-" + safeId;
-        btnAddFilter.className =
-          "mt-2 text-sm text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline";
-        btnAddFilter.textContent = "+ Ajouter un filtre";
-        btnAddFilter.addEventListener("click", function () {
-          const newFilter: FilterData = {
-            id: state.nextFilterId++,
-            objectPath: "",
-            filterType: "any",
-            values: [""],
-            valueSubTypes: ["text"],
-          };
-          if (!state.bodyFiltersData[scopeKey]) state.bodyFiltersData[scopeKey] = [];
-          state.bodyFiltersData[scopeKey].push(newFilter);
-          renderPanel();
-          renderChips();
-          const newFieldInput = document.getElementById("bf-field-" + newFilter.id);
-          if (newFieldInput) newFieldInput.focus();
+        if (!state.queryFiltersData[scopeKey]) {
+          state.queryFiltersData[scopeKey] = [];
+        }
+        renderQuerySubSection({
+          scopeKey,
+          filters: state.queryFiltersData[scopeKey],
+          safeId,
+          container: content,
+          nextId: () => state.nextFilterId++,
+          renderPanel,
+          renderChips,
         });
-        content.appendChild(btnAddFilter);
+
         row.appendChild(content);
       }
 
@@ -973,7 +1035,7 @@ export function renderChips(
   state: BodyFiltersState,
   updateVisibility: () => void,
 ): void {
-  const withFilters = getScopesWithFilters(state.bodyFiltersData);
+  const withFilters = scopesWithAnyFilter(state);
   scopeChips.textContent = "";
   if (withFilters.length === 0) {
     scopeChips.classList.add("hidden");
@@ -999,10 +1061,14 @@ export function renderChips(
 
       const textSpan = document.createElement("span");
       textSpan.className = "flex-1 truncate text-gray-800 dark:text-gray-200";
-      const summary = filterSummary(scopeKey, state.bodyFiltersData);
+      const summary = combinedSummary(scopeKey, state);
+      const requiredCount = (state.queryFiltersData[scopeKey] || []).filter((f) =>
+        f.required
+      ).length;
+      const titleSuffix = requiredCount > 0 ? " (requis)" : "";
       textSpan.textContent = truncatePath(scopeKey, 50) +
         (summary ? " \u2192 " + summary : "");
-      textSpan.title = scopeKey + (summary ? " \u2192 " + summary : "");
+      textSpan.title = scopeKey + (summary ? " \u2192 " + summary + titleSuffix : "");
 
       const btnEdit = document.createElement("button");
       btnEdit.type = "button";
@@ -1045,7 +1111,10 @@ export function renderChips(
         "Supprimer le scope " + scopeKey + " et ses filtres",
       );
       btnRemove.addEventListener("click", function () {
+        // Les deux axes decrivent le meme scope : n'en vider qu'un laisserait des donnees
+        // orphelines qui reapparaitraient au prochain rendu.
         delete state.bodyFiltersData[scopeKey];
+        delete state.queryFiltersData[scopeKey];
         const lines = scopesTextarea.value.split("\n");
         const kept: string[] = [];
         for (let k = 0; k < lines.length; k++) {
@@ -1071,18 +1140,18 @@ export function updateBodyFiltersVisibility(
   scopeChips: HTMLElement,
   state: BodyFiltersState,
 ): void {
-  const eligible = getEligibleScopes(scopesTextarea);
-  const withFilters = getScopesWithFilters(state.bodyFiltersData);
+  const declared = getAllScopes(scopesTextarea);
+  const withFilters = scopesWithAnyFilter(state);
 
-  let hasEligibleWithoutFilters = false;
-  for (let j = 0; j < eligible.length; j++) {
-    if (withFilters.indexOf(eligible[j]) === -1) {
-      hasEligibleWithoutFilters = true;
+  let hasScopeWithoutFilters = false;
+  for (let j = 0; j < declared.length; j++) {
+    if (withFilters.indexOf(declared[j]) === -1) {
+      hasScopeWithoutFilters = true;
       break;
     }
   }
 
-  btnAddBodyFilters.classList.toggle("hidden", !hasEligibleWithoutFilters);
+  btnAddBodyFilters.classList.toggle("hidden", !hasScopeWithoutFilters);
 
   const updateVisibility = () =>
     updateBodyFiltersVisibility(

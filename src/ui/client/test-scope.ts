@@ -2,8 +2,22 @@ import { assertElement } from "./elements.ts";
 import { buildScopes } from "./generate.ts";
 import { buildAuthPayload } from "./auth-mode.ts";
 import type { AuthModeDeps } from "./auth-mode.ts";
-import { checkRequestAccess, type Scope, splitPathAndQuery } from "../../middleware/scopes.ts";
-import type { FilterData, SerializedScope } from "./types.ts";
+import {
+  type AccessVerdict,
+  checkRequestAccess,
+  type QueryDenial,
+  type Scope,
+  splitPathAndQuery,
+} from "../../middleware/scopes.ts";
+import type { ScopeFiltersData, SerializedScope } from "./types.ts";
+
+const QUERY_NOTE_INFO_CLASS =
+  "flex items-start gap-2 rounded-md border border-l-4 p-2 text-xs border-blue-200 border-l-blue-500 bg-blue-50 text-blue-800 dark:border-blue-700 dark:border-l-blue-500 dark:bg-blue-900/30 dark:text-blue-300";
+const QUERY_NOTE_CAUTION_CLASS =
+  "flex items-start gap-2 rounded-md border border-l-4 p-2 text-xs border-amber-200 border-l-amber-500 bg-amber-50 text-amber-800 dark:border-amber-700 dark:border-l-amber-500 dark:bg-amber-900/30 dark:text-amber-300";
+
+const NOTE_UNCONSTRAINED =
+  "La query n'est pas contrainte par les scopes : tous les param\u00e8tres passent.";
 
 function clearElement(el: HTMLElement): void {
   while (el.firstChild) {
@@ -25,7 +39,35 @@ function scopeLabel(scope: SerializedScope): string {
   if (scope.bodyFilters && scope.bodyFilters.length > 0) {
     label += ` [${scope.bodyFilters.length} body filter(s)]`;
   }
+  if (scope.queryFilters && scope.queryFilters.length > 0) {
+    label += ` [${scope.queryFilters.length} query filter(s)]`;
+  }
   return label;
+}
+
+function scopePattern(scope: SerializedScope): string {
+  if (typeof scope === "string") return scope;
+  return `${scope.methods.join("|")}:${scope.pattern}`;
+}
+
+// Les quatre causes ne se cumulent jamais : l'evaluation s'arrete au premier probleme, et le
+// comptage des occurrences precede toujours l'examen des valeurs. Sans cet ordre, une requete
+// dont toutes les valeurs sont correctes se verrait reprocher une valeur (\u00a712.5, \u00a719.2).
+function queryDenialText(denial: QueryDenial): string {
+  switch (denial.reason) {
+    case "undeclared":
+      return `Param\u00e8tre "${denial.param}" non d\u00e9clar\u00e9 : refus\u00e9 par d\u00e9faut d\u00e8s qu'un filtre ` +
+        "query existe sur ce scope.";
+    case "required_missing":
+      return `Param\u00e8tre requis "${denial.param}" absent.`;
+    case "too_many_occurrences":
+      return `Plus de ${denial.cap} occurrences de "${denial.param}" : au-del\u00e0 de cette ` +
+        "limite, la requ\u00eate est refus\u00e9e quelles que soient les valeurs. Pour filtrer " +
+        "davantage d'occurrences, remplacez une valeur regex par stringwildcard si " +
+        "possible : le plafond passe de 4 \u00e0 64.";
+    case "value":
+      return `Valeur de "${denial.param}" non autoris\u00e9e par ce filtre.`;
+  }
 }
 
 function createResultRow(match: boolean, text: string): HTMLDivElement {
@@ -43,6 +85,32 @@ function createResultRow(match: boolean, text: string): HTMLDivElement {
 
   row.appendChild(icon);
   row.appendChild(label);
+  return row;
+}
+
+// Le cas du surnombre d'occurrences ne se lit nulle part dans la configuration de l'auteur,
+// contrairement aux trois autres : l'icone le distingue au survol d'une liste de resultats,
+// sans jamais porter seule l'information, que le texte suffit a rendre (design \u00a76.3).
+function createDetailRow(denial: QueryDenial): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "flex items-start gap-1 pl-5 text-xs text-gray-500 dark:text-gray-400";
+
+  const connector = document.createElement("span");
+  connector.setAttribute("aria-hidden", "true");
+  connector.textContent = "\u2514";
+  row.appendChild(connector);
+
+  if (denial.reason === "too_many_occurrences") {
+    const marker = document.createElement("span");
+    marker.setAttribute("aria-hidden", "true");
+    marker.className = "shrink-0 text-gray-400 dark:text-gray-500";
+    marker.textContent = "\u24d8";
+    row.appendChild(marker);
+  }
+
+  const text = document.createElement("span");
+  text.textContent = queryDenialText(denial);
+  row.appendChild(text);
   return row;
 }
 
@@ -67,7 +135,7 @@ function parseTestBody(bodyTextarea: HTMLTextAreaElement, method: string): unkno
 }
 
 export function setupTestScope(
-  bodyFiltersData: Record<string, FilterData[]>,
+  filtersData: ScopeFiltersData,
   authDeps: AuthModeDeps,
 ): void {
   const methodSelect = assertElement("test-method", HTMLSelectElement);
@@ -82,11 +150,53 @@ export function setupTestScope(
   const queryNote = assertElement("test-query-note", HTMLElement);
   const badge = document.getElementById("test-scope-badge");
 
-  // La note se retire d'elle-meme le jour ou un scope contraint la query : elle est
-  // pilotee par le verdict, pas par une constante a retrouver (§18.4).
-  function updateQueryNote(queryConstrained: boolean): void {
+  const queryNoteText = assertElement("test-query-note-text", HTMLElement);
+  const queryNoteIconInfo = assertElement("test-query-note-icon-info", HTMLElement);
+  const queryNoteIconCaution = assertElement("test-query-note-icon-caution", HTMLElement);
+
+  // Trois etats, jamais deux. Afficher « contrainte » a cote d'un verdict « autorise » alors
+  // que le scope qui a matche ne regarde rien dirait a l'auteur que sa query a ete validee
+  // quand elle est passee sans controle : le mensonge permissif que ce module supprime
+  // (§12.5, challenge testeur T2).
+  function updateQueryNote(verdict: AccessVerdict | null, scopes: SerializedScope[]): void {
     const [, rawSearch] = splitPathAndQuery(pathInput.value);
-    queryNote.hidden = rawSearch.length === 0 || queryConstrained;
+    if (rawSearch.length === 0 || !verdict) {
+      queryNote.hidden = true;
+      return;
+    }
+
+    if (!verdict.queryConstrained && !verdict.queryConstrainedElsewhere) {
+      setQueryNote(NOTE_UNCONSTRAINED, false);
+      return;
+    }
+
+    // Sur un refus global il n'y a aucun scope accordant l'acces a nommer, et le detail par
+    // scope porte deja une information plus precise qu'une note generique.
+    if (!verdict.allowed || verdict.grantedBy === undefined) {
+      queryNote.hidden = true;
+      return;
+    }
+
+    const label = scopePattern(scopes[verdict.grantedBy]);
+    if (verdict.queryConstrained) {
+      setQueryNote(`La query est contrainte par le scope qui vous autorise : ${label}.`, false);
+      return;
+    }
+    setQueryNote(
+      `Autorisé par un scope qui ne contraint pas la query : ${label}. D'autres scopes ` +
+        "de ce blob contraignent ce chemin, mais ce n'est pas celui qui a matché en premier.",
+      true,
+    );
+  }
+
+  // L'icone est decorative et sa couleur vient de la classe du bloc parent : la gravite tient
+  // au texte seul, l'icone ne fait que suivre la rampe (§12.13).
+  function setQueryNote(text: string, caution: boolean): void {
+    queryNote.hidden = false;
+    queryNote.className = caution ? QUERY_NOTE_CAUTION_CLASS : QUERY_NOTE_INFO_CLASS;
+    queryNoteText.textContent = text;
+    queryNoteIconInfo.hidden = caution;
+    queryNoteIconCaution.hidden = !caution;
   }
 
   function updateBadge(): void {
@@ -113,7 +223,7 @@ export function setupTestScope(
 
     jsonContainer.textContent = "";
     jsonContainer.classList.add("hidden");
-    updateQueryNote(false);
+    updateQueryNote(null, []);
 
     if (rawScopes.length === 0 || path.length === 0) {
       clearElement(resultsContainer);
@@ -122,26 +232,29 @@ export function setupTestScope(
       return;
     }
 
-    const scopes = buildScopes(scopesTextarea, bodyFiltersData);
+    const scopes = buildScopes(scopesTextarea, filtersData);
     const body = parseTestBody(bodyTextarea, method);
 
     clearElement(resultsContainer);
-    let anyMatch = false;
-    let queryConstrained = false;
 
     // Une seule lecture des scopes, la meme que celle du proxy : c'est ce qui empeche
-    // l'interface d'affirmer un refus la ou la production repond 200 (ADR-0009 §4).
+    // l'interface d'affirmer un refus la ou la production repond 200 (ADR-0009 §4). Le
+    // verdict global se lit sur le jeu complet, exactement comme le proxy le calcule ; les
+    // lignes par scope, elles, demandent un verdict par scope pour porter leur diagnostic.
+    const global = checkRequestAccess(scopes as Scope[], method.toUpperCase(), path, body);
+
     for (let i = 0; i < scopes.length; i++) {
       const scope = scopes[i] as Scope;
       const verdict = checkRequestAccess([scope], method.toUpperCase(), path, body);
-      if (verdict.allowed) anyMatch = true;
-      if (verdict.queryConstrained) queryConstrained = true;
       resultsContainer.appendChild(createResultRow(verdict.allowed, scopeLabel(scopes[i])));
+      if (!verdict.allowed && verdict.denial?.axis === "query" && verdict.denial.query) {
+        resultsContainer.appendChild(createDetailRow(verdict.denial.query));
+      }
     }
 
-    updateQueryNote(queryConstrained);
+    updateQueryNote(global, scopes);
 
-    if (!anyMatch) {
+    if (!global.allowed) {
       btnTest.disabled = true;
       verdictSpan.textContent = "Proxy : acc\u00e8s refus\u00e9";
       verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
@@ -162,7 +275,7 @@ export function setupTestScope(
   bodyTextarea.addEventListener("input", debouncedHighlight);
 
   btnTest.addEventListener("click", async () => {
-    const scopes = buildScopes(scopesTextarea, bodyFiltersData);
+    const scopes = buildScopes(scopesTextarea, filtersData);
     const method = methodSelect.value;
     const path = pathInput.value;
     const tokenInput = document.getElementById("token") as HTMLInputElement | null;

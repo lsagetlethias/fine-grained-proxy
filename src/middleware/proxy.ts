@@ -9,7 +9,7 @@ import { checkRequestAccess, type Scope } from "./scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY, FGP_SOURCE_UPSTREAM } from "../constants.ts";
 import { logsEnabled, readLogsConfig } from "../logs/config.ts";
 import { computeBlobId } from "../logs/blob-id.ts";
-import { captureDetailed, captureNetwork } from "../logs/capture.ts";
+import { captureDetailed, captureNetwork, extractQueryParamNames } from "../logs/capture.ts";
 import { extractClientIp, truncateIp } from "../logs/ip.ts";
 
 const MAX_BLOB_LENGTH = 4096;
@@ -493,6 +493,7 @@ async function finishWithCapture(
       durationMs,
       ipPrefix,
       ts,
+      queryParamNames: extractQueryParamNames(new URL(c.req.url).search),
     });
 
     if (shouldCaptureDetailed && rawBodyBytes) {

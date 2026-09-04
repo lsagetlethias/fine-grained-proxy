@@ -46,6 +46,7 @@ export function setupPresets(
     els.tokenInput.value = "";
     els.tokenInput.placeholder = "Votre cl\u00e9 API";
     state.bodyFiltersData = {};
+    state.queryFiltersData = {};
     state.expandedScopes = {};
     els.bodyFiltersPanel.classList.add("hidden");
 

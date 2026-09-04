@@ -15,6 +15,8 @@
     status: number;
     durationMs: number;
     ipPrefix: string;
+    queryParamNames?: string[];
+    queryParamNamesTruncated?: true;
   };
 
   type DetailedEntry =
@@ -501,6 +503,25 @@
     row2.append(statusEl, durEl, ipEl);
 
     li.append(row1, row2);
+
+    // Un nom de parametre est une chaine entierement controlee par l'appelant, qui traverse le
+    // serveur jusqu'ici : textContent, jamais innerHTML. Les valeurs, elles, ne sont jamais
+    // capturees (§14.6), donc il n'y a rien d'autre a afficher.
+    const names = entry.queryParamNames;
+    if (names && names.length > 0) {
+      const row3 = document.createElement("div");
+      row3.className =
+        "mt-1 flex items-baseline gap-2 text-xs pl-20 text-gray-400 dark:text-gray-500";
+      const label = document.createElement("span");
+      label.className = "shrink-0";
+      label.textContent = "query :";
+      const list = document.createElement("span");
+      list.className = "font-mono truncate";
+      list.textContent = names.join(", ") + (entry.queryParamNamesTruncated ? ", ..." : "");
+      list.setAttribute("title", list.textContent);
+      row3.append(label, list);
+      li.append(row3);
+    }
 
     networkList.prepend(li);
     while (networkList.childElementCount > MAX_NETWORK_ITEMS) {

@@ -156,9 +156,15 @@ Deno.test("AC-40.18: les codes d'erreur du proxy sont tous documentes", () => {
 Deno.test("AC-40.19: les trois non-garanties de la politique de sortie sont dites", () => {
   // Un agent qui construit un blob depuis ce document doit lire ces trois faits ici :
   // les decouvrir en production coute une fuite de credentials ou un scope contourne.
-  assertStringIncludes(doc, "Query string parameters are not\ninspected");
-  assertStringIncludes(doc, "Redirects are not followed");
-  assertStringIncludes(doc, "are stripped before\nforwarding");
+  // Les retours a la ligne du document sont un detail de mise en forme : les figer ferait
+  // echouer ce test sur une reformulation qui ne change aucun des trois faits.
+  const flat = doc.replace(/\s+/g, " ");
+  assertStringIncludes(
+    flat,
+    "A scope constrains its query only when it declares `queryFilters`",
+  );
+  assertStringIncludes(flat, "Redirects are not followed");
+  assertStringIncludes(flat, "are stripped before forwarding");
 });
 
 Deno.test("AC-40.8: les six modes d'authentification sont nommes", () => {

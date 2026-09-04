@@ -1,4 +1,10 @@
-import type { ObjectValue, Scope, ScopeEntry } from "./scopes.ts";
+import {
+  MAX_QUERY_FILTERS_PER_SCOPE,
+  MAX_QUERY_VALUES_PER_FILTER,
+  type ObjectValue,
+  type Scope,
+  type ScopeEntry,
+} from "./scopes.ts";
 import {
   MAX_AND_WIDTH,
   MAX_OBJECT_VALUES_PER_BLOB,
@@ -44,20 +50,36 @@ interface Budget {
   total: number;
 }
 
-// Miroir des plafonds de crypto/blob.ts. Ici pour un message actionnable a la generation,
-// la-bas pour refuser un blob crafte : le salt etant public, seul le second protege.
-function validateObjectValueBudget(ov: ObjectValue, budget: Budget): string | null {
+// Renseigne quand la valeur appartient a un query filter. La restriction du type « any » aux
+// chaines ne vaut que sur cet axe, et elle doit descendre a toute profondeur d'un « and » ou
+// d'un « not » : sous « not », un « any » non-string ne produit pas un filtre mort mais un
+// filtre permissif, l'auteur ecrit « exclure la page 1 » et obtient « accepter tout » (§19.3).
+interface QueryScope {
+  param: string;
+}
+
+function validateObjectValueBudget(
+  ov: ObjectValue,
+  budget: Budget,
+  queryScope: QueryScope | null,
+): string | null {
   budget.total++;
   if (budget.total > MAX_OBJECT_VALUES_PER_BLOB) {
     return `Maximum ${MAX_OBJECT_VALUES_PER_BLOB} object values allowed per blob`;
   }
   if (ov.type === "any") {
     const v = ov.value;
-    const scalar = v === null || typeof v === "string" || typeof v === "number" ||
-      typeof v === "boolean";
-    if (!scalar) {
-      return "An 'any' filter only accepts a string, number, boolean or null: comparing " +
-        "objects depends on the caller's key order, which makes the result non deterministic";
+    if (queryScope) {
+      if (typeof v !== "string") {
+        return `Type "any" on a query filter only accepts a string value (param: '${queryScope.param}')`;
+      }
+    } else {
+      const scalar = v === null || typeof v === "string" || typeof v === "number" ||
+        typeof v === "boolean";
+      if (!scalar) {
+        return "An 'any' filter only accepts a string, number, boolean or null: comparing " +
+          "objects depends on the caller's key order, which makes the result non deterministic";
+      }
     }
   }
   if (ov.type === "regex") {
@@ -73,12 +95,70 @@ function validateObjectValueBudget(ov: ObjectValue, budget: Budget): string | nu
       return `An 'and' filter accepts at most ${MAX_AND_WIDTH} conditions`;
     }
     for (const sub of ov.value) {
-      const err = validateObjectValueBudget(sub, budget);
+      const err = validateObjectValueBudget(sub, budget, queryScope);
       if (err) return err;
     }
   }
   if (ov.type === "not") {
-    return validateObjectValueBudget(ov.value, budget);
+    return validateObjectValueBudget(ov.value, budget, queryScope);
+  }
+  return null;
+}
+
+function validateBodyFilters(entry: ScopeEntry, budget: Budget): string | null {
+  const filters = entry.bodyFilters;
+  if (!filters) return null;
+  if (filters.length > 8) {
+    return "Maximum 8 body filters per scope, got " + filters.length + " on " + entry.pattern;
+  }
+  for (const bf of filters) {
+    if (bf.objectPath.split(".").length > 6) {
+      return "Dot-path '" + bf.objectPath + "' exceeds maximum of 6 segments";
+    }
+    if (bf.objectValue.length > 16) {
+      return "Maximum 16 OR values per filter, got " + bf.objectValue.length + " on " +
+        bf.objectPath;
+    }
+    for (const ov of bf.objectValue) {
+      const err = validateObjectValue(ov, 0);
+      if (err) return err + " (field: " + bf.objectPath + ")";
+      const budgetErr = validateObjectValueBudget(ov, budget, null);
+      if (budgetErr) return budgetErr + " (field: " + bf.objectPath + ")";
+    }
+  }
+  return null;
+}
+
+function validateQueryFilters(entry: ScopeEntry, budget: Budget): string | null {
+  const filters = entry.queryFilters;
+  if (!filters) return null;
+  if (filters.length > MAX_QUERY_FILTERS_PER_SCOPE) {
+    return `Maximum ${MAX_QUERY_FILTERS_PER_SCOPE} query filters per scope, got ${filters.length}`;
+  }
+
+  const seen = new Set<string>();
+  for (const qf of filters) {
+    if (typeof qf.param !== "string" || qf.param.trim().length === 0) {
+      return "A query filter requires a non-empty param name";
+    }
+    if (seen.has(qf.param)) {
+      return `Duplicate query filter for param '${qf.param}'`;
+    }
+    seen.add(qf.param);
+    if (!Array.isArray(qf.values) || qf.values.length === 0) {
+      return `A query filter requires at least one value (param: '${qf.param}')`;
+    }
+    if (qf.values.length > MAX_QUERY_VALUES_PER_FILTER) {
+      return `Maximum ${MAX_QUERY_VALUES_PER_FILTER} OR values per query filter, got ` +
+        `${qf.values.length} on param '${qf.param}'`;
+    }
+    const queryScope: QueryScope = { param: qf.param };
+    for (const ov of qf.values) {
+      const err = validateObjectValue(ov, 0);
+      if (err) return err + " (param: '" + qf.param + "')";
+      const budgetErr = validateObjectValueBudget(ov, budget, queryScope);
+      if (budgetErr) return budgetErr;
+    }
   }
   return null;
 }
@@ -89,27 +169,14 @@ export function validateScopeLimits(scopes: Scope[]): string | null {
   if (structured.length > 10) {
     return "Maximum 10 structured scopes allowed, got " + structured.length;
   }
+  // Aucun filtre d'aucune sorte ne saute la validation : un ScopeEntry GET qui ne porte que
+  // des queryFilters est le cas le plus courant de la v5, sortir de la boucle sur l'absence
+  // de bodyFilters le laissait passer sans le moindre controle (§19.5).
   for (const entry of structured) {
-    if (!entry.bodyFilters) continue;
-    if (entry.bodyFilters.length > 8) {
-      return "Maximum 8 body filters per scope, got " + entry.bodyFilters.length + " on " +
-        entry.pattern;
-    }
-    for (const bf of entry.bodyFilters) {
-      if (bf.objectPath.split(".").length > 6) {
-        return "Dot-path '" + bf.objectPath + "' exceeds maximum of 6 segments";
-      }
-      if (bf.objectValue.length > 16) {
-        return "Maximum 16 OR values per filter, got " + bf.objectValue.length + " on " +
-          bf.objectPath;
-      }
-      for (const ov of bf.objectValue) {
-        const err = validateObjectValue(ov, 0);
-        if (err) return err + " (field: " + bf.objectPath + ")";
-        const budgetErr = validateObjectValueBudget(ov, budget);
-        if (budgetErr) return budgetErr + " (field: " + bf.objectPath + ")";
-      }
-    }
+    const bodyError = validateBodyFilters(entry, budget);
+    if (bodyError) return bodyError;
+    const queryError = validateQueryFilters(entry, budget);
+    if (queryError) return queryError;
   }
   return null;
 }
@@ -123,7 +190,8 @@ export function validateScopePatterns(scopes: Scope[]): string | null {
     const pattern = typeof scope === "string" ? scope : scope.pattern;
     if (pattern.includes("?")) {
       return "A scope pattern cannot carry a query string: " + pattern +
-        ". Query parameters are not constrained by scopes, they are forwarded as sent.";
+        ". Use the queryFilters field on this scope to constrain query parameters, " +
+        "not the pattern.";
     }
   }
   return null;

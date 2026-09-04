@@ -36,6 +36,7 @@ Deno.test({
       durationMs: 42,
       ipPrefix: "203.0.113.0/24",
       ts: 1_700_000_000_000,
+      queryParamNames: null,
     });
     const buf = _getNetworkBufferForTests(blobId);
     assertEquals(buf.length, 1);
@@ -186,6 +187,7 @@ Deno.test({
       durationMs: 100,
       ipPrefix: "10.0.0.0/24",
       ts: 1,
+      queryParamNames: null,
     });
     const buf = _getNetworkBufferForTests(blobId);
     const blob = JSON.stringify(buf[0]);

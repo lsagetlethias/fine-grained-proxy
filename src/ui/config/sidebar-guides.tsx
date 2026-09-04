@@ -252,6 +252,97 @@ export function BodyFiltersGuide() {
   );
 }
 
+export function QueryFiltersGuide() {
+  return (
+    <details>
+      <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
+        Query filters : exemples
+      </summary>
+      <div class="mt-2 text-xs space-y-4 text-gray-600 dark:text-gray-400">
+        <p>
+          Les query filters s'appliquent &agrave; n'importe quelle m&eacute;thode, GET compris.
+          D&egrave;s qu'un scope en porte un, tout param&egrave;tre non d&eacute;clar&eacute; fait
+          &eacute;chouer la requ&ecirc;te sur ce scope.
+        </p>
+
+        <div class="space-y-2">
+          <p class="font-medium text-gray-700 dark:text-gray-300">Cas courants</p>
+
+          <div>
+            <p class="font-medium text-gray-700 dark:text-gray-300">
+              Statut restreint et requis
+            </p>
+            <p>
+              Scope : <code class="font-mono">GET:/v1/items</code>, filtre{" "}
+              <code class="font-mono">status</code> = <code class="font-mono">open</code> |{" "}
+              <code class="font-mono">pending</code>, requis. Autorise{" "}
+              <code class="font-mono">/v1/items?status=open</code>. Bloque{" "}
+              <code class="font-mono">/v1/items?status=deleted</code> (valeur hors liste) et{" "}
+              <code class="font-mono">/v1/items</code> (param&egrave;tre requis absent).
+            </p>
+          </div>
+
+          <div>
+            <p class="font-medium text-gray-700 dark:text-gray-300">
+              Param&egrave;tre optionnel, valeur libre
+            </p>
+            <p>
+              Filtre{" "}
+              <code class="font-mono">page</code>, valeur = Existe (toute valeur), non requis.
+              Autorise <code class="font-mono">/v1/items</code> et{" "}
+              <code class="font-mono">/v1/items?page=2</code>. Bloque{" "}
+              <code class="font-mono">/v1/items?page=2&amp;sort=asc</code> (
+              <code class="font-mono">sort</code> non d&eacute;clar&eacute;).
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <p class="font-medium text-gray-700 dark:text-gray-300">Edge cases</p>
+
+          <div>
+            <p class="font-medium text-gray-700 dark:text-gray-300">
+              Param&egrave;tre r&eacute;p&eacute;t&eacute;
+            </p>
+            <p>
+              Filtre <code class="font-mono">tag</code> = <code class="font-mono">feature</code> |
+              {" "}
+              <code class="font-mono">bugfix</code>.{" "}
+              <code class="font-mono">/v1/items?tag=feature&amp;tag=bugfix</code>{" "}
+              : chaque occurrence est v&eacute;rifi&eacute;e s&eacute;par&eacute;ment, toutes
+              doivent matcher une valeur.{" "}
+              <code class="font-mono">/v1/items?tag=feature&amp;tag=urgent</code>{" "}
+              est refus&eacute; : <code class="font-mono">urgent</code>{" "}
+              ne matche aucune valeur. Au-del&agrave; du plafond d'occurrences, la requ&ecirc;te est
+              refus&eacute;e quelle que soit leur valeur : 64 occurrences ici (aucune regex dans ce
+              filtre), seulement 4 si le filtre avait utilis&eacute; une regex.
+            </p>
+          </div>
+
+          <div>
+            <p class="font-medium text-gray-700 dark:text-gray-300">Refus par d&eacute;faut</p>
+            <p>
+              D&egrave;s qu'un seul filtre query existe sur ce scope, tout param&egrave;tre non
+              d&eacute;clar&eacute;, m&ecirc;me anodin (<code class="font-mono">?debug=1</code>),
+              fait &eacute;chouer la requ&ecirc;te sur ce scope.
+            </p>
+          </div>
+
+          <div>
+            <p class="font-medium text-gray-700 dark:text-gray-300">Type de valeur</p>
+            <p>
+              Contrairement aux body filters, <code class="font-mono">any</code>{" "}
+              sur un query filter n'accepte que du texte. Pour{" "}
+              <code class="font-mono">?page=1</code>, la valeur du filtre s'&eacute;crit{" "}
+              <code class="font-mono">1</code> en tant que texte, pas en tant que nombre.
+            </p>
+          </div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export function AuthModesGuide() {
   return (
     <details>

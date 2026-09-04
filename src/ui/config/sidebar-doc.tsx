@@ -1,4 +1,10 @@
-import { AuthModesGuide, BodyFiltersGuide, RegexGuide, ScopesGuide } from "./sidebar-guides.tsx";
+import {
+  AuthModesGuide,
+  BodyFiltersGuide,
+  QueryFiltersGuide,
+  RegexGuide,
+  ScopesGuide,
+} from "./sidebar-guides.tsx";
 
 export function DocPanel() {
   return (
@@ -183,9 +189,11 @@ export function DocPanel() {
                 </dt>
                 <dd>
                   La m&eacute;thode ou le chemin demand&eacute; ne correspond &agrave; aucun scope
-                  du blob. Si des body filters sont configur&eacute;s, le contenu de la
-                  requ&ecirc;te peut aussi &ecirc;tre en cause. La section &laquo; Tester un scope
-                  &raquo; rejoue le cas sans consommer d'appel.
+                  du blob. Si des body filters ou des query filters sont configur&eacute;s, le
+                  contenu de la requ&ecirc;te ou ses param&egrave;tres de query peuvent aussi
+                  &ecirc;tre en cause. La section &laquo; Tester un scope &raquo; rejoue le cas sans
+                  consommer d'appel, et d&eacute;taille quel param&egrave;tre bloque si l'axe query
+                  est en cause.
                 </dd>
               </div>
               <div>
@@ -296,14 +304,20 @@ export function DocPanel() {
         </details>
 
         <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">
-          Les param&egrave;tres de query ne sont pas contr&ocirc;l&eacute;s
+          Param&egrave;tres de query
         </p>
         <p class="mt-1">
-          Les scopes contraignent la m&eacute;thode et le chemin, pas les param&egrave;tres de
-          query. Un blob autoris&eacute; sur <code class="font-mono text-xs">/v1/items</code>{" "}
-          accepte{" "}
-          <code class="font-mono text-xs">/v1/items?action=delete</code>. Si votre API cible expose
-          des actions par la query, scopez le chemin le plus &eacute;troitement possible.
+          Par d&eacute;faut, les scopes contraignent la m&eacute;thode et le chemin, pas les
+          param&egrave;tres de query. Un scope autoris&eacute; sur{" "}
+          <code class="font-mono text-xs">/v1/items</code> accepte{" "}
+          <code class="font-mono text-xs">/v1/items?action=delete</code>, sauf s'il d&eacute;clare
+          des <code class="font-mono text-xs">queryFilters</code>.
+        </p>
+        <p class="mt-1">
+          Un scope qui d&eacute;clare au moins un filtre query bascule en refus par d&eacute;faut
+          sur toute sa query : seuls les param&egrave;tres explicitement couverts sont
+          accept&eacute;s, tout param&egrave;tre non d&eacute;clar&eacute; fait &eacute;chouer la
+          requ&ecirc;te sur ce scope.
         </p>
 
         <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">
@@ -507,6 +521,7 @@ POST:/v1/apps/my-app/scale`}</pre>
 
         <ScopesGuide />
         <BodyFiltersGuide />
+        <QueryFiltersGuide />
         <AuthModesGuide />
         <RegexGuide />
       </section>

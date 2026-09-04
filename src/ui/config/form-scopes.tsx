@@ -5,7 +5,7 @@ import {
   LABEL_CLASS,
   SUB_LABEL_CLASS,
 } from "./constants.ts";
-import { AlertInfoIcon } from "./icons.tsx";
+import { AlertInfoIcon, AlertTriangleIcon } from "./icons.tsx";
 
 export function ScopesSection() {
   return (
@@ -27,31 +27,34 @@ export function ScopesSection() {
       >
       </textarea>
       <p id="scopes-hint" class={HINT_CLASS}>
-        Un pattern par ligne. Wildcard * pour tout matcher. Les scopes POST/PUT/PATCH permettent
-        d'ajouter des filtres sur le contenu de la requ&ecirc;te.
+        Un pattern par ligne. Wildcard * pour tout matcher. Tout scope peut porter des filtres sur
+        les param&egrave;tres de query ; les scopes POST/PUT/PATCH peuvent en plus filtrer le
+        contenu de la requ&ecirc;te.
       </p>
       <button
         type="button"
         id="btn-add-body-filters"
         class="hidden mt-1 text-sm text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline"
+        aria-expanded="false"
+        aria-controls="body-filters-panel"
       >
-        + Ajouter des filtres body sur un scope...
+        + Ajouter des filtres sur un scope...
       </button>
       <div
         id="body-filters-panel"
         class="hidden mt-3 rounded-md border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-600"
         role="region"
-        aria-label="Filtres body avanc&#233;s"
+        aria-label="Filtres avanc&#233;s"
       >
         <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
           <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            Body Filters (avanc&#233;)
+            Filtres avanc&#233;s
           </span>
           <button
             type="button"
             id="btn-close-body-filters"
             class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-fgp-500 rounded p-1"
-            aria-label="Fermer le panel body filters"
+            aria-label="Fermer le panel de filtres avanc&#233;s"
           >
             &#10005;
           </button>
@@ -109,9 +112,19 @@ export function TestScopeSection() {
           </div>
         </div>
 
+        {
+          /* Les deux icones vivent ici plutot que d'etre fabriquees en JS : leur trace
+            appartient au gabarit, le client ne fait que basculer laquelle est visible selon
+            l'etat de la note. La couleur suit la classe du bloc parent, jamais l'icone. */
+        }
         <p id="test-query-note" hidden aria-live="polite" class={ALERT_INFO_CLASS}>
-          <AlertInfoIcon />
-          <span>
+          <span id="test-query-note-icon-info" class="contents">
+            <AlertInfoIcon />
+          </span>
+          <span id="test-query-note-icon-caution" class="contents" hidden>
+            <AlertTriangleIcon />
+          </span>
+          <span id="test-query-note-text">
             La query n'est pas contrainte par les scopes : tous les param&egrave;tres passent.
           </span>
         </p>

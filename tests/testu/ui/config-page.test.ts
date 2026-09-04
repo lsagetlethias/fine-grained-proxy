@@ -154,10 +154,10 @@ Deno.test("§12.10: la remediation des nouveaux codes reprend la copy du PO au m
 });
 
 Deno.test("§12.10: le bloc sur la query est visible, hors du <details> des codes", () => {
-  const title = "Les paramètres de query ne sont pas contrôlés";
+  const title = "Paramètres de query";
 
-  // Ce n'est pas une erreur mais une absence de refus : la replier avec les codes la rendrait
-  // introuvable pour qui construit un blob en croyant le restreindre.
+  // Ce n'est pas une erreur mais une regle de comportement : la replier avec les codes la
+  // rendrait introuvable pour qui construit un blob en croyant le restreindre.
   assertStringIncludes(copy, title);
   assertEquals(
     errorDetailsHtml().includes(title),
@@ -165,14 +165,16 @@ Deno.test("§12.10: le bloc sur la query est visible, hors du <details> des code
     "le bloc query a ete replie dans le <details> des codes d'erreur",
   );
 
+  // Depuis la v5 les deux comportements coexistent : la non-contrainte reste la regle par
+  // defaut, le refus par defaut est ce que declenche un scope a queryFilters (§12.10 bloc 2 bis).
   assertStringIncludes(
     copy,
-    "Les scopes contraignent la méthode et le chemin, pas les paramètres de query.",
+    "Par défaut, les scopes contraignent la méthode et le chemin, pas les paramètres de query.",
   );
   assertStringIncludes(
     copy,
-    "Si votre API cible expose des actions par la query, scopez le chemin le plus étroitement " +
-      "possible.",
+    "Un scope qui déclare au moins un filtre query bascule en refus par défaut sur toute sa " +
+      "query",
   );
   assertStringIncludes(html, '<code class="font-mono text-xs">/v1/items?action=delete</code>');
 });
