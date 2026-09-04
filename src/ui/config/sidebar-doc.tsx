@@ -78,6 +78,190 @@ export function DocPanel() {
 
       <section>
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          Codes d'erreur
+        </h3>
+
+        <p class="font-medium text-gray-800 dark:text-gray-200">D'o&ugrave; vient l'erreur</p>
+        <p class="mt-1">
+          Toute r&eacute;ponse renvoy&eacute;e par le proxy porte l'en-t&ecirc;te{" "}
+          <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
+            X-FGP-Source
+          </code>. Il dit qui a r&eacute;pondu, avant m&ecirc;me de regarder le status.
+        </p>
+        <ul class="mt-1 list-disc list-inside space-y-0.5">
+          <li>
+            <code class="font-mono text-xs">proxy</code>{" "}
+            : c'est FGP qui a r&eacute;pondu. Le corps a la forme{" "}
+            <code class="font-mono text-xs">{"{error, message}"}</code>{" "}
+            et le code figure dans la liste ci-dessous.
+          </li>
+          <li>
+            <code class="font-mono text-xs">upstream</code>{" "}
+            : la r&eacute;ponse vient de votre API cible, transmise telle quelle. FGP n'a
+            touch&eacute; ni au status, ni au corps, ni aux en-t&ecirc;tes. Interpr&eacute;tez-la
+            avec la documentation de cette API.
+          </li>
+        </ul>
+        <p class="mt-1">
+          Ajoutez <code class="font-mono text-xs">-i</code> &agrave; votre commande{" "}
+          <code class="font-mono text-xs">curl</code> pour voir cet en-t&ecirc;te.
+        </p>
+
+        <details class="mt-3">
+          <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
+            Les erreurs de FGP
+          </summary>
+
+          <div class="mt-2">
+            <p class="font-medium text-gray-700 dark:text-gray-300">La cl&eacute; ou le blob</p>
+            <dl class="mt-1 space-y-2">
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">missing_key</code> (401)
+                </dt>
+                <dd>
+                  L'en-t&ecirc;te <code class="font-mono text-xs">X-FGP-Key</code>{" "}
+                  est absent de la requ&ecirc;te. Sans la cl&eacute; client, le blob ne peut pas
+                  &ecirc;tre d&eacute;chiffr&eacute;.
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">invalid_credentials</code> (401)
+                </dt>
+                <dd>
+                  Le d&eacute;chiffrement a &eacute;chou&eacute;. La cl&eacute; ne correspond pas
+                  &agrave; ce blob, le blob a &eacute;t&eacute; tronqu&eacute; ou modifi&eacute;, ou
+                  il a &eacute;t&eacute; g&eacute;n&eacute;r&eacute; sur une autre instance FGP.
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">blob_too_large</code> (414)
+                </dt>
+                <dd>
+                  Le blob d&eacute;passe 4 Ko. Passez en mode en-t&ecirc;te avec{" "}
+                  <code class="font-mono text-xs">X-FGP-Blob</code>, ou r&eacute;duisez le nombre de
+                  scopes.
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="mt-3">
+            <p class="font-medium text-gray-700 dark:text-gray-300">
+              Le p&eacute;rim&egrave;tre du blob
+            </p>
+            <dl class="mt-1 space-y-2">
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">scope_denied</code> (403)
+                </dt>
+                <dd>
+                  La m&eacute;thode ou le chemin demand&eacute; ne correspond &agrave; aucun scope
+                  du blob. Si des body filters sont configur&eacute;s, le contenu de la
+                  requ&ecirc;te peut aussi &ecirc;tre en cause. La section &laquo; Tester un scope
+                  &raquo; rejoue le cas sans consommer d'appel.
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">token_expired</code> (410)
+                </dt>
+                <dd>
+                  Le TTL du blob est d&eacute;pass&eacute;. Une URL expir&eacute;e ne se prolonge
+                  pas, il faut en g&eacute;n&eacute;rer une nouvelle.
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">invalid_body</code> (400)
+                </dt>
+                <dd>
+                  Des body filters sont configur&eacute;s mais le corps de la requ&ecirc;te n'est
+                  pas du JSON valide. V&eacute;rifiez aussi que l'en-t&ecirc;te{" "}
+                  <code class="font-mono text-xs">Content-Type</code> vaut bien{" "}
+                  <code class="font-mono text-xs">application/json</code>, sinon la requ&ecirc;te
+                  est refus&eacute;e en <code class="font-mono text-xs">scope_denied</code>.
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="mt-3">
+            <p class="font-medium text-gray-700 dark:text-gray-300">
+              FGP n'a pas pu joindre l'API cible
+            </p>
+            <p class="mt-1">
+              Ces trois erreurs sont les seules 502 produites par FGP. Toute autre 502 vient de
+              votre API cible : v&eacute;rifiez <code class="font-mono text-xs">X-FGP-Source</code>
+              {" "}
+              avant de conclure.
+            </p>
+            <dl class="mt-1 space-y-2">
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">upstream_unreachable</code> (502)
+                </dt>
+                <dd>
+                  L'API cible n'a r&eacute;pondu &agrave; aucun moment : DNS, d&eacute;lai
+                  d&eacute;pass&eacute;, connexion refus&eacute;e ou erreur TLS. V&eacute;rifiez
+                  l'URL cible du blob.
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">auth_exchange_failed</code> (502)
+                </dt>
+                <dd>
+                  Mode Scalingo API : impossible de s'authentifier aupr&egrave;s de Scalingo. Le
+                  token de compte du blob est invalide ou r&eacute;voqu&eacute;, ou l'API
+                  d'authentification Scalingo est indisponible.
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-gray-800 dark:text-gray-200">
+                  <code class="font-mono text-xs">auth_addon_failed</code> (502)
+                </dt>
+                <dd>
+                  Mode Scalingo Database API : impossible d'obtenir un token de base de
+                  donn&eacute;es. Le token de compte est invalide, ou il n'a pas acc&egrave;s
+                  &agrave; la base configur&eacute;e dans ce blob.
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="mt-3">
+            <p class="font-medium text-gray-700 dark:text-gray-300">Anomalies</p>
+            <p class="mt-1">
+              <code class="font-mono text-xs">invalid_request</code>{" "}
+              (400) quand l'URL ne contient pas de chemin apr&egrave;s le blob,{" "}
+              <code class="font-mono text-xs">invalid_auth_mode</code>{" "}
+              (400) quand le mode d'authentification du blob n'est pas reconnu par cette instance,
+              et <code class="font-mono text-xs">internal_error</code>{" "}
+              (500) qui signale un bug de FGP et m&eacute;rite un rapport.
+            </p>
+          </div>
+        </details>
+
+        <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">
+          Tout le reste vient de votre API
+        </p>
+        <p class="mt-1">
+          Un code absent de cette liste n'a pas &eacute;t&eacute; produit par FGP. Un 401, un 404,
+          un 429 ou un 500 portant <code class="font-mono text-xs">X-FGP-Source: upstream</code>
+          {" "}
+          sont la r&eacute;ponse de votre API cible, transmise sans modification. FGP ne les
+          reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de
+          votre API exactement comme si vous l'appeliez en direct.
+        </p>
+      </section>
+
+      <hr class="border-gray-200 dark:border-gray-700" />
+
+      <section>
+        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
           Partage &amp; import
         </h3>
         <div class="space-y-3">
