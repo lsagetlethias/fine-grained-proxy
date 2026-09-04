@@ -998,7 +998,7 @@ Les deux modes Scalingo portent dans l'UI les noms utilisés par Scalingo lui-m�
 | Bouton helper | « Charger les bases de données » |
 | Label sélecteur de base (visible) | « Base de données » |
 | Placeholder sélecteur | « Choisissez une base de données » |
-| Lien vers le panneau Doc | « Comment fonctionne ce mode » (cf. §12.11) |
+| Lien vers le panneau Doc | « En savoir plus sur les modes d'auth » (cf. §12.11) |
 | Lien de retour depuis le panneau Doc | « Revenir à Base de données » (cf. §12.11) |
 | Rappel URL cible | « Cible : `https://db-api.<région>.scalingo.com` » (voir la contrainte de largeur ci-dessous) |
 
@@ -1294,7 +1294,7 @@ Trois formes, selon le sens du déplacement :
 
 | Origine | Forme | Exemples |
 |---------|-------|----------|
-| Un champ ou un bloc du formulaire | « En savoir plus sur {sujet} » | « En savoir plus sur la clé client », « Comment fonctionne ce mode » |
+| Un champ ou un bloc du formulaire | « En savoir plus sur {sujet} » | « En savoir plus sur la clé client », « En savoir plus sur les modes d'auth » |
 | Le changelog | « Voir {section} dans la doc » | « Voir Codes d'erreur dans la doc » |
 | Le retour, depuis le panneau Doc | « Revenir à {label du champ} » | « Revenir à Clé personnalisée », « Revenir à Base de données » |
 
@@ -1305,6 +1305,8 @@ Trois règles, dans l'ordre d'importance :
 1. **Le libellé nomme sa destination.** Jamais « cliquez ici », jamais « en savoir plus » seul, jamais « revenir au formulaire ». Un lecteur d'écran peut lister les liens d'une page hors de leur contexte : un libellé qui ne dit pas où il mène devient inutilisable dans cette liste, et il y en aura plusieurs identiques sur la même page. C'est la règle qui impose la forme du retour : dès qu'il y a deux renvois, « Revenir au formulaire » ne distingue plus rien.
 2. **Le sujet reprend le mot du label du champ**, en minuscule à l'aller, tel quel au retour. Le lien placé sous « Clé personnalisée » parle de « la clé client », pas de « BYOK » ni de « la génération de clé ». L'utilisateur doit reconnaître ce qu'il vient de lire.
 3. **Pas de formulation de navigation externe.** Le lien bascule d'onglet sans quitter la page : il ne dit ni « ouvrir », ni « aller à », ni « consulter la documentation », qui laissent croire à un départ. « En savoir plus sur », « Voir » et « Revenir à » conviennent.
+
+**Un contre-exemple, gardé comme rappel.** La première version de cette convention donnait « Comment fonctionne ce mode » comme libellé du renvoi depuis le bloc Scalingo, et le citait en exemple de la forme « En savoir plus sur {sujet} ». Il n'a ni cette forme, ni ne nomme sa destination : lu hors contexte dans une liste de liens, « ce mode » ne désigne rien. La règle 1 était donc enfreinte par sa propre illustration, ce qui est le meilleur moyen de la vider de son sens. Corrigé en « En savoir plus sur les modes d'auth ». Vérifier qu'un libellé reste compréhensible **sorti de la page** est le test à appliquer, y compris aux exemples de cette section.
 
 ### 12.12 Bloc de résultat : la clé n'est affichée qu'une fois
 

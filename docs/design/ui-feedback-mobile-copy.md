@@ -7,7 +7,7 @@
 **Portée** : 6 retours de l'architecte après usage réel, dont 4 visibles surtout sur mobile
 **Fichiers impactés (intégration dev)** : `src/ui/config/constants.ts`, `src/ui/config/form-auth.tsx`, `src/ui/config/form-delivery.tsx`, `src/ui/config/form-identity.tsx`, `src/ui/config/form-scopes.tsx`, `src/ui/config/sidebar-doc.tsx`, `src/ui/config-page.tsx`, `src/ui/client/tabs.ts`
 
-> **Aucun identifiant HTML n'est renommé.** Tous les `id` consommés par `assertElement` sont conservés à l'identique. Deux éléments changent de **position** dans le DOM sans changer d'`id` (`#addon-status`, section `#scalingo-addon-section`), et trois `id` sont **ajoutés** (`#byok-doc-link`, `#addon-doc-link`, `#doc-client-key`). Détail en section 8.
+> **Aucun identifiant HTML n'est renommé.** Tous les `id` consommés par `assertElement` sont conservés à l'identique. Certains éléments changent de **position** dans le DOM sans changer d'`id`, et des `id` sont **ajoutés**. La **section 8 est l'inventaire faisant foi** : c'est elle qui sert de contrat de sélecteurs pour l'intégration, aucune autre liste de ce document n'est exhaustive.
 
 ---
 
@@ -570,6 +570,8 @@ Le défaut se cache sur écran large. La vérification doit se faire **à 375 px
 ---
 
 ## 8. Identifiants : ce qui change, ce qui ne change pas
+
+**Inventaire faisant foi.** Cette section est le contrat de sélecteurs de ce lot. Toute mention d'identifiant ailleurs dans le document est une illustration locale, pas un décompte : en cas d'écart, c'est cette liste qui fait référence, et c'est ici qu'il faut ajouter une entrée quand le lot évolue.
 
 **Aucun renommage.** Tous les `id` consommés par `assertElement` sont préservés.
 

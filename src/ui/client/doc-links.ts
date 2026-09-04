@@ -1,5 +1,7 @@
 const RETURN_ID = "doc-return";
 
+let switchingForDocLink = false;
+
 function panelOf(target: HTMLElement): HTMLElement | null {
   return target.closest<HTMLElement>("[role=tabpanel]");
 }
@@ -48,7 +50,13 @@ export function setupDocLinks(): void {
     // Ordre contraignant : activate() dans tabs.ts finit par focus() sur l'onglet.
     // Deplacer le focus avant la bascule le ferait atterrir sur le bouton d'onglet.
     const panel = panelOf(target);
-    if (panel) document.getElementById(panel.getAttribute("aria-labelledby") ?? "")?.click();
+    if (panel) {
+      // Sans ce drapeau, le nettoyage declenche par la bascule supprimerait le bouton de
+      // retour que insertReturn() vient tout juste de poser, deux renvois de suite.
+      switchingForDocLink = true;
+      document.getElementById(panel.getAttribute("aria-labelledby") ?? "")?.click();
+      switchingForDocLink = false;
+    }
 
     openAncestorDetails(target);
 
@@ -63,11 +71,12 @@ export function setupDocLinks(): void {
     target.focus();
   });
 
-  // Un seul retour vivant a la fois : la bascule manuelle d'onglet le retire.
+  // Un seul retour vivant a la fois : la bascule manuelle d'onglet le retire, mais pas
+  // celle qu'un renvoi vient de declencher, sinon il supprimerait son propre remplacant.
   for (const tab of document.querySelectorAll<HTMLElement>("[role=tab]")) {
     tab.addEventListener("click", () => {
-      if (!document.getElementById(RETURN_ID)) return;
-      setTimeout(removeReturn, 0);
+      if (switchingForDocLink) return;
+      removeReturn();
     });
   }
 }
