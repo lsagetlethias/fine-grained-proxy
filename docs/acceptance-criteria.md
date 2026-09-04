@@ -1,9 +1,11 @@
 # Criteres d'acceptation : Fine-Grained Proxy (FGP)
 
-**Version** : 3.1
-**Date** : 2026-09-03
-**Ref specs** : `docs/specs.md` v4.0
-**Ref review** : `docs/review/challenge-v4-byok-llms.md` (challenge des specs), `docs/review/ac-coverage-v4.md` (matrice)
+**Version** : 5.0
+**Date** : 2026-09-04
+**Ref specs** : `docs/specs.md` v5.0
+**Ref review** : `docs/review/challenge-v4-byok-llms.md` (challenge v4), `docs/review/challenge-query-filters-v5.md` (challenge v5), `docs/review/ac-coverage-v5.md` (matrice)
+
+**Etat du registre** : les series AC-1 a AC-57 sont toutes redigees ici. Les series **AC-43 a AC-50** ont ete backfillees le 2026-09-04, le lot de securite (ADR-0009 et ADR-0010) ayant ete livre sans criteres ecrits. Elles sont reconstituees **depuis les ADR et `docs/specs.md` §18**, jamais depuis les tests : rediger d'apres l'implementation produit des criteres qui decrivent le code au lieu de le contraindre. Les ecarts entre ces criteres et les tests existants, dans les deux sens, sont dans `docs/review/ac-coverage-v5.md`.
 
 ---
 
@@ -2201,7 +2203,7 @@
 
 ### AC-38.8 Caractere de controle : refuse
 
-**Given** une `key` de 30 caracteres contenant `\t`, puis `\n`, puis ` `
+**Given** une `key` de 30 caracteres contenant `\t`, puis `\n`, puis `
 **When** le serveur valide le body
 **Then** `400 invalid_key` dans les trois cas
 
@@ -2716,6 +2718,1295 @@
 
 ---
 
+## AC-43 : Politique de sortie, destination (garantie G1)
+
+Ref : `docs/adr/0009-politique-de-sortie-du-proxy.md` §1 (G1) et §2, `docs/specs.md` §18.1, §18.2, §8.4 etape 9.
+
+Serie reconstituee a posteriori depuis les ADR, le lot de securite ayant ete livre sans criteres ecrits. **La contrainte de forme se verifie deux fois** : a la generation pour un message actionnable, au dechiffrement pour refuser un blob forge. Le salt etant public par conception (`GET /api/salt`), un blob se fabrique hors ligne : une limite posee uniquement a la generation est decorative.
+
+### AC-43.1 Seuls les schemas http et https sont acceptes
+
+**Given** un `target` valant successivement `file:///etc/passwd`, `data:text/plain,hello`, `ftp://h/x` et `javascript:alert(1)`
+**When** la forme du target est evaluee
+**Then** les quatre sont refuses. `fetch` accepte `data:` et `file:` : un `target` n'a meme pas a etre une URL reseau pour que le processus emette quelque chose
+
+### AC-43.2 Un target portant un userinfo est refuse
+
+**Given** un `target` valant `https://user:pass@api.example.com`
+**When** la forme est evaluee
+**Then** il est refuse
+
+### AC-43.3 Un target portant une query est refuse
+
+**Given** un `target` valant `https://api.example.com/?x=`
+**When** la forme est evaluee
+**Then** il est refuse. Sans ce refus, la concatenation produisait `/?x=/v1/items` : le chemin scope finissait dans la query et le controle d'acces portait sur une chaine sans rapport avec la requete emise
+
+### AC-43.4 Un target portant un fragment est refuse
+
+**Given** un `target` valant `https://api.example.com/#`
+**When** la forme est evaluee
+**Then** il est refuse. Sans ce refus, le chemin reellement emis etait `/`, le chemin scope finissant dans le fragment, qui n'est jamais envoye sur le fil
+
+### AC-43.5 Un chemin de base piege est refuse
+
+**Given** des `target` dont le chemin de base contient successivement `%2f`, `..` et `\`
+**When** la forme est evaluee
+**Then** les trois sont refuses
+
+### AC-43.6 Un chemin de base legitime reste accepte
+
+**Given** un `target` valant `https://api.example.com/v2`
+**When** la forme est evaluee
+**Then** il est accepte, et le chemin proxy s'ajoute apres ce chemin de base
+
+### AC-43.7 La forme est verifiee a la generation
+
+**Given** un `target` mal forme envoye a `POST /api/generate`
+**When** la generation est demandee
+**Then** la reponse est `400 invalid_target` avec `X-FGP-Source: proxy`
+
+### AC-43.8 La forme est verifiee au dechiffrement
+
+**Given** un blob **forge hors ligne** avec `encryptBlob`, portant un `target` mal forme
+**When** le proxy le dechiffre
+**Then** le blob est refuse comme malforme, donc `401 invalid_credentials`. Ce critere ne peut pas se tester via `/api/generate` : il porte precisement sur le contournement de la generation
+
+### AC-43.9 Toutes les plages IPv4 non publiques sont refusees
+
+**Given** un `target` visant successivement `0.0.0.0/8`, `10/8`, `100.64/10`, `127/8`, `169.254/16`, `172.16/12`, `192.0.0/24`, `192.168/16`, `198.18/15`, `224/4`, `240/4` et `255.255.255.255`
+**When** la destination est classee avant l'appel sortant
+**Then** toutes sont refusees en `403 target_forbidden`
+
+### AC-43.10 Les notations alternatives d'une IP sont normalisees avant classement
+
+**Given** des `target` visant `2130706433`, `0x7f.0.0.1` et `0177.0.0.1`
+**When** la destination est classee
+**Then** toutes sont refusees : la normalisation WHATWG les ramene a `127.0.0.1` avant que la classification n'opere
+
+### AC-43.11 Les adresses IPv6 non publiques sont refusees, formes mappees comprises
+
+**Given** des `target` visant `::`, `::1`, `fc00::/7`, `fe80::/10`, `ff00::/8`, puis les formes IPv4-mapped et IPv4-compatible des plages d'AC-43.9
+**When** la destination est classee
+**Then** toutes sont refusees
+
+### AC-43.12 Pour un nom, toutes les adresses resolues doivent etre publiques
+
+**Given** un nom dont la resolution A et AAAA retourne une adresse publique **et** une adresse privee
+**When** la destination est classee
+**Then** elle est refusee. Un seul enregistrement non public suffit : accepter au premier resultat public laisserait passer un nom a resolution multiple
+
+### AC-43.13 Les suffixes internes sont refuses sans meme resoudre
+
+**Given** des noms se terminant par `.internal`, `.local`, `.localhost` et `.home.arpa`
+**When** la destination est classee
+**Then** tous sont refuses, et **aucune resolution DNS n'est emise**. Resoudre d'abord donnerait a l'appelant un oracle sur la zone DNS interne de l'hebergeur
+
+### AC-43.14 Un nom sans point est refuse
+
+**Given** un `target` visant `http://intranet`
+**When** la destination est classee
+**Then** il est refuse
+
+### AC-43.15 Un echec de resolution n'est pas un refus de politique
+
+**Given** un `target` dont le nom ne resout pas
+**When** la requete est traitee
+**Then** elle **continue** et echoue naturellement en `502 upstream_unreachable`, jamais en `403 target_forbidden`. Un nom qui ne resout pas ne joint rien, et transformer chaque incident DNS en refus opaque n'apporterait rien
+
+### AC-43.16 Les redirections ne sont pas suivies
+
+**Given** une cible publique autorisee qui repond `302` avec un `Location` pointant vers `169.254.169.254`
+**When** le forward a lieu
+**Then** le `302` est forwarde tel quel au client avec son `Location` et `X-FGP-Source: upstream`, et **aucune requete n'est emise vers la destination de redirection**. Sans `redirect: "manual"`, toute la classification d'AC-43.9 a AC-43.14 ne vaut rien : un hote public redirige vers l'adresse de metadonnees et les en-tetes d'auth y sont rejoues
+
+### AC-43.17 Le point de sortie est unique
+
+**Given** les cinq appelants reseau connus : le forward du proxy, `/api/test-proxy`, `/api/list-apps`, `/api/list-addons` et l'obtention du token d'addon
+**When** chacun emet
+**Then** chacun passe par le module de sortie unique et se voit appliquer la politique. C'est un critere structurel : il transforme la question « ce nouvel appel reseau est-il sur » en « passe-t-il par le point de sortie », qui se verifie mecaniquement. `apiUrl` (ADR-0008) est precisement l'appel qui avait echappe a la regle avant qu'elle existe
+
+### AC-43.18 Le champ `apiUrl` du mode `scalingo-addon` exige un hote Scalingo
+
+**Given** un blob v4 en mode `scalingo-addon` dont `apiUrl` vaut `https://collecteur.example`
+**When** le proxy tente d'obtenir le token d'addon
+**Then** l'appel est refuse. Ce n'est pas une entorse a l'agnosticisme, qui est une propriete de `target` : ce mode presente un **bearer de compte** a l'hote designe, un `apiUrl` libre est un canal d'exfiltration de credential upstream
+
+### AC-43.19 Le target des helpers Scalingo exige un hote Scalingo
+
+**Given** `POST /api/list-apps` puis `POST /api/list-addons` avec un `target` hors du domaine `.scalingo.com`
+**When** la requete est traitee
+**Then** les deux sont refuses. Ces routes sont declarees helpers Scalingo, la contrainte est coherente avec leur contrat
+
+### AC-43.20 `FGP_EGRESS_ALLOW_PRIVATE` desactive l'etape 2, jamais les etapes 1 et 3
+
+**Given** la variable positionnee a `1`
+**When** un `target` visant une adresse privee est presente, puis un `target` de schema `file:`, puis une cible qui redirige
+**Then** le premier passe, le second reste refuse, et la redirection reste non suivie. La derogation porte sur la classification d'adresse, jamais sur la forme ni sur la politique de redirection
+
+### AC-43.21 `FGP_EGRESS_ALLOW_PRIVATE` est signale bruyamment au demarrage
+
+**Given** la variable positionnee a `1`
+**When** le serveur demarre
+**Then** un avertissement est ecrit. C'est un interrupteur de developpement : actif en production, **G1 ne s'applique plus et l'instance redevient la SSRF non authentifiee que l'ADR-0009 corrige**, ouverte sur le reseau prive de l'hebergeur, service de metadonnees compris
+
+### AC-43.22 Les valeurs d'origine operateur ne sont pas soumises au classement d'adresse
+
+**Given** `SCALINGO_API_URL` et `SCALINGO_AUTH_URL` pointant vers un mock local
+**When** un echange de token a lieu
+**Then** l'appel aboutit. Ces valeurs ne viennent pas d'un appelant, elles viennent de l'operateur qui a deja le controle du processus
+
+### AC-43.23 NON-REGRESSION : une cible publique legitime fonctionne toujours
+
+**Given** un blob visant une API publique ordinaire
+**When** une requete dans le scope est presentee
+**Then** elle est forwardee et la reponse revient. Toute la politique doit rester invisible pour l'usage nominal, sans quoi elle sera desactivee par le premier operateur qu'elle gene
+
+### AC-43.24 Le refus de scope precede l'application de la politique de sortie
+
+**Given** un blob dont le `target` vise une adresse privee, et une requete **hors scope**
+**When** la requete est traitee
+**Then** la reponse est `403 scope_denied` et **aucune resolution DNS n'est emise**. L'ordre de §8.4 place le controle de scope en etape 8 et la politique de sortie en etape 9 : un appelant hors scope ne doit rien apprendre de la configuration du blob, ni declencher le moindre appel reseau
+
+---
+
+## AC-44 : Chemin, controle sur toutes les formes (garantie G2)
+
+Ref : `docs/adr/0009-politique-de-sortie-du-proxy.md` §1 (G2) et §3, `docs/specs.md` §18.1, §18.3.
+
+La regle est `autorise(formeBrute) ET autorise(formeCanonique)`, l'emission etant toujours la forme brute. Elle est **monotone et fail-closed** : ajouter une forme au jeu de verification ne peut que reduire l'ensemble autorise.
+
+### AC-44.1 Le percent-encoding ne contourne pas le scope
+
+**Given** un scope `GET:/v1/public/*` et une requete sur `/v1/public/..%2f..%2fadmin`
+**When** le verdict est calcule
+**Then** l'acces est refuse en `403 scope_denied` : la forme canonique vaut `/admin`, que le scope ne couvre pas. Le parseur URL normalise `..` et `%2e%2e`, jamais `%2f` ni `%5c` : c'est exactement l'ecart qu'exploitait l'attaque
+
+### AC-44.2 La contre-oblique encodee ne contourne pas non plus
+
+**Given** le meme scope et une requete portant `%5c` en guise de separateur
+**When** le verdict est calcule
+**Then** l'acces est refuse : la canonicalisation remplace `\` par `/` avant resolution des segments
+
+### AC-44.3 Le double encodage est couvert
+
+**Given** une requete portant `%252f`
+**When** la forme canonique est calculee
+**Then** le decodage percent est repete jusqu'au point fixe, au plus trois tours, et le verdict porte sur la forme finale
+
+### AC-44.4 Cas legitime GitLab : un identifiant contenant un slash encode reste autorise
+
+**Given** un scope `GET:/api/v4/projects/*` et une requete sur `/api/v4/projects/groupe%2Fprojet`
+**When** le verdict est calcule
+**Then** l'acces est autorise : la forme brute et la forme canonique `/api/v4/projects/groupe/projet` sont toutes deux couvertes par le wildcard.
+
+C'est le critere qui interdit les deux voies naturelles ecartees par l'ADR : refuser `%2f` casserait GitLab, Artifactory, Nexus et toute API dont un identifiant contient un `/` ; decoder avant de forwarder casserait les memes APIs plus profondement, en emettant silencieusement une autre route
+
+### AC-44.5 Table de canonicalisation
+
+**Given** les entrees `/v1//items`, `/v1/./items`, `/v1/a/../items`, `/v1\items` et `//v1/items`
+**When** la forme canonique est calculee
+**Then** chacune produit la forme attendue par la regle : slashes repetes ecrases, `\` remplace par `/`, segments `.` et `..` resolus selon la RFC 3986 §5.2.4
+
+### AC-44.6 Un caractere de controle ou un octet NUL apres decodage est rejete
+
+**Given** une requete dont le chemin contient `%00` ou un caractere de controle une fois decode
+**When** la requete est traitee
+**Then** la reponse est `400 invalid_request` avec `X-FGP-Source: proxy`. Aucune API ne route la-dessus, et c'est un vecteur de troncature classique
+
+### AC-44.7 NON-REGRESSION : un chemin sans encodage donne le meme verdict qu'avant
+
+**Given** un corpus de chemins ordinaires, sans percent-encoding ni segment relatif
+**When** le verdict est calcule
+**Then** il est identique a celui du controle sur la seule forme brute. La regle des deux formes ne doit rien changer au cas nominal, sans quoi elle casserait des blobs en circulation
+
+### AC-44.8 Les deux modes de livraison du blob produisent la meme chaine
+
+**Given** la requete `/v1//public//x`, presentee une fois en mode URL et une fois en mode header
+**When** le verdict est calcule dans chaque mode
+**Then** les deux verdicts sont identiques.
+
+Auparavant le mode URL reconstruisait le chemin par `"/" + segments.slice(1).join("/")` apres un `filter(Boolean)`, ce qui ecrasait les slashes repetes et supprimait le slash final, tandis que le mode header prenait `url.pathname` brut : **un seul blob, deux surfaces d'autorisation**. C'est la condition d'existence de G2
+
+### AC-44.9 L'emission est la forme brute, octet pour octet
+
+**Given** une requete autorisee dont le chemin porte du percent-encoding
+**When** le forward a lieu
+**Then** la cible recoit le chemin **tel que presente au proxy**, sans decodage ni normalisation. C'est la garantie que la regle des deux formes ne rouvre pas l'ADR-0006 : le controle s'elargit, l'emission ne bouge pas
+
+### AC-44.10 La regle est monotone : elle ne peut jamais ouvrir un acces
+
+**Given** un corpus de requetes dont le verdict est connu sous le controle de la seule forme brute
+**When** le controle des deux formes est applique
+**Then** aucune requete refusee ne devient autorisee. Ce critere protege la propriete structurelle : ajouter une forme de verification ne doit jamais elargir l'ensemble autorise, quelle que soit la forme ajoutee plus tard
+
+### AC-44.11 Un scope en correspondance exacte portant du percent-encoding devient plus strict
+
+**Given** un scope `GET:/projects/groupe%2Fprojet` sans wildcard et la requete correspondante
+**When** le verdict est calcule
+**Then** l'acces est refuse, la forme canonique `/projects/groupe/projet` n'etant pas couverte. C'est le cout ergonomique assume de la decision, il concerne les scopes sans wildcard et il doit etre teste pour que personne ne le prenne plus tard pour un bug
+
+### AC-44.12 L'URL sortante est construite par l'API URL, jamais par concatenation
+
+**Given** un `target` portant un chemin de base et une requete sur un chemin proxy
+**When** l'URL sortante est construite
+**Then** l'origine et le chemin de base viennent du `target` valide, le chemin proxy est ajoute, la query est posee explicitement, et le resultat ne depend d'aucune concatenation de chaines. La forme du `target` ayant deja ete contrainte par AC-43.1 a AC-43.6, cette construction est deterministe
+
+### AC-44.13 Le chemin proxy ne peut pas etre avale par le target
+
+**Given** un `target` dont le chemin de base se termine par un ou plusieurs slashes
+**When** l'URL sortante est construite pour un chemin proxy donne
+**Then** le chemin proxy est integralement present dans l'URL emise. Un chemin scope qui disparait de la requete emise est la forme la plus dangereuse de divergence entre ce qui est controle et ce qui part
+
+---
+
+## AC-45 : En-tetes entrants et provenance (garantie G3)
+
+Ref : `docs/adr/0009-politique-de-sortie-du-proxy.md` §1 (G3) et §5, `docs/specs.md` §11.2, §18.1.
+
+La decision est une **denylist par classe**, pas une allowlist : il n'existe pas de liste finie d'en-tetes utiles a toutes les APIs, et une allowlist casserait l'agnosticisme aussi surement qu'une allowlist d'hotes.
+
+### AC-45.1 L'`Authorization` de l'appelant n'atteint pas l'upstream
+
+**Given** un blob en mode `header:{name}` ou en mode `headers`, cas ou l'auth du blob n'ecrase pas `Authorization`, et un appelant qui pose son propre `Authorization`
+**When** le forward a lieu
+**Then** la cible ne recoit pas cet en-tete.
+
+C'est la classe qui porte la vraie decision. La promesse de FGP est que **l'appelant ne detient pas le credential de l'API cible**. Laisser passer son `Authorization` permet d'atteindre l'upstream avec une identite que le blob n'a jamais accordee, sur une API acceptant plusieurs schemas d'authentification : une escalade de privilege qui contourne entierement le modele de scopes
+
+### AC-45.2 Le `Cookie` de l'appelant n'est pas transmis
+
+**Given** un appelant qui pose un `Cookie`
+**When** le forward a lieu
+**Then** la cible ne le recoit pas
+
+### AC-45.3 Les en-tetes hop-by-hop ne sont pas transmis
+
+**Given** un appelant qui pose `Connection`, `Keep-Alive`, `Proxy-Authenticate`, `Proxy-Authorization`, `Proxy-Connection`, `TE`, `Trailer`, `Transfer-Encoding` et `Upgrade`
+**When** le forward a lieu
+**Then** aucun n'atteint la cible. Aucun proxy conforme ne les relaie (RFC 9110 §7.6.1), et c'est la matiere premiere du request smuggling
+
+### AC-45.4 Les en-tetes nommes par `Connection` sont retires aussi
+
+**Given** un appelant qui pose `Connection: X-Custom-A, X-Custom-B` et les deux en-tetes correspondants
+**When** le forward a lieu
+**Then** `X-Custom-A` et `X-Custom-B` sont retires en plus de `Connection`. Ne retirer que l'en-tete `Connection` lui-meme laisserait passer exactement ce qu'il designe
+
+### AC-45.5 Les en-tetes de provenance ne sont pas transmis
+
+**Given** un appelant qui pose `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Real-IP` et `Forwarded`
+**When** le forward a lieu
+**Then** aucun n'atteint la cible, et FGP n'en pose aucun de son cru. En relayer un forge pollue les logs de l'upstream ; en poser un vrai divulguerait l'IP de l'appelant a la cible, ce qu'un proxy stateless n'a pas a faire sans qu'on le lui demande
+
+### AC-45.6 Tout en-tete prefixe `X-FGP-` est retire
+
+**Given** un appelant qui pose `X-FGP-Key`, `X-FGP-Blob` et un `X-FGP-Inconnu`
+**When** le forward a lieu
+**Then** les trois sont retires. La regle porte sur le prefixe, pas sur une liste : ils appartiennent au protocole du proxy, pas a l'upstream
+
+### AC-45.7 `Host` est retire
+
+**Given** un appelant qui pose un `Host`
+**When** le forward a lieu
+**Then** il est retire et le runtime resout l'hote de la cible
+
+### AC-45.8 AGNOSTICISME : un en-tete applicatif quelconque est bien transmis
+
+**Given** un appelant qui pose `Accept`, `Range`, `If-None-Match`, `Idempotency-Key`, `X-GitHub-Api-Version` et un en-tete proprietaire inconnu
+**When** le forward a lieu
+**Then** tous atteignent la cible inchanges. C'est le critere qui interdit de transformer la denylist en allowlist a la premiere alerte de securite
+
+### AC-45.9 L'en-tete d'auth du blob ecrase celui de l'appelant portant le meme nom
+
+**Given** un blob dont l'AuthSpec pose `X-API-Key`, et un appelant qui pose lui aussi `X-API-Key`
+**When** le forward a lieu
+**Then** la cible recoit la valeur du blob, jamais celle de l'appelant
+
+### AC-45.10 Le strip transport passe en dernier et ecrase tout
+
+**Given** un blob dont l'AuthSpec tenterait de poser `Host` ou un en-tete hop-by-hop
+**When** le forward a lieu
+**Then** ces en-tetes sont retires malgre tout. L'ordre est : strip des en-tetes de l'appelant, puis pose des en-tetes d'auth du blob, puis strip transport final. Inverser les deux premieres passes supprimerait l'`Authorization` legitime issu du blob
+
+### AC-45.11 `FGP_TRUSTED_PROXY_HOPS` a 0 : `X-Forwarded-For` est ignore
+
+**Given** la variable absente ou a `0`, et une requete portant un `X-Forwarded-For` forge
+**When** l'IP cliente est resolue pour les logs
+**Then** l'IP retenue vient de l'adresse du pair, jamais de l'en-tete.
+
+Le defaut a `0` degrade la precision des logs derriere un routeur mal declare, et c'est le bon arbitrage : **une IP fausse dans un journal est pire qu'une IP absente**, parce qu'elle sera lue comme une preuve
+
+### AC-45.12 `FGP_TRUSTED_PROXY_HOPS` a n : la n-ieme en partant de la droite
+
+**Given** la variable a `1` et un `X-Forwarded-For` portant plusieurs adresses
+**When** l'IP cliente est resolue
+**Then** l'adresse retenue est la premiere en partant de la **droite**, jamais la premiere en partant de la gauche. La partie gauche de la liste est ecrite par l'appelant, la partie droite par l'infrastructure
+
+### AC-45.13 Une liste trop courte pour le nombre de sauts declare retombe sur l'adresse du pair
+
+**Given** la variable a `1` et un `X-Forwarded-For` ne portant qu'une seule adresse, forgee par l'appelant
+**When** l'IP cliente est resolue
+**Then** l'adresse du pair est retenue. Sans ce repli, declarer un saut suffirait a faire confiance a une valeur entierement fournie par l'appelant
+
+### AC-45.14 L'IP stockee reste tronquee
+
+**Given** n'importe laquelle des configurations ci-dessus
+**When** une entry de log est ecrite
+**Then** l'IP y figure tronquee en /24 pour IPv4 ou /48 pour IPv6, jamais en clair
+
+---
+
+## AC-46 : Query non contrainte et verdict unifie (etat du lot de securite)
+
+Ref : `docs/adr/0009-politique-de-sortie-du-proxy.md` §1 (G4) et §4, `docs/specs.md` §18.4.
+
+**Serie datee.** Ces criteres decrivent l'etat livre par le lot de securite, ou le seul etat atteignable de G4 est « transmis librement ». Un critere d'acceptation date de sa decision : ils ne sont pas reecrits retroactivement.
+
+**Ce que la v5 change**, sans que ces criteres deviennent faux : AC-46.1 et AC-46.5 restent vrais pour tout `ScopeEntry` sans `queryFilters`, qui est le cas de tous les blobs v2 a v4 et de la majorite des v5. Leur enonce doit simplement etre lu comme conditionne a l'absence de `queryFilters` sur le scope evalue. AC-46.3 change de message, pas de comportement (§19.7). AC-46.2, AC-46.4 et AC-46.6 sont inchanges. La serie AC-51 et suivantes couvre le cas contraint.
+
+### AC-46.1 La query n'est pas contrainte par les scopes, et le verdict le dit
+
+**Given** un blob scope `GET:/v1/items` et une requete `GET /v1/items?action=delete&scope=all`
+**When** le verdict est calcule
+**Then** l'acces est autorise, et le verdict porte un champ indiquant que la query n'est **pas** contrainte. Ce champ existe des ce lot, avec une seule valeur atteignable, precisement pour que la feature `queryFilters` s'y branche sans nouveau point de decision
+
+### AC-46.2 PARITE : le testeur de scopes et le proxy rendent le meme verdict
+
+**Given** la requete `/v1/items?action=delete` et le scope `GET:/v1/items`
+**When** on compare le verdict affiche par le testeur de l'UI a la reponse du proxy
+**Then** les deux disent « autorise ».
+
+Avant ce lot, le testeur repondait « Acces refuse » la ou la production repondait 200. **Un outil de verification qui se trompe dans le sens permissif est pire que pas d'outil.** La cause n'etait pas le code du testeur mais le fait qu'il possedait sa propre lecture des scopes, en parallele de celle du proxy
+
+### AC-46.3 Un `?` dans un pattern de scope est refuse a la generation
+
+**Given** un scope `GET:/v1/items?safe=1` envoye a `POST /api/generate`
+**When** la generation est demandee
+**Then** la reponse est `400 invalid_scope`. Un scope syntaxiquement mort dont l'auteur croit qu'il contraint quelque chose est le pire des deux mondes
+
+### AC-46.4 Un `?` dans un pattern reste accepte au dechiffrement, et n'est jamais matche
+
+**Given** un blob en circulation portant un pattern avec un `?`, presente au proxy
+**When** le blob est dechiffre puis une requete evaluee
+**Then** le blob est accepte, ses autres scopes fonctionnent, et le pattern portant le `?` ne matche jamais rien.
+
+Refuser ce blob casserait des acces vivants sur leurs autres scopes pour un gain de securite nul : un pattern qui ne peut rien autoriser n'est pas dangereux. La regle generale est celle de l'ADR-0006 appliquee a la validation, **on refuse ce qui peut nuire, on ne casse pas ce qui est seulement inutile**
+
+### AC-46.5 La query est transmise a la cible telle quelle
+
+**Given** une requete autorisee portant une query
+**When** le forward a lieu
+**Then** la cible recoit la chaine de query inchangee, et le proxy n'en retire ni n'en ajoute aucun parametre
+
+### AC-46.6 STRUCTUREL : une seule fonction d'autorisation
+
+**Given** le proxy et le highlight du testeur cote navigateur
+**When** on trace quelle fonction chacun appelle pour decider
+**Then** les deux appellent la meme fonction exportee, qui prend le chemin brut avec sa query eventuelle et retourne un verdict.
+
+C'est le critere qui rend le mensonge d'AC-46.2 impossible plutot que corrige. **Trois lectures des scopes ne peuvent pas rester d'accord dans le temps, une seule ne peut pas diverger.** La troisieme lecture, le handler serveur de test, a ete supprimee (AC-49)
+
+---
+
+## AC-47 : Plafonds de corps et de decompression
+
+Ref : `docs/adr/0010-politique-limites-ressources.md` D5, D6, D7 et plan lot 1, `docs/specs.md` §18.5.
+
+Toutes ces limites decoulent du critere D0 : **aucune primitive optionnelle ne doit couter plus cher que la derivation de cle obligatoire deja presente sur le chemin**, soit environ 11,6 ms.
+
+### AC-47.1 `bodyLimit` par defaut sur `/api/*`
+
+**Given** un corps de plus de 64 Ko envoye a `POST /api/generate`
+**When** la requete est traitee
+**Then** la reponse est `413 payload_too_large` avec `X-FGP-Source: proxy`. Une configuration produisant un blob de 4 096 caracteres base64url pese au plus environ 45 Ko de JSON : tout ce qui depasse echouerait de toute facon en `blob_too_large`, le refuser plus tot ne coute rien a l'appelant
+
+### AC-47.2 Paliers resserres par route
+
+**Given** des corps depassant respectivement 8 Ko sur `/api/decode`, 16 Ko sur `/api/share/decode`, et 4 Ko sur `/api/list-apps` et `/api/list-addons`
+**When** chaque requete est traitee
+**Then** chacune repond `413`. Chaque palier est dimensionne sur ce que la route transporte reellement : un blob plus une cle, un `encoded`, un token plus un nom d'application
+
+### AC-47.3 Le champ `encoded` est plafonne a 8 192 caracteres
+
+**Given** un `encoded` de 8 193 caracteres envoye a `POST /api/share/decode`
+**When** la requete est traitee
+**Then** la reponse est `400`. Ce payload n'a qu'un transport, le parametre d'URL `/?c=...`, et 8 192 est la limite de fait des serveurs en frontal : au-dela, le lien de partage est deja casse en tant que lien
+
+### AC-47.4 Le corps bufferise du proxy est plafonne a 512 Ko
+
+**Given** un blob avec body filter actif et une requete portant un corps de 1 Mo
+**When** la requete est traitee
+**Then** la reponse est `413 payload_too_large`. `JSON.parse` de 337 Ko coute 0,92 ms, donc 512 Ko environ 1,4 ms, un ordre de grandeur sous les 11,6 ms de la derivation obligatoire
+
+### AC-47.5 NON-REGRESSION : sans body filter ni capture detailed, le corps reste en flux
+
+**Given** un blob **sans** body filter et **sans** capture detailed, et une requete portant un corps de 2 Mo
+**When** le forward a lieu
+**Then** la cible recoit les 2 Mo, et le corps n'a jamais ete mis en memoire.
+
+**C'est le critere le plus important de cette serie.** Le plafond doit s'appliquer la ou le corps est deja lu, pas au transit. Le poser au mauvais endroit casserait les gros uploads a travers le proxy et introduirait precisement la consommation memoire qu'on cherche a eviter, tout en contredisant le proxy transparent (ADR-0006)
+
+### AC-47.6 Le `bodyLimit` n'est jamais monte sur `*`
+
+**Given** l'inventaire des chemins sur lesquels le middleware est monte
+**When** on le compare a la liste des routes servies par FGP
+**Then** le middleware est monte sur une liste explicite et jamais sur un motif fourre-tout. Meme parti que celui deja pris pour les en-tetes de securite, et pour la meme raison : la route proxy transmet le corps en streaming, un montage global le mettrait en tampon
+
+### AC-47.7 Quand seule la capture detailed a besoin du corps, la lecture est plus courte
+
+**Given** un blob avec capture detailed active et **sans** body filter
+**When** un corps depassant `FGP_LOGS_DETAILED_MAX_KB` est presente
+**Then** la lecture s'arrete peu apres ce plafond, le reste etant de toute facon tronque a la capture. Lire 512 Ko pour n'en garder que 32 Ko serait du gaspillage sur le chemin chaud
+
+### AC-47.8 Toute decompression est bornee en sortie
+
+**Given** une bombe gzip de 3 Ko se decompressant en 3 Mo, presentee comme blob puis comme `encoded` de partage
+**When** la decompression est tentee
+**Then** les deux sont rejetees des que la sortie cumulee depasse 128 Ko, et la memoire du processus ne monte pas.
+
+Le ciphertext d'un blob vaut au plus 3 044 octets, donc 128 Ko autorise un ratio de 42:1 quand du JSON de configuration compresse a 10 ou 15:1, tout en coupant d'un facteur 24 le ratio gzip maximal mesure a 1 029:1. Sur `/api/share/decode`, l'amplification passe de 1 200:1 a 16:1
+
+### AC-47.9 NON-REGRESSION : l'aller-retour nominal de compression fonctionne
+
+**Given** une configuration realiste
+**When** on chiffre puis dechiffre un blob, et on encode puis decode un partage
+**Then** les deux aller-retours sont fideles. Une borne de decompression posee trop bas casserait les configurations legitimes les plus grosses
+
+### AC-47.10 Les refus de taille sont des reponses FGP, pas des reponses upstream
+
+**Given** un `413` et un `400` produits par ces plafonds
+**When** on inspecte la reponse
+**Then** elle porte `X-FGP-Source: proxy` et la shape `{error, message}`. Le proxy transparent n'est pas entame : ces codes sont produits par FGP et se declarent comme tels
+
+---
+
+## AC-48 : Dialecte regex, ancrage et budgets de denombrement
+
+Ref : `docs/adr/0010-politique-limites-ressources.md` D2, D3, D4 et plan lot 2, `docs/limits.md`.
+
+Trois couches, du plus au moins solide : le plafond de la valeur testee (ne depend d'aucune analyse du motif, ne peut pas se tromper), le dialecte (heuristique, jamais seul), le plafond de denombrement. **La couche 2 est une analyse statique ecrite a la main, donc un parseur, donc susceptible de bugs** : c'est la dette assumee de l'ADR, et la raison pour laquelle les deux autres couches existent.
+
+### AC-48.1 Le corpus catastrophique connu est refuse
+
+**Given** les motifs `^(a+)+$`, `^(a|a)*$`, `^(a*)*$`, `^(?:a+)+$`, `(x+x+)+y` et `^(a+){10}$`
+**When** le dialecte est evalue
+**Then** tous sont refuses. `^(a+)+$` coute 3 248 ms sur 29 caracteres et 37 900 ms sur 31 : c'est la classe que la regle « aucun quantificateur applique a un groupe » elimine
+
+### AC-48.2 Le corpus legitime passe
+
+**Given** les motifs `^v\d+\.\d+\.\d+$`, `^refs/heads/[a-z0-9._/-]+$` et `^(main|develop)$`
+**When** le dialecte est evalue
+**Then** tous sont acceptes. Un dialecte qui refuserait ces trois motifs rendrait le type `regex` inutilisable, et la perte serait reelle : un tableau de 16 `stringwildcard` absorbe l'alternation mais ni les classes de caracteres ni la repetition bornee
+
+### AC-48.3 PIEGE DE PARSEUR : parentheses echappees
+
+**Given** le motif `\(a+\)+`
+**When** le dialecte est evalue
+**Then** il est accepte : ce ne sont pas des groupes, donc le quantificateur ne s'applique pas a un groupe. Un analyseur naif le refuserait
+
+### AC-48.4 PIEGE DE PARSEUR : parentheses en classe de caracteres
+
+**Given** le motif `[(]a+`
+**When** le dialecte est evalue
+**Then** il est accepte : la parenthese est un caractere litteral a l'interieur d'une classe
+
+### AC-48.5 PIEGE DE PARSEUR : accolade litterale non quantificateur
+
+**Given** un motif contenant une `{` qui n'ouvre pas un quantificateur valide
+**When** le dialecte est evalue
+**Then** elle est traitee comme un caractere litteral et non comme une borne de repetition
+
+### AC-48.6 Source de plus de 200 caracteres refusee
+
+**Given** une source de regex de 201 caracteres
+**When** le dialecte est evalue
+**Then** elle est refusee
+
+### AC-48.7 Borne de repetition superieure a 100 refusee
+
+**Given** un motif portant `{2,101}`
+**When** le dialecte est evalue
+**Then** il est refuse ; `{2,100}` passe
+
+### AC-48.8 Plus de trois quantificateurs refuses
+
+**Given** un motif a 4 quantificateurs
+**When** le dialecte est evalue
+**Then** il est refuse. `^a*a*a*b$` en contient 3 et coute 2,54 ms sur 128 caracteres ; le meme motif a 4 quantificateurs coute 82,6 ms, a 5 il coute 2 209 ms. Le seuil est place la ou le pire cas mesure tient dans le budget D0
+
+### AC-48.9 Backreferences et lookarounds refuses
+
+**Given** des motifs portant `\1`, `(?=`, `(?!`, `(?<=` et `(?<!`
+**When** le dialecte est evalue
+**Then** tous sont refuses
+
+### AC-48.10 FAILLE CORRIGEE : l'evaluation est ancree
+
+**Given** un filtre `{"type":"regex","value":"main"}` et la valeur testee `not-main-at-all`
+**When** le filtre est evalue
+**Then** il **ne matche pas**. Le moteur recoit toujours `^(?:source)$`.
+
+Avant l'ancrage, `RegExp.test` faisait du sous-chaine et ce filtre autorisait `not-main-at-all` : **un predicat de permission qui matche en sous-chaine est un contournement de scope qui attend son heure**. L'ancrage par enveloppement ne resserre jamais dans le mauvais sens, un ancien blob devient plus strict, jamais plus permissif
+
+### AC-48.11 La valeur testee par une regex est plafonnee a 128 caracteres
+
+**Given** une valeur de 129 caracteres et un filtre `regex` qui la matcherait
+**When** le filtre est evalue
+**Then** il echoue, donc l'acces est refuse.
+
+C'est la couche porteuse : le backtracking est exponentiel ou polynomial en la longueur de l'entree, le meme motif coutant 181,9 ms sur 1 000 caracteres, 6,78 ms sur 256 et 2,54 ms sur 128. Ce plafond ne depend d'aucune analyse du motif et ne peut donc pas se tromper. Echec ferme, jamais ouvert, mais c'est un changement de comportement sur des blobs existants : une valeur entre 128 et 1 000 caracteres refuse desormais l'acces
+
+### AC-48.12 Au plus 4 valeurs `regex` par blob
+
+**Given** un blob **forge** portant 5 valeurs `regex`, puis un portant 4
+**When** ils sont dechiffres
+**Then** le premier est refuse, le second accepte. Quatre evaluations a 2,54 ms font 10,2 ms, soit exactement le budget D0, quand le maximum structurel avant plafond etait de 1 280 evaluations
+
+### AC-48.13 Un `and` de plus de 8 elements est refuse
+
+**Given** un blob forge portant un `and` de 9 conditions
+**When** il est dechiffre
+**Then** il est refuse. La largeur d'un `and` n'avait auparavant **aucune borne superieure**, seul le minimum de 2 etait verifie
+
+### AC-48.14 Au plus 256 `ObjectValue` par blob
+
+**Given** un blob forge dont le total d'`ObjectValue`, imbrications comprises, depasse 256
+**When** il est dechiffre
+**Then** il est refuse
+
+### AC-48.15 Les budgets sont globaux au blob, pas par filtre ni par portee
+
+**Given** un blob repartissant ses valeurs `regex` sur plusieurs filtres et plusieurs scopes de facon a en totaliser 5
+**When** il est dechiffre
+**Then** il est refuse. Un plafond par filtre laisserait la structure multiplicative intacte : c'est le comptage global qui borne le cout d'une requete
+
+### AC-48.16 `any` est restreint aux valeurs scalaires
+
+**Given** un blob forge portant `{"type":"any","value":{"a":1}}` puis `{"type":"any","value":[1,2]}`
+**When** il est dechiffre
+**Then** les deux sont refuses, et `string`, `number`, `boolean` et `null` restent acceptes.
+
+Deux raisons, pas une. Le cout : 1 280 comparaisons sur un sous-arbre de 770 Ko coutent 2 956 ms, contre 0,16 ms sur des scalaires, **sans une seule expression reguliere**. Et surtout la correction : `JSON.stringify` depend de l'ordre d'insertion des cles, qui vient du serialiseur de l'appelant, donc `JSON.stringify({a:1,b:2}) === JSON.stringify({b:2,a:1})` vaut `false`. **Ce n'est pas un predicat de permission, c'est un tirage**
+
+### AC-48.17 Une regex hors dialecte a son propre code d'erreur
+
+**Given** un blob dont une regex sort du dialecte
+**When** le proxy le dechiffre
+**Then** la reponse est `400 unsupported_regex`, jamais `401 invalid_credentials`. Renvoyer une erreur de credentials enverrait le porteur verifier sa cle, qui est bonne : c'est un diagnostic mensonger. Le message doit dire que le blob est a regenerer avec un motif plus simple
+
+### AC-48.18 Les limites sont verifiees au dechiffrement, pas seulement a la generation
+
+**Given** un blob **forge hors ligne** avec `encryptBlob`, violant chacune des limites AC-48.6 a AC-48.16
+**When** il est dechiffre
+**Then** chacun est refuse.
+
+**Le salt serveur est public par conception** : `GET /api/salt` le retourne en clair parce que le navigateur en a besoin pour dechiffrer les bodies detailles. N'importe qui derive une cle et fabrique un blob arbitraire hors ligne. **Une limite posee uniquement a la generation est decorative.** Ces criteres ne se testent donc jamais via `/api/generate`
+
+### AC-48.19 `/api/test-proxy` valide les scopes avant toute evaluation
+
+**Given** un `POST /api/test-proxy` portant le motif `^(a+)+$`
+**When** la requete est traitee
+**Then** la reponse est `400` et **aucune expression reguliere n'a ete compilee ni evaluee**. La reponse doit arriver en moins de 100 ms : le critere n'est pas seulement le code de retour, c'est que le vecteur de 37,9 secondes ne s'est pas exprime
+
+### AC-48.20 BUDGET DE TEMPS : un motif du corpus catastrophique ne s'evalue jamais
+
+**Given** les motifs d'AC-48.1
+**When** ils traversent la validation
+**Then** la validation les refuse en un temps negligeable. Ce critere mesure que le refus precede l'evaluation, ce qu'une simple assertion sur le code de retour ne prouverait pas
+
+---
+
+## AC-49 : Surface d'API, absence de `/api/test-scope`
+
+Ref : `docs/adr/0010-politique-limites-ressources.md` D1 et plan 2.6, `docs/specs.md` §12.5.
+
+**Formule au present.** Ces criteres enoncent que la route n'existe pas, et non qu'elle a ete retiree : un critere qui raconte une suppression devient du bruit historique des que plus personne ne se souvient de ce qui existait avant.
+
+### AC-49.1 `POST /api/test-scope` n'existe pas
+
+**Given** une requete `POST /api/test-scope`
+**When** elle est traitee
+**Then** la reponse est `404`
+
+### AC-49.2 `/api/test-scope` ne figure pas dans la specification OpenAPI
+
+**Given** `GET /api/openapi.json`
+**When** on inspecte les chemins declares
+**Then** `/api/test-scope` n'y figure pas. Une route absente du code mais presente dans la spec publiee est une promesse d'API qui echoue a l'appel
+
+### AC-49.3 Le test de scope de l'UI n'emet aucun appel reseau
+
+**Given** l'utilisateur qui saisit une methode et un chemin dans le testeur de scopes
+**When** le verdict s'affiche
+**Then** aucune requete n'est emise vers le serveur : l'evaluation a lieu dans le navigateur, sur la fonction d'autorisation partagee (AC-46.6).
+
+C'est ce qui rend la route serveur inutile. Maintenir une copie serveur d'une logique que le produit execute deja cote navigateur, c'est payer une surface d'attaque publique et non authentifiee pour zero valeur
+
+### AC-49.4 `/api/test-proxy` demeure et reste la voie de migration
+
+**Given** un integrateur tiers qui aurait cable la route supprimee
+**When** il cherche un remplacement
+**Then** `POST /api/test-proxy` existe et teste la configuration de bout en bout. La suppression a un impact produit nul, mais un impact potentiel sur un integrateur externe : la voie de repli doit rester testee
+
+---
+
+## AC-50 : Derivation de cle, cout et cache
+
+Ref : `docs/adr/0010-politique-limites-ressources.md` D8 et plan 1.1, 1.6, 3.1.
+
+La derivation PBKDF2 coute 11,60 ms de CPU pur et fixe le plancher de cout d'une requete proxy. Elle est le critere de dimensionnement de tout le reste (D0).
+
+### AC-50.1 Une seule derivation par requete proxy
+
+**Given** une requete proxy sur un blob avec `logs.detailed` actif, cas qui a besoin de la cle deux fois
+**When** la requete est traitee
+**Then** la derivation n'a lieu **qu'une fois**. La cle derivee descend par le contexte au lieu d'etre recalculee pour chiffrer le body detailed. C'est 11,60 ms jetes par requete, sans le moindre benefice, et sans aucune contrepartie a le corriger
+
+### AC-50.2 SECURITE : la table de cache ne contient jamais la cle client en clair
+
+**Given** un cache peuple par plusieurs derivations
+**When** on inspecte ses cles d'index et ses valeurs
+**Then** l'index est une empreinte `SHA-256(clientKey || 0x00 || serverSalt)` et la valeur un `CryptoKey` non extractible. La cle client n'apparait nulle part. L'exposition marginale par rapport a l'existant est la duree de retention, pas la nature de la donnee
+
+### AC-50.3 Le cache est borne en capacite
+
+**Given** un cache de capacite 512 et une 513-ieme entree
+**When** elle est inseree
+**Then** la plus ancienne est evincee. Le cache convertit une pression CPU en pression memoire, d'ou la borne dure
+
+### AC-50.4 Une entree expiree est purgee et rederivee
+
+**Given** une entree inactive depuis plus de 10 minutes
+**When** la meme cle est presentee a nouveau
+**Then** l'entree est purgee et la cle rederivee, sans erreur.
+
+Le TTL court n'est pas seulement de l'hygiene memoire. Un hit est mesurablement plus rapide qu'un miss, ce qui constitue un **canal auxiliaire par le temps** : un oracle indiquant si une cle client donnee a ete vue recemment par cet isolate. Severite faible, les cles faisant 24 caracteres au minimum et l'oracle revelant une recence et non une valeur, mais c'est une raison de garder le TTL court plutot qu'une propriete a decouvrir plus tard
+
+### AC-50.5 Le cache n'est jamais une dependance de correction
+
+**Given** un cache vide, un cache plein, et un cache purge entre deux requetes
+**When** les memes requetes sont rejouees dans les trois etats
+**Then** les reponses sont identiques. Sur Deno Deploy le cache est par isolate et ephemere : c'est un cache, jamais un etat dont depend la correction du produit
+
+### AC-50.6 Le cache n'abaisse pas le cout d'un attaquant
+
+**Given** un trafic legitime reutilisant une meme cle, puis un trafic utilisant des cles aleatoires
+**When** on observe les derivations
+**Then** le premier rate le cache une seule fois, le second le rate a 100 %.
+
+Ce critere existe pour empecher qu'on vende le cache pour ce qu'il n'est pas. **Il ne deplace pas le plafond de l'attaquant**, il rend le trafic legitime quasi gratuit, donc il augmente la charge utile qu'une instance sous attaque peut continuer d'absorber. C'est le bon gain, ce n'est pas celui qu'on croit acheter
+
+### AC-50.7 Une cle hors format est refusee avant toute derivation
+
+**Given** un `X-FGP-Key` de 5 caracteres, puis un contenant une espace
+**When** la requete proxy est traitee
+**Then** la reponse est `401` et **aucune derivation n'a lieu**. Une cle qui n'aurait jamais pu generer de blob ne peut dechiffrer aucun blob : la rejeter avant PBKDF2 est gratuit. Le controle est celui deja applique a `/api/generate`, 24 a 256 caracteres ASCII imprimables
+
+### AC-50.8 Un blob structurellement trop court est refuse avant toute derivation
+
+**Given** un blob de moins de 48 octets decodes, soit moins que l'IV de 12 octets plus le tag GCM de 16 octets plus un flux gzip minimal
+**When** la requete est traitee
+**Then** elle est refusee sans derivation
+
+### AC-50.9 Ce que la pre-validation ne fait pas
+
+**Given** un attaquant envoyant des cles de 24 caracteres bien formees et aleatoires
+**When** il inonde l'instance
+**Then** chaque requete paie la derivation complete.
+
+Critere ecrit pour figer une **non-propriete**. La pre-validation filtre les sondes malformees et les erreurs de configuration, elle ne deplace pas le plafond de requetes par seconde. C'est de l'hygiene, pas une defense, et le confondre avec une defense conduirait a ne pas poser la limitation de debit la ou elle doit l'etre (§18.6)
+
+### AC-50.10 Le timer de purge n'est pas conditionne a la feature logs
+
+**Given** une instance avec `FGP_LOGS_ENABLED` a l'arret
+**When** des entrees de cache expirent
+**Then** elles sont purgees. Le timer de purge existant etait conditionne a l'activation des logs : y accrocher le cache de cles sans l'en sortir laisserait la table croitre jusqu'a sa capacite sans jamais respirer
+
+### AC-50.11 Le nombre d'iterations PBKDF2 ne bouge pas
+
+**Given** les blobs en circulation
+**When** on inspecte le parametre de derivation
+**Then** il vaut toujours 100 000.
+
+Critere de **non-changement**, ecrit parce que baisser ce nombre est le geste tentant et le mauvais. Le parametre n'est pas porte par le blob : le changer invalide tous les blobs en circulation. Et l'argument « la cle est a haute entropie donc l'etirement ne sert a rien » ne tient plus depuis le BYOK, qui accepte des cles fournies par l'utilisateur a partir de 24 caracteres. Faire evoluer ce parametre demanderait un blob transportant ses propres parametres de KDF
+
+---
+
+## AC-51 : Semantique de l'axe query (v5)
+
+Ref : `docs/specs.md` §19.2, §3.3, §6.1. La formulation « le scope refuse » signifie que ce `ScopeEntry` ne matche pas ; l'acces global reste autorise si un autre scope matche (cf. AC-51.15).
+
+### AC-51.1 NON-REGRESSION : un scope sans `queryFilters` ne contraint aucun parametre
+
+**Given** un blob dont les scopes ne portent aucun `queryFilters` (string, ou `ScopeEntry` avec ou sans `bodyFilters`)
+**When** une requete `GET /v1/items?action=delete&scope=all` est presentee
+**Then** l'acces est autorise et la query est transmise telle quelle a la cible, exactement comme avant la v5
+
+### AC-51.2 Un `ScopeEntry` a `bodyFilters` sans `queryFilters` est inchange
+
+**Given** un `ScopeEntry` POST avec `bodyFilters` et sans champ `queryFilters`
+**When** une requete conforme au body filter arrive avec une query quelconque
+**Then** l'acces est autorise : l'ajout de l'axe query ne modifie le comportement d'aucun scope qui ne le declare pas
+
+### AC-51.3 Parametre declare, valeur couverte
+
+**Given** un `ScopeEntry` `GET:/v1/items` avec `queryFilters: [{param: "status", values: [{type:"any",value:"open"}, {type:"any",value:"pending"}]}]`
+**When** `GET /v1/items?status=open` est presente
+**Then** le scope matche et l'acces est autorise
+
+### AC-51.4 Parametre declare, valeur non couverte
+
+**Given** le meme scope
+**When** `GET /v1/items?status=closed` est presente
+**Then** ce scope ne matche pas ; si aucun autre scope ne matche, le proxy repond `403 scope_denied` avec `X-FGP-Source: proxy`
+
+### AC-51.5 Deni par defaut : un parametre non declare fait echouer le scope
+
+**Given** le meme scope, qui ne declare que `status`
+**When** `GET /v1/items?status=open&sort=asc` est presente
+**Then** ce scope ne matche pas, bien que `status` soit conforme : `sort` n'est couvert par aucun `queryFilter`
+
+### AC-51.6 Le deni par defaut ne se desactive pas filtre par filtre
+
+**Given** un `ScopeEntry` avec `queryFilters: [{param:"page", values:[{type:"wildcard"}], required: false}]`
+**When** `GET /v1/items?page=2&debug=1` est presente
+**Then** le scope ne matche pas : `required: false` sur `page` ne rend jamais `debug` tolerable (§19.2, piege d'articulation)
+
+### AC-51.7 `required: true` et parametre absent
+
+**Given** un `queryFilter` `{param:"status", values:[...], required: true}`
+**When** `GET /v1/items` sans query est presente
+**Then** le scope ne matche pas : le parametre requis manque
+
+### AC-51.8 `required: false` et parametre absent
+
+**Given** un `queryFilter` `{param:"page", values:[{type:"wildcard"}]}` sans `required`, seul filtre du scope
+**When** `GET /v1/items` sans query est presente
+**Then** le scope matche : le filtre est trivialement satisfait
+
+### AC-51.9 `required: false` n'assouplit pas l'evaluation d'une valeur presente
+
+**Given** un `queryFilter` `{param:"status", values:[{type:"any",value:"open"}], required: false}`
+**When** `GET /v1/items?status=closed` est presente
+**Then** le scope ne matche pas : `required` ne gouverne que l'absence, jamais la valeur
+
+### AC-51.10 Occurrences multiples : AND entre occurrences, OR entre valeurs
+
+**Given** un `queryFilter` `{param:"tag", values:[{type:"any",value:"feature"}, {type:"any",value:"bugfix"}]}`
+**When** `GET /v1/items?tag=feature&tag=bugfix` est presente
+**Then** le scope matche : chaque occurrence satisfait au moins une valeur
+
+### AC-51.11 Une seule occurrence non conforme fait echouer le filtre
+
+**Given** le meme filtre
+**When** `GET /v1/items?tag=feature&tag=urgent` est presente
+**Then** le scope ne matche pas, `urgent` ne satisfaisant aucune valeur
+
+### AC-51.12 L'ordre des parametres est sans effet
+
+**Given** un `ScopeEntry` declarant `status` et `page`
+**When** `?status=open&page=2` puis `?page=2&status=open` sont presentes
+**Then** les deux requetes produisent strictement le meme verdict (§19.8, non-goal)
+
+### AC-51.13 L'axe query est en AND avec methode, chemin et body
+
+**Given** un `ScopeEntry` `POST:/deploy` portant a la fois des `bodyFilters` et des `queryFilters`
+**When** une requete satisfait le body filter mais pas le query filter, puis l'inverse
+**Then** aucun des deux cas ne matche : les quatre axes doivent etre satisfaits simultanement (§3.3)
+
+### AC-51.14 Requete sans query sur un scope a filtres tous optionnels
+
+**Given** un `ScopeEntry` avec deux `queryFilters` sans `required`
+**When** `GET /v1/items` sans aucun parametre est presente
+**Then** le scope matche : aucun parametre non declare n'est present, aucun filtre requis n'est absent
+
+### AC-51.15 Additivite des scopes : un scope non contraignant autorise malgre le scope contraignant
+
+**Given** un blob dont les scopes sont `["GET:/v1/items", {methods:["GET"], pattern:"/v1/items", queryFilters:[{param:"status", values:[{type:"any",value:"open"}]}]}]`
+**When** `GET /v1/items?force=true` est presente
+**Then** l'acces est **autorise** par le scope string, les scopes etant en OR. Ce test fige un comportement contre-intuitif mais correct, et sert de reference a AC-56.9 qui exige que l'interface le dise
+
+### AC-51.16 Les autres types d'`ObjectValue` fonctionnent sur une valeur de query
+
+**Given** des `queryFilters` utilisant successivement `wildcard`, `stringwildcard` (`release/*`), `regex` (`^\d+$`), `and` de deux conditions, et `not` d'un `any` string
+**When** des requetes conformes puis non conformes sont presentees pour chacun
+**Then** chaque type produit le meme verdict que sur une valeur string d'un body filter : le moteur de matching est le meme (§19.2)
+
+---
+
+## AC-52 : Plafond d'occurrences a deux paliers et budget de temps (v5)
+
+Ref : `docs/specs.md` §19.4, `docs/limits.md` §12.5, arbitrage architecte du 2026-09-04 sur le bloquant B5 de `docs/review/challenge-query-filters-v5.md`.
+
+**Regle retenue** : le plafond d'occurrences evaluees par requete et par parametre a deux paliers.
+
+- **Palier bas, 4 occurrences** : `queryFilter` dont les `values` contiennent au moins une valeur de type `regex`, **a n'importe quelle profondeur d'imbrication** dans un `and` ou un `not`.
+- **Palier haut, 64 occurrences** : tous les autres `queryFilters`.
+- Le palier de chaque filtre est **decide une fois au dechiffrement**, sur une donnee du blob, et jamais recalcule a partir de la requete. C'est ce qui garde la fonction d'autorisation sans etat, condition de son bundling cote navigateur.
+- Les deux paliers sont **fail-closed** : au-dela, le filtre echoue, quelles que soient les valeurs envoyees.
+
+Le 64 est un chiffre a confirmer : AC-52.11 est son garde-fou et doit etre relance si la valeur bouge.
+
+### AC-52.1 Palier haut : au plafond exact, toutes occurrences conformes
+
+**Given** un `queryFilter` `{param:"ids", values:[{type:"wildcard"}]}`, sans aucune valeur `regex` a aucune profondeur
+**When** une requete envoie exactement 64 occurrences de `ids`, toutes conformes
+**Then** le scope matche
+
+### AC-52.2 Palier haut : FAIL-CLOSED au-dela du plafond, meme toutes conformes
+
+**Given** le meme filtre
+**When** une requete envoie 65 occurrences de `ids`, **toutes conformes**
+**Then** ce `queryFilter` echoue et le scope ne matche pas, independamment des valeurs envoyees
+
+### AC-52.3 Palier bas : un filtre portant une `regex` directe plafonne a 4
+
+**Given** un `queryFilter` `{param:"ids", values:[{type:"regex", value:"^\d+$"}]}`
+**When** une requete envoie 4 occurrences conformes, puis une requete en envoie 5, toutes conformes
+**Then** la premiere matche, la seconde ne matche pas
+
+### AC-52.4 Palier bas : la `regex` imbriquee declasse aussi le filtre
+
+**Given** trois `queryFilters`, portant respectivement `{type:"and", value:[{type:"regex",...}, {type:"wildcard"}]}`, `{type:"not", value:{type:"regex",...}}` et un `and` contenant un `not` contenant une `regex`, soit trois profondeurs differentes
+**When** chacun recoit 5 occurrences conformes de son parametre
+**Then** les trois echouent : le classement au palier bas descend a toute profondeur, exactement comme la restriction de `any` d'AC-53.4 et AC-53.5. Un classement qui ne regarderait que le premier niveau de `values` laisserait le cout `regex` s'exprimer 64 fois
+
+### AC-52.5 Le palier est determine au dechiffrement, pas a la requete
+
+**Given** un blob dont un `queryFilter` porte une `regex`
+**When** on inspecte la configuration dechiffree, puis on presente des requetes
+**Then** le palier de ce filtre est deja resolu a l'issue du dechiffrement, et la fonction d'autorisation ne reclasse rien. Un test qui appelle deux fois la fonction d'autorisation sur la meme configuration doit obtenir des verdicts identiques sans qu'aucun etat mutable n'ait ete conserve entre les deux appels
+
+### AC-52.6 Jamais de troncage silencieux, sur les deux paliers
+
+**Given** un filtre au palier bas restreint a `feature`, puis un filtre au palier haut restreint a `feature`
+**When** on envoie respectivement 4 puis 64 occurrences valant `feature`, suivies d'une occurrence supplementaire valant `force`
+**Then** aucun des deux scopes ne matche. Un troncage aux N premieres occurrences, qui laisserait passer `force`, est un contournement de scope et doit faire echouer ce test
+
+### AC-52.7 Le palier est local au filtre, pas au `ScopeEntry`
+
+**Given** un `ScopeEntry` portant deux `queryFilters` : `tag` avec une `regex`, et `ids` sans aucune `regex`
+**When** une requete envoie 5 occurrences de `ids` et 4 de `tag`, toutes conformes
+**Then** le scope matche : `ids` releve du palier haut bien que le scope voisin porte une `regex`. Le budget de 4 valeurs `regex` est global au blob (AC-53.10), le **palier d'occurrences** est local au filtre : ne pas confondre les deux
+
+### AC-52.8 Le plafond se compte par parametre, pas globalement sur la requete
+
+**Given** un `ScopeEntry` declarant `tag` et `label`, tous deux au palier haut
+**When** une requete envoie 64 occurrences de `tag` et 64 occurrences de `label`, toutes conformes
+**Then** le scope matche
+
+### AC-52.9 L'axe query n'est evalue qu'une fois malgre la double passe de chemin
+
+**Given** un `ScopeEntry` a `queryFilters` et une requete dont le chemin brut differe de sa forme canonique (par exemple `//v1/items` ou `/v1/./items`), ce qui declenche la seconde passe de `checkRequestAccess`
+**When** le verdict est calcule
+**Then** chaque `queryFilter` n'est evalue qu'une seule fois. Un compteur d'appels instrumente doit mesurer le meme nombre d'evaluations que pour un chemin deja canonique. L'axe query est independant de la forme du chemin : le doubler offrirait a l'appelant un facteur deux gratuit sur le cout d'une requete, qu'il declenche en ajoutant un slash
+
+### AC-52.10 BUDGET DE TEMPS : le palier bas borne le cout du pire cas `regex`
+
+**Given** le motif de reference `^a*a*a*b$` du benchmark ADR-0010, evalue sur une entree de 128 caracteres, et le pire cas atteignable : les 4 valeurs `regex` du budget global du blob concentrees sur un seul filtre, applique a un parametre repete jusqu'au palier bas
+**When** on mesure le cout total, calibre sur le cout d'une evaluation unique mesuree sur la meme machine
+**Then** le cout total ne depasse pas 16 evaluations, et croit lineairement avec le nombre d'occurrences. Aucun comportement superlineaire ne doit apparaitre : c'est la propriete qui rend le palier suffisant, l'absolu dependant de la machine
+
+### AC-52.11 GARDE-FOU DU 64 : le palier haut reste hors de portee du cout `regex`
+
+**Given** le meme motif de reference
+**When** on mesure le cout de 64 puis 256 evaluations
+**Then** le cout reste proportionnel. Ce test existe pour rendre visible ce que couterait un palier haut applique par erreur a un filtre `regex` : au coefficient de reference de l'ADR-0010, 64 occurrences fois 4 `regex` depassent 600 ms. Si le chiffre 64 est un jour remonte, ou si le classement par palier regresse, ce test est le premier a le montrer
+
+### AC-52.12 Les types non-regex ne portent pas le cout, ce qui justifie le palier haut
+
+**Given** 1024 evaluations d'un `any` puis d'un `stringwildcard` sur une valeur de 120 caracteres
+**When** on mesure
+**Then** le cout total reste inferieur d'au moins deux ordres de grandeur au cout d'une seule evaluation `regex` sur la meme machine, et negligeable devant la derivation PBKDF2 (11,6 ms, ADR-0010 D0) que toute requete paie de toute facon. C'est la mesure qui a fonde l'arbitrage a deux paliers
+
+### AC-52.13 Le parsing d'une query volumineuse n'est pas un vecteur
+
+**Given** une query de 5 000 occurrences d'un meme parametre, soit environ 48 Ko
+**When** elle est analysee
+**Then** le cout de l'analyse reste negligeable devant celui de la derivation PBKDF2 : le vecteur est le nombre d'evaluations, jamais la taille de la query
+
+### AC-52.14 Le plafond ne s'applique qu'aux parametres couverts par un filtre
+
+**Given** un `ScopeEntry` a `queryFilters` declarant `ids`
+**When** une requete envoie 100 occurrences de `autre`, parametre non declare
+**Then** le scope ne matche pas, par deni par defaut (AC-51.5) et non par depassement de plafond. Le refus doit etre attribue a la bonne cause, sans quoi le diagnostic d'AC-56.3 designera le mauvais probleme
+---
+
+## AC-53 : Validation du blob et de la generation (v5)
+
+Ref : `docs/specs.md` §19.3, §12.14, §5 ; `docs/limits.md` §12. Chaque limite se verifie **deux fois** : au dechiffrement (rejet du blob, `401 invalid_credentials`, le salt etant public) et a la generation (`400`, message actionnable).
+
+### AC-53.1 `any` de type string est accepte
+
+**Given** un `queryFilter` `{param:"status", values:[{type:"any", value:"open"}]}`
+**When** le blob est genere puis dechiffre
+**Then** les deux operations reussissent
+
+### AC-53.2 `any` non-string est refuse au dechiffrement
+
+**Given** un blob forge portant successivement `{type:"any", value: 1}`, `{type:"any", value: true}` et `{type:"any", value: null}` sur un `queryFilter`
+**When** le proxy dechiffre
+**Then** les trois cas sont rejetes en `401 invalid_credentials` (`malformed BlobConfig`)
+
+### AC-53.3 `any` non-string est refuse a la generation avec un message nommant le parametre
+
+**Given** une configuration envoyee a `POST /api/generate` avec `{type:"any", value: 1}` sur le `queryFilter` de `page`
+**When** la generation est demandee
+**Then** la reponse est `400` et le message est `Type "any" on a query filter only accepts a string value (param: 'page')` (§12.14)
+
+### AC-53.4 La restriction descend dans un `and`
+
+**Given** un `queryFilter` portant `{type:"and", value:[{type:"any", value: 1}, {type:"wildcard"}]}`
+**When** le blob est genere, puis un blob forge equivalent est dechiffre
+**Then** les deux sont refuses. Sans propagation du contexte, `isValidObjectValue` accepterait cette valeur, qui est toujours fausse : c'est un filtre mort, le piege exact que §19.3 supprime
+
+### AC-53.5 FAIL-OPEN : la restriction descend dans un `not`, sous peine d'un filtre qui autorise tout
+
+**Given** un `queryFilter` portant `{type:"not", value:{type:"any", value: 1}}`, ce qu'un auteur ecrit en pensant « exclure la page 1 »
+**When** le blob est genere, puis un blob forge equivalent est dechiffre
+**Then** les deux sont refuses, a la generation avec le message de §12.14 et au dechiffrement par rejet du blob
+
+### AC-53.6 FAIL-OPEN : demonstration, `not` sur un `any` non-string est toujours vrai
+
+**Given** la valeur `{type:"not", value:{type:"any", value: 1}}` evaluee directement, hors validation, contre la chaine `"1"` puis contre `"deploy"` puis contre la chaine vide
+**When** on evalue
+**Then** le resultat est `true` dans les trois cas. `matchObjectValue` compare par `JSON.stringify`, et `JSON.stringify(1)` ne vaut jamais `JSON.stringify("1")` : la condition interne est toujours fausse, donc sa negation est toujours vraie.
+
+Ce test est la raison d'etre d'AC-53.5 et il doit rester **meme apres** que la validation refuse ce blob, parce qu'il documente la nature du risque et non le comportement du produit. Sous `not`, un `any` non-string ne produit pas un filtre mort qui refuse trop, il produit un filtre **decoratif qui autorise tout**, sur un axe dont la seule raison d'exister est de bloquer `?force=true`. C'est un fail-open silencieux, et c'est la seule occurrence de ce type dans toute la feature : partout ailleurs, une erreur d'ecriture de l'auteur se traduit par un refus.
+
+### AC-53.6 bis FAIL-OPEN : le `not` imbrique profondement est couvert aussi
+
+**Given** un `queryFilter` portant `{type:"and", value:[{type:"not", value:{type:"any", value: true}}, {type:"wildcard"}]}`, soit un `any` non-string a trois niveaux de profondeur
+**When** le blob est genere, puis un blob forge equivalent est dechiffre
+**Then** les deux sont refuses. La descente de la restriction ne s'arrete a aucune profondeur : c'est le meme parcours que celui de `budget` dans `isValidObjectValue`, il n'y a pas de raison qu'un contexte s'arrete la ou un compteur passe
+
+### AC-53.7 Plus de 8 `queryFilters` sur un `ScopeEntry`
+
+**Given** un `ScopeEntry` portant 9 `queryFilters`
+**When** generation puis dechiffrement
+**Then** `400` avec `Maximum 8 query filters per scope, got 9` a la generation, rejet du blob au dechiffrement ; 8 passe dans les deux cas
+
+### AC-53.8 Plus de 16 valeurs OR sur un `queryFilter`
+
+**Given** un `queryFilter` sur `status` portant 17 valeurs
+**When** generation puis dechiffrement
+**Then** `400` avec `Maximum 16 OR values per query filter, got 17 on param 'status'` a la generation, rejet au dechiffrement ; 16 passe dans les deux cas
+
+### AC-53.9 Deux `queryFilters` du meme scope sur le meme parametre
+
+**Given** un `ScopeEntry` portant deux `queryFilters` nommant tous deux `status`
+**When** generation puis dechiffrement
+**Then** `400` avec `Duplicate query filter for param 'status'` a la generation, **et rejet au dechiffrement**. La regle de generation seule ne protege personne, le salt etant public et un blob forgeable hors ligne (ADR-0009 §2)
+
+### AC-53.10 Le budget de 4 valeurs `regex` est partage avec les `bodyFilters`
+
+**Given** un blob portant 3 valeurs `regex` dans ses `bodyFilters` et 2 dans ses `queryFilters`
+**When** generation puis dechiffrement
+**Then** les deux refusent : le budget est global au blob, toutes portees confondues. Un blob a 2 plus 2 passe
+
+### AC-53.11 Le budget de 256 `ObjectValue` est partage
+
+**Given** un blob dont la somme des `ObjectValue` de ses `bodyFilters` et de ses `queryFilters`, imbrications comprises, depasse 256
+**When** generation puis dechiffrement
+**Then** les deux refusent
+
+### AC-53.12 La profondeur `and`/`not` reste plafonnee a 4
+
+**Given** un `queryFilter` dont une valeur imbrique 5 niveaux de `and`
+**When** generation puis dechiffrement
+**Then** les deux refusent
+
+### AC-53.13 Les combinaisons interdites sont heritees
+
+**Given** des `queryFilters` portant `not(wildcard)`, `not(not(...))`, `and([])` et `and` a un seul element
+**When** generation puis dechiffrement
+**Then** les quatre sont refuses, avec les memes messages que pour un body filter (§5)
+
+### AC-53.14 La validation de generation n'ignore pas un scope sans `bodyFilters`
+
+**Given** un `ScopeEntry` portant des `queryFilters` invalides et **aucun** `bodyFilters`
+**When** `POST /api/generate` est appele
+**Then** l'erreur de validation est bien retournee. Ce test cible la boucle de `validateScopeLimits` qui saute aujourd'hui tout scope sans `bodyFilters` : sans correction, aucun message de §12.14 ne se declencherait pour le cas le plus courant, un scope GET a query filters
+
+### AC-53.15 `POST /api/generate` ne supprime pas silencieusement les `queryFilters`
+
+**Given** une configuration valide portant des `queryFilters`
+**When** le blob est genere puis relu par `POST /api/decode`
+**Then** les `queryFilters` sont presents a l'identique dans les scopes retournes, et la version du blob est 5. Le schema de validation ne doit ni les stripper ni les alterer
+
+### AC-53.16 `POST /api/share/encode` ne supprime pas silencieusement les `queryFilters`
+
+**Given** une configuration portant des `queryFilters`
+**When** on appelle `POST /api/share/encode` puis `POST /api/share/decode` sur le resultat
+**Then** l'aller-retour est fidele, `queryFilters` compris. Le schema Zod de cette route strippe aujourd'hui les cles inconnues : un partage perdrait la contrainte sans aucun signal, et le destinataire generarait un blob permissif en croyant l'inverse (bloquant B2)
+
+### AC-53.17 `param` vide, absent ou non-string
+
+**Given** un `queryFilter` sans champ `param`, puis avec `param: ""`, puis avec `param: 42`
+**When** generation puis dechiffrement
+**Then** les trois cas sont refuses des deux cotes
+
+---
+
+## AC-54 : Version du blob et retro-compatibilite (v5)
+
+Ref : `docs/specs.md` §6.1, §6.2, §6.3, §19.6 ; ADR-0008 pour le precedent.
+
+### AC-54.1 Des `queryFilters` portent le blob en v5
+
+**Given** une configuration dont au moins un `ScopeEntry` porte un `queryFilters` non vide
+**When** le blob est genere
+**Then** `v` vaut `5`
+
+### AC-54.2 Un blob v5 peut n'avoir qu'une auth string
+
+**Given** une configuration `auth: "bearer"` avec des `queryFilters`
+**When** le blob est genere puis dechiffre
+**Then** `v` vaut `5`, le dechiffrement reussit, et le forward pose bien l'en-tete `Authorization: Bearer ...`
+
+### AC-54.3 Un blob v5 a auth structuree est dechiffrable
+
+**Given** une configuration combinant un `AuthSpec` de type `headers` a deux entrees et des `queryFilters`
+**When** le blob est genere puis dechiffre
+**Then** `v` vaut `5` et le dechiffrement **reussit**. La regle actuelle « `auth` objet implique `v === 4` » rejette ce blob en `401 invalid_credentials` : elle doit devenir un plancher (`v >= 4`), pas une egalite (bloquant B1). Ce test echoue tant que §6.3 et `src/crypto/blob.ts` n'ont pas ete corriges
+
+### AC-54.4 NON-REGRESSION : le controle de version reste exhaustif
+
+**Given** des blobs forges portant `v: 1`, `v: 6`, `v: 0`, `v: "5"` et `v` absent
+**When** le proxy dechiffre
+**Then** les cinq sont rejetes en `401 invalid_credentials`. Ce test protege la garantie du bump : un controle relache en `v >= 2` ferait servir sans contrainte un blob portant des champs inconnus, ce qui est exactement le fail-open que la v5 supprime
+
+### AC-54.5 Les blobs v2, v3 et v4 restent lus a l'identique
+
+**Given** des blobs v2 (scopes string), v3 (`ScopeEntry` avec `bodyFilters`) et v4 (`AuthSpec`) generes avant la v5
+**When** un proxy v5 les dechiffre et les sert
+**Then** le comportement est strictement inchange, query non contrainte comprise. Aucune regeneration n'est necessaire
+
+### AC-54.6 Un `queryFilters` vide n'induit pas de bump
+
+**Given** une configuration dont un `ScopeEntry` porte `queryFilters: []`
+**When** le blob est genere
+**Then** le champ est omis de la serialisation et `v` reste `3` ou `4` selon les autres axes. Au dechiffrement, un blob portant `queryFilters: []` est traite comme n'en portant pas : aucun deni par defaut. Bumper pour un tableau vide rendrait le blob illisible par un proxy anterieur sans apporter la moindre contrainte
+
+### AC-54.7 Une version sous-declaree est refusee
+
+**Given** un blob forge portant `v: 3` et un `ScopeEntry` avec des `queryFilters` non vides
+**When** le proxy dechiffre
+**Then** le blob est rejete en `401 invalid_credentials`. Aujourd'hui, la validation ignore toute cle inconnue d'un `ScopeEntry` : un tel blob serait accepte et ses `queryFilters` silencieusement ignores, ce qui est un fail-open. La regle est symetrique de celle de l'axe `auth`
+
+### AC-54.8 La regle de version s'exprime en plancher, pas en egalite
+
+**Given** les quatre combinaisons d'axes : auth string plus scopes string, auth structuree plus scopes string, auth string plus `queryFilters`, auth structuree plus `queryFilters`
+**When** la version est calculee puis le blob dechiffre
+**Then** on obtient respectivement 2, 4, 5 et 5, et les quatre se dechiffrent. Chaque axe impose un plancher, `v` est le maximum des planchers, et aucune validation ne teste une egalite de version
+
+### AC-54.9 Un `ScopeEntry` portant a la fois `bodyFilters` et `queryFilters`
+
+**Given** un `ScopeEntry` POST portant les deux axes
+**When** le blob est genere puis dechiffre
+**Then** `v` vaut `5`, les deux axes sont conserves, et les deux sont evalues en AND (cf. AC-51.13)
+
+---
+
+## AC-55 : Analyse de la query (v5)
+
+Ref : `docs/specs.md` §19.8. Ces AC figent des comportements que la spec ne dit qu'en creux ; plusieurs sont a confirmer par l'architecte (cf. challenge T3). Ils sont ecrits sur le comportement de `URLSearchParams`, qui est la seule analyse raisonnable et celle que le dev utilisera.
+
+### AC-55.1 Decodage percent standard
+
+**Given** un `queryFilter` `{param:"q", values:[{type:"any", value:"a b"}]}`
+**When** `GET /v1/items?q=a%20b` est presente
+**Then** le scope matche : la valeur est comparee apres decodage
+
+### AC-55.2 Pas de double decodage, contrairement au chemin
+
+**Given** un `queryFilter` `{param:"q", values:[{type:"any", value:"%2Fx"}]}`
+**When** `GET /v1/items?q=%252Fx` est presente
+**Then** le scope matche : une seule passe de decodage. La canonicalisation du chemin decode jusqu'a trois fois, l'axe query non, parce que la cible ne decodera qu'une fois. Ce test empeche qu'une future harmonisation aligne les deux par erreur
+
+### AC-55.3 Le signe plus est decode en espace
+
+**Given** un `queryFilter` `{param:"q", values:[{type:"any", value:"a b"}]}`
+**When** `GET /v1/items?q=a+b` est presente
+**Then** le scope matche. Corollaire a documenter dans §12.14 : un auteur qui saisit `a+b` dans le formulaire obtient un filtre qui ne matchera jamais `?q=a+b`
+
+### AC-55.4 Parametre sans valeur et parametre a valeur vide
+
+**Given** un `queryFilter` `{param:"flag", values:[{type:"any", value:""}]}`
+**When** `GET /v1/items?flag` puis `GET /v1/items?flag=` sont presentes
+**Then** les deux matchent : l'analyse standard ne les distingue pas. §19.3 et `docs/limits.md` §12.4 affirment que `?flag`, `?flag=` et `?flag=null` sont trois etats distincts ; ils sont deux, et ce texte doit etre corrige
+
+### AC-55.5 Le nom du parametre est sensible a la casse
+
+**Given** un `queryFilter` sur `status`
+**When** `GET /v1/items?Status=open` est presente
+**Then** le scope ne matche pas : `Status` est un parametre non declare, donc refuse par defaut. Aucune normalisation de casse n'est appliquee au nom d'un parametre de query, contrairement aux noms d'en-tetes d'auth (§6.3)
+
+### AC-55.6 Les crochets font partie du nom du parametre
+
+**Given** un `queryFilter` `{param:"ids[]", values:[{type:"wildcard"}]}`
+**When** `GET /v1/items?ids[]=1&ids[]=2` est presente
+**Then** le scope matche. Un filtre declarant `ids` ne matcherait pas cette requete : l'auteur doit ecrire les crochets
+
+### AC-55.7 Une valeur encodant du JSON n'est pas re-analysee
+
+**Given** un `queryFilter` `{param:"filter", values:[{type:"any", value:"{\"a\":1}"}]}`
+**When** `GET /v1/items?filter=%7B%22a%22%3A1%7D` est presente
+**Then** le scope matche par comparaison de chaines. Aucun chemin d'acces de type dot-path n'est disponible sur une valeur de query (§19.8)
+
+### AC-55.8 La query controlee est exactement la query emise
+
+**Given** un `ScopeEntry` a `queryFilters` et une requete autorisee portant des caracteres encodes
+**When** le forward a lieu
+**Then** la chaine de query recue par la cible est identique octet pour octet a celle presentee au proxy. Le controle porte sur la forme decodee, l'emission sur la forme brute, exactement comme pour le chemin (ADR-0009 §3)
+
+### AC-55.9 Le point-virgule n'est pas un separateur
+
+**Given** un `queryFilter` `{param:"a", values:[{type:"wildcard"}]}`
+**When** `GET /v1/items?a=1;force=true` est presente
+**Then** un seul parametre `a` est vu, valant `1;force=true`, et le scope matche. Ce comportement doit etre inscrit en non-goal explicite dans §19.8 : certaines piles amont decoupent sur `;` et verraient deux parametres, dont `force=true`. C'est un differentiel d'analyse que FGP ne peut pas resoudre sans connaitre la cible, et une limite documentee vaut mieux qu'une decouverte
+
+### AC-55.10 Parametre au nom vide
+
+**Given** un `ScopeEntry` a `queryFilters` declarant `status`
+**When** `GET /v1/items?=orphelin` est presente
+**Then** le scope ne matche pas : le nom vide est un parametre non declare comme un autre, et le deni par defaut s'applique
+
+---
+
+## AC-56 : Testeur de scopes et diagnostic (v5)
+
+Ref : `docs/specs.md` §12.5, §12.10 bloc 2 bis, §8.2. Le testeur tourne dans le navigateur, sur la meme fonction d'autorisation que le proxy.
+
+### AC-56.1 Note « query non contrainte » quand aucun scope ne porte de `queryFilters`
+
+**Given** un chemin de test contenant un `?` et des scopes sans `queryFilters`
+**When** le highlight s'execute
+**Then** la note affichee est « La query n'est pas contrainte par les scopes : tous les parametres passent. »
+
+### AC-56.2 Note « query contrainte » quand au moins un scope en porte
+
+**Given** un chemin de test contenant un `?` et au moins un scope a `queryFilters`
+**When** le highlight s'execute
+**Then** la note affichee est « La query est contrainte par au moins un scope : voir le detail sous chaque scope concerne. »
+
+### AC-56.3 Detail : parametre non declare
+
+**Given** un scope declarant `status` et un chemin de test `/v1/items?status=open&sort=asc`
+**When** le highlight s'execute
+**Then** une ligne de detail apparait sous ce scope : « Parametre "sort" non declare : refuse par defaut des qu'un filtre query existe sur ce scope. »
+
+### AC-56.4 Detail : parametre requis absent
+
+**Given** un scope avec `{param:"status", required: true}` et un chemin de test `/v1/items?page=3`
+**When** le highlight s'execute
+**Then** la ligne de detail est « Parametre requis "status" absent. »
+
+### AC-56.5 Detail : valeur non autorisee
+
+**Given** un scope avec `{param:"status", values:[{type:"any", value:"open"}]}` et un chemin de test `/v1/items?status=closed`
+**When** le highlight s'execute
+**Then** la ligne de detail est « Valeur de "status" non autorisee par ce filtre. »
+
+### AC-56.6 Detail : occurrences en surnombre
+
+**Given** un scope avec un `queryFilter` sur `ids` acceptant toute valeur, et un chemin de test portant `N+1` occurrences de `ids`, **toutes conformes**
+**When** le highlight s'execute
+**Then** une ligne de detail specifique au surnombre apparait, nommant `ids` et sa cause reelle. §12.5 ne specifie que trois messages alors que §3.3 enumere quatre causes de refus : ce quatrieme message manque a la spec (bloquant B3) et doit etre fourni par le PO. Le message ne doit **pas** etre celui d'AC-56.5, qui enverrait l'utilisateur verifier des valeurs qui sont toutes correctes
+
+### AC-56.7 Aucun refus de l'axe query ne tombe dans un message generique
+
+**Given** les quatre causes de refus de l'axe query, jouees successivement
+**When** le highlight s'execute pour chacune
+**Then** chacune produit son message dedie. Aucune ne produit un simple indicateur de refus sans ligne de detail, et aucune ne reutilise le message d'une autre cause. Le comptage d'occurrences est evalue **avant** la conformite des valeurs, sans quoi le message affiche dependrait de l'ordre des occurrences
+
+### AC-56.8 PARITE : le testeur et le proxy rendent le meme verdict
+
+**Given** un corpus de requetes couvrant les quatre causes de refus, les cas autorises, les occurrences au plafond et au-dela
+**When** on compare le verdict du testeur a celui du proxy pour chaque cas
+**Then** ils sont identiques. C'est l'invariant structurel de l'ADR-0009 §4 : une seule fonction d'autorisation, appelee des deux cotes. Un testeur qui refuse la ou le proxy autorise est pire que pas de testeur
+
+### AC-56.9 TROISIEME ETAT : l'acces accorde par un scope non contraignant est dit comme tel
+
+**Given** la configuration d'AC-51.15, un scope string plus un scope a `queryFilters` sur le meme chemin et la meme methode, et un chemin de test `/v1/items?force=true`
+**When** le highlight s'execute
+**Then** le verdict global est « acces autorise » et la note affichee est celle du **troisieme etat**, « autorise par un scope qui ne contraint pas la query », et non celle d'AC-56.2.
+
+Afficher « autorise » a cote de « la query est contrainte par au moins un scope » laisserait croire que la query a ete validee alors qu'elle est passee sans aucun controle : c'est le mensonge permissif que l'ADR-0009 §4 qualifie de pire que pas d'outil, reintroduit sous une forme nouvelle. Le troisieme etat est retenu par l'architecte au titre du niveau 1 de T2 ; l'avertissement a la generation quand un scope non contraignant recouvre un scope contraignant est un ticket separe.
+
+### AC-56.9 bis Le troisieme etat ne se declenche pas a tort
+
+**Given** un blob dont le seul scope couvrant le chemin de test porte des `queryFilters`, et une requete de test conforme
+**When** le highlight s'execute
+**Then** la note affichee est celle d'AC-56.2, « la query est contrainte », et non celle du troisieme etat. Une note qui apparaitrait des qu'un scope non contraignant existe **ailleurs** dans le blob, sur un autre chemin, alarmerait sans raison et serait ignoree en deux jours
+
+### AC-56.10 En production, le refus reste generique
+
+**Given** un blob a `queryFilters` et une requete refusee sur l'axe query, pour chacune des quatre causes
+**When** le proxy repond
+**Then** la reponse est `403` avec `{"error":"scope_denied"}` et `X-FGP-Source: proxy`. Le message ne nomme ni le parametre fautif, ni la cause, ni aucun element de structure du blob. Le detail nomme n'existe que dans le testeur, qui tourne chez l'auteur de la configuration (§12.5)
+
+---
+## AC-57 : Diagnostic en production, capture des noms de parametres (v5)
+
+Ref : arbitrage architecte du 2026-09-04 sur le point T1 de `docs/review/challenge-query-filters-v5.md`, `docs/specs.md` §14.6.
+
+**Regle retenue** : l'entry `network` de la feature `/logs` enregistre les **noms** des parametres de query, jamais leurs valeurs. Sans cela, la boucle de diagnostic d'un refus sur l'axe query est cassee de bout en bout : la production repond `403 scope_denied` generique par decision (AC-56.10), les logs ne montrent aujourd'hui que `url.pathname` sans la query, et le testeur exige de connaitre deja la query exacte que le client envoie, qui est precisement l'information qui manque quand un SDK ajoute `per_page` a l'insu de l'auteur.
+
+Le nom exact du champ et la forme finale du schema sont arbitres par le PO, la rupture de compatibilite du flux SSE etant de son ressort (§14.6). Les criteres ci-dessous portent sur les invariants, pas sur le nom du champ.
+
+### AC-57.1 Les noms de parametres sont captures dans l'entry network
+
+**Given** un blob avec `logs.enabled` et une requete `GET /v1/items?status=open&per_page=50`
+**When** la capture a lieu
+**Then** l'entry `network` porte les noms `status` et `per_page`, et le champ `path` reste inchange, sans query, tel que §14.6 le decrit
+
+### AC-57.2 SECURITE : aucune valeur de parametre n'est jamais capturee
+
+**Given** une requete `GET /v1/items?api_key=sk-live-000000&token=abcdef&status=open`
+**When** la capture a lieu, puis le stream SSE est lu
+**Then** aucune des chaines `sk-live-000000` ni `abcdef` n'apparait nulle part dans l'entry, ni dans un champ, ni dans une concatenation, ni dans le `path`. Seuls les noms `api_key`, `token` et `status` sont presents.
+
+C'est l'invariant central de cette serie : l'entry `network` vit **en clair** dans le ring buffer, contrairement au body `detailed` qui est chiffre avec la cle client (§14.8). Y faire entrer des valeurs de query serait un vecteur de fuite de secrets a part entiere, les valeurs de query en contenant regulierement
+
+### AC-57.3 Le comptage d'occurrences est diagnosticable sans les valeurs
+
+**Given** une requete envoyant 5 occurrences de `ids` et une de `status`
+**When** la capture a lieu
+**Then** l'entry permet de determiner que `ids` etait present 5 fois, sans exposer aucune des 5 valeurs. C'est l'information qui rend un refus par plafond d'occurrences (AC-52.2) diagnosticable a posteriori ; un simple ensemble de noms dedoublonnes la perdrait
+
+### AC-57.4 La capture est plafonnee en nombre de noms
+
+**Given** une requete portant 5 000 parametres de noms distincts
+**When** la capture a lieu
+**Then** le nombre de noms enregistres est plafonne et l'entry signale la troncature. Le ring buffer est en memoire et dimensionne par `FGP_LOGS_BUFFER_NETWORK` : une requete unique ne doit pas pouvoir en consommer la totalite
+
+### AC-57.5 La capture est plafonnee en longueur de nom
+
+**Given** une requete dont un nom de parametre fait 10 000 caracteres
+**When** la capture a lieu
+**Then** le nom est tronque a une longueur bornee. Le nom est une chaine entierement controlee par l'appelant, il doit etre traite comme telle
+
+### AC-57.6 SECURITE : les noms sont rendus comme du texte, jamais comme du HTML
+
+**Given** une requete portant un parametre nomme `<img src=x onerror=alert(1)>`
+**When** l'entry est affichee dans la page `/logs`
+**Then** la chaine apparait litteralement a l'ecran et aucun noeud HTML n'est cree. Un nom de parametre est une donnee d'appelant qui traverse le serveur jusqu'au navigateur de l'auteur du blob : c'est le seul nouveau chemin d'injection ouvert par cette decision
+
+### AC-57.7 Aucune capture quand il n'y a pas de query
+
+**Given** une requete `GET /v1/items` sans query
+**When** la capture a lieu
+**Then** le champ est absent ou vide, et jamais une chaine vide unique qui se lirait comme un parametre au nom vide
+
+### AC-57.8 NON-REGRESSION : la capture reste soumise au meme gating
+
+**Given** un blob sans `logs.enabled`, puis le kill switch `FGP_LOGS_ENABLED` a l'arret
+**When** des requetes avec query sont proxyfiees
+**Then** aucun nom de parametre n'est capture ni stocke dans les deux cas. Cette capture ne cree aucune exception au gating de §14.3
+
+---
+
 ## Assumptions : proprietes cryptographiques non directement testables
 
 Les enonces suivants decrivent des proprietes valides **par construction cryptographique** et non par un test d'integration direct. Ils sont maintenus ici pour documenter l'intention de securite, sans polluer la matrice de couverture AC.
@@ -2747,5 +4038,13 @@ Le `blobId` (SHA-256 tronque a 16 chars hex = 64 bits) ne permet pas de retrouve
 - **Arbitrages du 2026-09-03 repercutes** : multi-addon abandonne au profit du mono-addon (AuthSpec `scalingo-addon` aplati, plus de tableau, plus de `resourceId` dans le blob, code `addon_not_resolved` supprime). AC-35.2 a 35.7, AC-35.18, AC-35.19, AC-36.3 et AC-39.16 sont marques obsoletes plutot que supprimes, pour ne pas decaler la numerotation. Nouveaux AC : AC-35.24 (`resourceId` n'atteint jamais le blob), AC-36.14 a 36.16 (`app_not_found`), AC-37.12 et 37.13 (partage `?c=` en mode addon), AC-38.16 et 38.17 (`empty` vs `too-short`), AC-39.19 a 39.21 (`maxlength` retire, jauge a trois niveaux), AC-41.13 et 41.14 (parite des en-tetes).
 
 - **Copy UI `/logs` a confirmer par le PO** : trois chaines de `docs/specs.md` §14.13 ont ete modifiees dans `src/ui/logs-client.ts` pendant la purge des tirets cadratins (« Body trop volumineux, non stocke », « Blob ou cle invalide : impossible de dechiffrer. », « Dechiffrement impossible : verifiez votre cle »). Les AC-20.x et AC-26.x portent la valeur observee dans le code, mais `specs.md` §14.13 porte encore l'ancienne ponctuation. **Ce n'est pas un alignement valide** : tant que le PO n'a pas tranche et mis a jour §14.13, ces AC assertent une chaine que la spec ne porte pas. A regler avant d'implementer les tests correspondants.
+
+- **Blob v5 (AC-51 a AC-57)** : les `ScopeEntry` acceptent un axe `queryFilters`, opt-in, avec deni par defaut a l'interieur du scope qui le porte. Les blobs v2 a v4 restent lus a l'identique et leur query reste non contrainte. **Aucun de ces AC n'est implemente en test cote feature** : `queryFilters` n'existe pas encore dans `src/`. Seuls AC-52.10 a AC-52.13 sont exerces aujourd'hui, par `tests/testu/middleware/query-occurrences-budget.test.ts`, qui mesure les primitives de matching existantes et sert de garde-fou aux deux paliers.
+
+- **Ces AC sont ecrits contre les arbitrages du 2026-09-04**, pas contre la premiere redaction de `docs/specs.md` §19. Les cinq bloquants et les huit points ouverts de `docs/review/challenge-query-filters-v5.md` ont ete tranches par l'architecte. Trois series en portent la trace directe et **echoueront tant que la spec et le code n'auront pas ete corriges**, ce qui est leur fonction : AC-54.3 et AC-54.8 (la regle `v === 4` de §6.3 doit devenir un plancher de version), AC-53.15 et AC-53.16 (les schemas de `/api/generate` et `/api/share/encode` doivent refuser une cle inconnue au lieu de la stripper en silence), AC-56.6 (le quatrieme message de diagnostic, celui du surnombre d'occurrences, n'existe pas encore dans §12.5). Ce ne sont pas des tests a assouplir.
+
+- **Plafond d'occurrences a deux paliers (AC-52)** : 4 occurrences pour un `queryFilter` dont les valeurs contiennent une `regex` a n'importe quelle profondeur, 64 pour tous les autres, palier decide une fois au dechiffrement. Le 4 est calibre sur le cout mesure d'une evaluation `regex` ; le 64 sur le fait qu'un millier d'evaluations d'un `any` ou d'un `stringwildcard` coute deux ordres de grandeur de moins qu'une seule evaluation `regex`. Le 64 reste a confirmer, AC-52.11 est son garde-fou.
+
+- **Le seul fail-open de la feature est AC-53.5 et AC-53.6** : sous `not`, un `any` non-string n'est pas un filtre mort, c'est un filtre toujours vrai. L'auteur ecrit « exclure la page 1 » et obtient « accepter tout ». Partout ailleurs dans `queryFilters`, une erreur d'ecriture se traduit par un refus. C'est la raison pour laquelle la restriction de `any` aux chaines doit descendre a toute profondeur d'un `and` ou d'un `not`, et pourquoi AC-53.6 doit survivre a la correction : il documente la nature du risque, pas le comportement du produit.
 
 - **Invariant ADR-0006 sur les headers de securite (AC-41.5 a AC-41.8)** : les headers de securite ne sont poses que sur les chemins servis par FGP. Aucune reponse upstream forwardee, mode URL ou mode header, ne doit en porter. Ces quatre AC sont des tests de non-regression : ils doivent echouer si le middleware repasse un jour sur `app.use("*")`.
