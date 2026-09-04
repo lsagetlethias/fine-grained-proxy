@@ -13,8 +13,10 @@
 - **TTL** : expiration encodée dans le blob, vérifiée à chaque requête.
 - **6 modes d'auth** : bearer, basic, header custom simple, headers multiples, Scalingo API (exchange), Scalingo Database API (exchange + token d'addon). Scalingo est un cas d'usage parmi d'autres.
 - **Blob v2/v3/v4** : v2 = scopes string METHOD:PATH, v3 = scopes mixtes string + ScopeEntry avec body filters, v4 = champ `auth` structuré (`string | AuthSpec`). Les trois versions restent déchiffrables, v4 n'est produit que si `auth` est un objet.
-- **Body filters** (v3) : filtrage du contenu JSON des requêtes POST/PUT/PATCH (types : any, wildcard, stringwildcard, regex, not, and).
+- **Body filters** (v3) : filtrage du contenu JSON des requêtes POST/PUT/PATCH (types : any, wildcard, stringwildcard, regex, not, and). `any` n'accepte qu'un scalaire, comparer un objet dépendrait de l'ordre des clés de l'appelant. `regex` est un dialecte restreint (ADR-0010), pas une RegExp libre. Les plafonds vivent en double, `src/middleware/scope-limits.ts` à la génération pour un message actionnable et `src/crypto/blob.ts` au déchiffrement pour refuser un blob forgé. Le salt étant public, seul le second protège : toujours modifier les deux.
 - **Logs stream** (ADR-0007) : page `/logs` avec SSE live par blob, opt-in via champ `logs: { enabled, detailed }` dans le blob (décorrélé de la version du blob). In-memory only (ring buffer par blob + purge inactivité), body `detailed` chiffré AES-256-GCM côté serveur avec la clé client (zero trust). Kill switch global `FGP_LOGS_ENABLED`.
+- **Politique de sortie** (ADR-0009) : contrat unique sur tout ce qui sort du processus. `src/net/egress.ts` est le seul point de sortie et le seul `fetch` du code serveur. Destination publique obligatoire, chemin contrôlé sur la forme brute et la forme canonique mais émis en brut, authentification issue du blob et jamais de l'appelant, `redirect: "manual"` partout. Les paramètres de query ne sont contraints par aucun scope, et l'outillage doit le dire au lieu d'affirmer un refus que le proxy n'applique pas.
+- **Limites de ressources** (ADR-0010) : chaque coût est borné avant d'être payé. Blob plafonné à 4096 caractères et refusé sous 64, décompression bornée à 128 Ko en sortie, corps proxy bufferisé à 512 Ko et seulement quand un body filter ou la capture `detailed` en a besoin, `bodyLimit` monté sur la liste explicite des chemins `/api/*` et **jamais sur `*`**, cache LRU de dérivation PBKDF2. Le critère de calibrage est unique : aucune primitive optionnelle ne doit coûter plus cher que la dérivation PBKDF2 obligatoire, soit 11,6 ms.
 
 ## Stack
 - **Runtime** : Deno
@@ -44,22 +46,40 @@
 - `deno task check` : type checking serveur, puis `check:client`
 - `deno task check:client` : type checking du code navigateur via `deno.client.json` (lib DOM isolée, pour ne pas affaiblir le check serveur)
 - `deno task verify` : lint + fmt + check + test (pipeline complète)
+- **Permissions** : `dev:server`, `start` et les quatre tâches `test*` tournent sur une allow-list explicite de variables, jamais `--allow-env` nu. Ajouter une variable d'environnement lue par le serveur, c'est toucher trois endroits : la section « Variables d'environnement » ci-dessous, les six listes `--allow-env` de `deno.json`, et `.env.example`. Oubliée dans `deno.json`, elle lève une erreur de permission au runtime comme en test au lieu de prendre son défaut. Élargir la permission pour faire taire l'erreur annule le durcissement.
 
 ## Structure
 ```
 src/
   main.ts           point d'entrée, Hono app, Deno.serve sous import.meta.main
   constants.ts      constantes partagées (FGP_SOURCE_HEADER, FGP_OWNED_PATHS, FGP_SECURITY_HEADERS)
-  routes/           routes Hono (ui.tsx, logs.tsx, llms.ts)
-  middleware/       middlewares (proxy, scopes, body filters, capture logs)
-  crypto/           blob.ts (chiffrement/déchiffrement), client-key.ts (validation clé), share.ts
+  routes/           ui.tsx : page de config, TOUS les endpoints /api/* et la route /llms.txt.
+                    logs.tsx : /logs, /logs/stream, /logs/health. llms.ts : pas de route,
+                    seulement le rendu du contenu servi sur /llms.txt
+  net/              egress.ts : point de sortie unique du processus (ADR-0009). parseTargetUrl
+                    (forme), classifyLiteralHost (moitié synchrone de la classification),
+                    assertPublicHost (classification complète, avec DNS), buildUpstreamUrl,
+                    egressFetch. Jamais de fetch nu côté serveur
+  middleware/       proxy.ts (flow proxy), scopes.ts (matching méthode/chemin et body filters),
+                    scope-limits.ts (limites de scopes et dialecte regex, refus à la génération)
+  crypto/           blob.ts (chiffrement/déchiffrement), client-key.ts (validation clé), share.ts,
+                    bounded.ts (décompression plafonnée), key-cache.ts (cache des clés dérivées),
+                    regex-policy.ts (dialecte regex restreint et ancrage, ADR-0010)
   auth/             spec.ts (AuthSpec + validation), credentials.ts, client.ts (Scalingo), cache.ts
-  logs/             feature /logs : config env, blob-id, capture, events, ip, store (ring buffer in-memory)
-  ui/               pages JSX (config-page, layout, logo/SEO, logs-page)
+  logs/             feature /logs : config env, blob-id, capture (captureNetwork et
+                    captureDetailed, pas dans middleware/), events, ip, store (ring buffer)
+  ui/               config-page.tsx (assemble les composants de ui/config/), layout.tsx (logo,
+                    SEO), logs-page.tsx, asset-version.ts (cache-busting via static/version.txt),
+                    changelog-renderer.tsx, changelog-data.ts (généré, ne pas éditer)
+  ui/config/        composants de la page de config : form-identity, form-auth, form-scopes,
+                    form-delivery, result, sidebar (+ sidebar-doc, sidebar-guides,
+                    sidebar-panels), page-chrome, icons, constants
   ui/client/        modules TS client (auth-mode, auth-headers, addons, byok, presets, body-filters,
                     apps, generate, ttl, clipboard, scopes, test-scope, share-config, import-config,
                     tabs, logs-tab, elements, types)
   ui/tailwind.css   source Tailwind (build-time vers static/styles.css)
+scripts/            version.ts (SHA de build vers static/version.txt), changelog.ts (génère
+                    src/ui/changelog-data.ts depuis docs/changelog.md)
 deno.client.json    config de type checking du code navigateur (lib DOM)
 tailwind.config.js  config Tailwind (couleurs fgp, dark mode media)
 static/             assets compilés (client.js, styles.css), gitignored
@@ -82,34 +102,56 @@ docs/
 - Pas de default exports sauf `src/main.ts`
 - Imports triés : deps externes, puis internes, ligne vide entre les deux
 - Nommage : camelCase pour variables/fonctions, PascalCase pour types/interfaces
-- Erreurs : utiliser `HTTPException` de Hono pour les erreurs HTTP
-- OpenAPI : schemas de réponse stricts par route (union `z.enum([...])` des error codes autorisés). Ajouter un nouveau code d'erreur = l'ajouter dans l'enum de la route correspondante, **quand la route est documentée**. Seules les routes `/api/*` le sont : la route proxy `/{blob}/*` n'apparaît pas dans l'OpenAPI, puisque son contrat dépend entièrement du blob. Ses codes d'erreur vivent donc dans `docs/specs.md` et dans `/llms.txt`, qui doivent être mis à jour à la place.
+- Erreurs : **jamais `HTTPException`**. `app.onError` (`src/main.ts`) ne la discrimine pas et la transformerait en 500 `internal_error`, perdant le status et le code voulus. Renvoyer la shape `{error, message}` par les helpers locaux : `jsonError` (`src/middleware/proxy.ts`), `jsonStreamError` (`src/routes/logs.tsx`), `c.json({ error, message }, status)` dans `src/routes/ui.tsx`.
+- OpenAPI : schemas de réponse stricts par route (union `z.enum([...])` des error codes autorisés). Ajouter un nouveau code d'erreur = l'ajouter dans l'enum de la route correspondante, **quand la route est documentée**. Seules les routes `/api/*` le sont : la route proxy `/{blob}/*` n'apparaît pas dans l'OpenAPI, puisque son contrat dépend entièrement du blob. Ses codes d'erreur vivent donc dans `docs/specs.md` et dans `/llms.txt`, qui doivent être mis à jour à la place. Un code produit par un **middleware monté** sur la route compte comme un code de cette route : `createRoute` ne le voit pas tout seul, et le 413 `payload_too_large` d'`apiBodyLimit` manque aujourd'hui dans les enums de tous les `/api/*`.
 - Toute réponse du proxy principal doit porter `X-FGP-Source: proxy|upstream` (voir `src/constants.ts`).
+- **Réseau sortant** : tout appel serveur passe par `egressFetch` de `src/net/egress.ts`, jamais par un `fetch` direct. Une URL cible se valide par `parseTargetUrl` et se construit par `buildUpstreamUrl`, jamais par concaténation. Un `fetch` nu côté serveur rouvre la SSRF que l'ADR-0009 ferme. Les `fetch` du code navigateur visent FGP lui-même et ne sont pas concernés.
+- **Expressions régulières issues d'une entrée** : jamais `new RegExp` en direct. Valider la source par `checkRegexSource` puis compiler par `compileAnchored` (`src/crypto/regex-policy.ts`). Non validée, la regex rouvre le ReDoS ; non ancrée, elle matche en sous-chaîne et autorise plus que son motif (ADR-0010).
+- **Autorisation d'une requête** : `checkRequestAccess` (`src/middleware/scopes.ts`) est la seule porte. Ne jamais appeler `checkAccess` directement depuis la route proxy ni depuis l'UI : il ne contrôle qu'une seule forme du chemin et retire silencieusement la garantie de l'ADR-0009. Une seule lecture des scopes, sinon l'interface finit par affirmer un refus que la production n'applique pas.
 - Exploration du code TypeScript : LSP en priorité (`workspaceSymbol`, `findReferences`, `goToDefinition`), grep en dernier recours. Le LSP suit les alias et les re-exports, grep ne fait que du pattern matching.
 
 ## Flow proxy
 ```
 Requête, extraire blob (header X-FGP-Blob prioritaire, sinon premier segment URL)
   vérifier taille blob, extraire X-FGP-Key
-  PBKDF2(client_key + server_salt), déchiffrer blob (gunzip + AES-256-GCM)
-  valider auth mode, vérifier TTL
-  parser body si body filters requis (POST/PUT/PATCH + JSON)
-  vérifier scopes vs méthode/path/body
-  obtenir les credentials (toujours APRÈS la vérification des scopes, pour qu'un appelant
-    hors scope ne déclenche aucun appel réseau et n'apprenne rien de la config)
-  forward vers config.target avec auth headers (X-FGP-Key et X-FGP-Blob strippés)
-  renvoyer réponse upstream telle quelle (status/body/headers, seul Set-Cookie strippé)
+  pré-filtre gratuit avant PBKDF2 : format de la clé et plancher structurel du blob (64 chars),
+    pour ne pas payer la dérivation sur une sonde malformée
+  PBKDF2(client_key + server_salt) servi par le cache de dérivation, déchiffrer blob
+    (gunzip borné + AES-256-GCM). Un blob déchiffrable mais hors politique (regex hors
+    dialecte) sort en 400 unsupported_regex, jamais en 401 : le diagnostic doit désigner
+    le blob, pas la clé
+  vérifier le TTL, puis valider le mode d'auth
+  lire le corps de façon bornée si un body filter ou la capture detailed le réclame
+    (POST/PUT/PATCH + JSON), dépassement en 413 payload_too_large. Sans ces deux besoins
+    le corps n'est jamais bufferisé et part en flux, ne jamais casser cette propriété
+  vérifier les scopes via checkRequestAccess : méthode, corps, et le chemin sur DEUX formes,
+    brute et canonique. Les deux doivent être autorisées, la forme émise reste la brute.
+    La query n'est contrainte par aucun scope, elle est transmise telle quelle
+  classifier la destination : parseTargetUrl (forme) puis assertPublicHost (adresse publique
+    après résolution DNS), refus en 403 target_forbidden
+  obtenir les credentials
+  ces deux dernières étapes sont toujours APRÈS la vérification des scopes, pour qu'un appelant
+    hors scope ne déclenche ni résolution DNS ni appel réseau et n'apprenne rien de la config
+  forward vers config.target : strip des en-têtes de l'appelant (denylist par classe : hop-by-hop,
+    Authorization, Cookie, provenance, Host, X-FGP-*), PUIS pose des en-têtes d'auth du blob.
+    Cet ordre est imposé, l'inverser supprimerait l'Authorization légitime issue du blob
+  renvoyer réponse upstream telle quelle (status/body/headers, seul Set-Cookie strippé).
+    Les redirections ne sont pas suivies, un 3xx est forwardé tel quel avec son Location :
+    sans cela la classification de destination ne vaut rien
 ```
 
 **Proxy transparent (ADR-0006)** : toute réponse effectivement reçue de l'upstream est forwardée sans transformation, avec header `X-FGP-Source: upstream`. Les erreurs générées par FGP lui-même portent `X-FGP-Source: proxy` et la shape `{error, message}`. Trois 502 sont légitimes côté proxy : `upstream_unreachable` (fetch throw), `auth_exchange_failed` (échange de token Scalingo échoué) et `auth_addon_failed` (obtention du token d'addon échouée). Les 500 non catchés passent par `app.onError` dans `src/main.ts` vers la shape FGP `{error: "internal_error", ...}`. Ne jamais réintroduire de transformation de status/body upstream.
 
 **En-têtes de sécurité** : montés sur la liste explicite `FGP_OWNED_PATHS`, **jamais sur `*`**, plus un wrapper qui couvre les erreurs FGP de la route proxy (discriminées par `X-FGP-Source: proxy`). La transparence de l'ADR-0006 est ainsi garantie par construction et non par une condition qui peut se tromper. La couverture est vérifiée par un test de recensement des routes réellement enregistrées, et la parité entre `FGP_SECURITY_HEADERS` et ce que servent les routes par un test dédié. Ne jamais remonter ce middleware sur un pattern fourre-tout.
 
+**Plafonds de corps (ADR-0010)** : `bodyLimit` est monté sur des chemins `/api/*` explicites, **jamais sur `*`**, même doctrine que les en-têtes de sécurité et pour un enjeu plus lourd. La route proxy transmet le corps en streaming, un plafond global le mettrait en tampon et casserait les uploads volumineux légitimes à travers le proxy, en introduisant précisément la consommation mémoire qu'on cherche à éviter.
+
 **Carve-out `/logs`** : `blobHeaderProxy()` exclut `/logs` et `/logs/*` du mode header. C'est nécessaire, la feature logs consomme elle-même `X-FGP-Blob` et `X-FGP-Key` pour identifier le blob à streamer. Sans cette exclusion, `/logs/stream` serait injoignable. `/llms.txt` n'est en revanche pas exclu et reste proxyfiable.
 
 ## Variables d'environnement
 - `PORT` : port du serveur (défaut: 8000). Réellement pris en compte depuis le passage à `Deno.serve()` explicite.
 - `FGP_SALT` : salt serveur pour la dérivation de clé (requis)
+- `FGP_EGRESS_ALLOW_PRIVATE` : interrupteur de **développement uniquement**, désactivé par défaut. `1` coupe la classification des destinations (ADR-0009), jamais le contrôle de forme du `target` ni le `redirect: "manual"`. Actif en production, la garantie de destination tombe et l'instance redevient une SSRF non authentifiée, ouverte sur le réseau privé de l'hébergeur et sur son service de métadonnées. L'avertissement console est écrit au premier contrôle de destination, pas au démarrage : une instance qui n'a encore rien proxyfié reste silencieuse.
 - `SCALINGO_API_URL` : URL de l'API Scalingo pour les helpers list-apps et list-addons, et pour l'obtention du token d'addon (défaut: https://api.osc-fr1.scalingo.com)
 - `SCALINGO_AUTH_URL` : URL du service auth Scalingo pour l'échange de token (défaut: https://auth.scalingo.com)
 - `FGP_GITHUB_REPO` : repo GitHub `owner/name` pour la résolution du SHA de build (défaut: auto-détecté via git remote ou `lsagetlethias/fine-grained-proxy`)
@@ -118,6 +160,7 @@ Requête, extraire blob (header X-FGP-Blob prioritaire, sinon premier segment UR
 - `FGP_LOGS_BUFFER_DETAILED` : taille du ring buffer des entries detailed (body chiffré) par blob (défaut: 10)
 - `FGP_LOGS_INACTIVITY_MIN` : minutes d'inactivité avant purge complète du buffer d'un blob (défaut: 10)
 - `FGP_LOGS_DETAILED_MAX_KB` : taille max du body capturé en detailed, en KB, avant troncature (défaut: 32)
+- `FGP_TRUSTED_PROXY_HOPS` : nombre de sauts de proxy amont dignes de confiance pour l'IP capturée dans les logs (défaut: 0). À `0`, `X-Forwarded-For` et `X-Real-IP` sont ignorés et l'IP est celle du pair. Au-dessus, l'IP retenue est la n-ième de `X-Forwarded-For` en partant de la droite, jamais la première : la partie gauche est écrite par l'appelant. Toute valeur non entière ou négative retombe sur `0`.
 
 ## Équipe multi-agent
 - **Référence complète** : `docs/ia-architecture-reference.md` (setup, rôles, modèles, skills, hooks, process type, workflows)
@@ -127,7 +170,7 @@ Requête, extraire blob (header X-FGP-Blob prioritaire, sinon premier segment UR
   - `testeur.md` (`opus`) : challenge specs, AC Given/When/Then, /add-tests, /verif
   - `designer.md` (`sonnet`) : specs UI/UX dans docs/design/, review a11y, PAS d'intégration
   - pas de définition pour le lead : c'est la session principale
-- **Fiches de poste** dans `docs/team/` : doc humaine (place dans le process, interactions) et source de vérité des **checklists de fin de tâche**, que le hook de commit audite. Partage détaillé en section 4.2 de la référence.
+- **Fiches de poste** dans `docs/team/` : doc humaine (place dans le process, interactions) et source de vérité des **checklists de fin de tâche**. Le hook de commit ne les audite plus : un sous-agent n'a accès ni au transcript parent ni à celui de ses frères, il concluait donc systématiquement à l'absence et bloquait à tort. Il ne vérifie plus que ce qui est vérifiable depuis le diff, et autorise en cas de doute. Les checklists restent à la charge de chaque rôle et du lead. Partage détaillé en section 4.2 de la référence.
 - **Avant de dispatcher** : ne plus recopier la fiche dans le brief. Lancer l'agent par son type (`subagent_type: "dev"`) et ne mettre dans le brief que la tâche et son contexte.
 - **Parallélisme** : `isolation: "worktree"` dès que deux agents parallèles écrivent dans le même fichier, plutôt que de les séquencer.
 - **Review** : renvoyer les remarques au même agent par continuation, pas re-spawner un agent vierge.
@@ -142,6 +185,6 @@ Requête, extraire blob (header X-FGP-Blob prioritaire, sinon premier segment UR
 - **OpenAPI** : `GET /api/openapi.json`, spec OpenAPI 3.0 auto-générée depuis le code (schemas Zod)
 - **Swagger UI** : `GET /api/docs`, documentation interactive de l'API
 - **llms.txt** : `GET /llms.txt`, documentation en anglais destinée aux agents LLM (convention llmstxt.org), découvrable par balise `<link rel="describedby">` et header HTTP `Link`
-- **ADR** dans `docs/adr/`, pour les décisions architecturales significatives
+- **ADR** dans `docs/adr/`, pour les décisions architecturales significatives. Deux d'entre eux contraignent le code avant même de l'écrire et se lisent avant de toucher au réseau ou à une limite : **ADR-0009** (politique de sortie du proxy) et **ADR-0010** (politique de limites de ressources).
 - **ACTIVITY.md** : log d'activité des sessions de dev
-- **MEMORY.md** : mémoire persistante Claude Code
+- **MEMORY.md** : mémoire persistante Claude Code, **hors dépôt**, sous `~/.claude/projects/<projet>/memory/`. Ne pas la chercher dans les fichiers versionnés.

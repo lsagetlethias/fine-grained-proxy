@@ -40,7 +40,12 @@ export function parseTargetUrl(raw: string): { url: URL } | { error: EgressDenia
 // Étape 2 : classification d'une adresse littérale.
 export function isBlockedAddress(ip: string): boolean;
 
-// Étape 2 : classification d'un hôte, avec résolution si c'est un nom.
+// Étape 2, moitié synchrone : IP littérale et suffixes conventionnels, sans réseau.
+// Destinée aux chemins qui n'émettent aucune requête, la génération en particulier.
+export function classifyLiteralHost(hostname: string): EgressDenial | null;
+
+// Étape 2 complète : classifyLiteralHost, puis résolution DNS des noms.
+// À n'appeler que sur un chemin qui va réellement émettre.
 export async function assertPublicHost(hostname: string): Promise<EgressDenial | null>;
 
 // Point de sortie unique : parseTargetUrl + assertPublicHost + fetch(redirect: "manual").
@@ -60,6 +65,12 @@ Règles à implémenter, toutes détaillées dans l'ADR §2 :
 - échec de résolution : **pas** un refus, on laisse passer et `fetch` échouera en `upstream_unreachable` ;
 - `FGP_EGRESS_ALLOW_PRIVATE=1` désactive l'étape 2 uniquement, avec un `console.warn` au premier appel ;
 - `redirect: "manual"` sur tous les appels sortants.
+
+**L'étape 2 est scindée en deux, et c'est structurant.** La partie synchrone se décide sur la chaîne seule, IP littérale et suffixes conventionnels, sans toucher au réseau. La partie DNS exige une résolution et ne peut donc vivre qu'au point de sortie, juste avant le `fetch`.
+
+Cette scission n'est pas un détail d'implémentation, elle répond à deux contraintes opposées. Une classification faite trop tôt ne vaut rien : la réponse DNS obtenue à la génération d'un blob aura expiré bien avant son premier usage, et prétendre avoir validé la destination à ce moment-là serait une garantie fausse. Mais une classification faite uniquement au point de sortie laisserait passer sans le moindre signal un `target` qui est déjà, littéralement, `http://169.254.169.254`, alors que rien n'oblige à attendre une requête pour le refuser.
+
+D'où le partage : la génération applique `classifyLiteralHost` et refuse ce qui est refusable sur la chaîne, le point de sortie applique `assertPublicHost` et refuse ce qui n'était connaissable qu'après résolution. Et même au bon endroit, cette seconde moitié ne protège pas du rebinding DNS : entre la résolution de contrôle et celle du `fetch`, rien ne garantit la même réponse. La défense réelle contre le rebinding est le filtrage d'egress au niveau réseau, au déploiement.
 
 **Tests** : `tests/testu/net/egress.test.ts` (nouveau), résolveur injecté, échappatoire désactivée.
 - AC-43.1 schéma : `file:`, `data:`, `ftp:`, `javascript:` refusés en `invalid_target`.
@@ -94,7 +105,7 @@ Règles à implémenter, toutes détaillées dans l'ADR §2 :
 **Fichier** : `src/routes/ui.tsx`.
 
 **Ce qui change** :
-- `/api/generate` : `parseTargetUrl(body.target)` avant chiffrement, 400 `invalid_target` en cas de refus. Nouveau code d'erreur à ajouter à l'enum de réponse de la route (convention CLAUDE.md).
+- `/api/generate` : `parseTargetUrl(body.target)` **puis** `classifyLiteralHost(url.hostname)` avant chiffrement, 400 `invalid_target` si l'un des deux refuse. `parseTargetUrl` seule ne suffit pas, elle ne classe aucune adresse et `http://169.254.169.254` en sort valide. Pas d'`assertPublicHost` ici : l'endpoint n'émet aucune requête, et une résolution faite à la génération aura expiré au premier usage du blob. Nouveau code d'erreur à ajouter à l'enum de réponse de la route (convention CLAUDE.md).
 - `/api/test-proxy` : la requête sortante passe par `egressFetch` et `buildUpstreamUrl`. Refus de politique renvoyé dans la forme existante de l'endpoint, `{ allowed: true, reason: "target_forbidden" }`, pour ne pas changer la shape de réponse.
 - `/api/list-apps` et `/api/list-addons` : le champ `target` fourni par l'appelant doit avoir un hôte en `.scalingo.com`, sinon 400 `invalid_target`. La valeur issue de `SCALINGO_API_URL` n'est pas soumise à cette règle.
 
@@ -110,7 +121,7 @@ Règles à implémenter, toutes détaillées dans l'ADR §2 :
 
 **Fichier** : `src/auth/client.ts`, fonctions `resolveScalingoApiUrl` et `fetchAddonToken`.
 
-**Ce qui change** : `fetchAddonToken` vérifie que l'hôte résolu se termine par `.scalingo.com` avant d'émettre, et passe par `egressFetch`. Le refus lève, ce qui remonte en 502 `auth_addon_failed` par le chemin existant de `src/middleware/proxy.ts`. Idem pour la validation à la génération : un `AuthSpec` `scalingo-addon` dont l'`apiUrl` n'est pas Scalingo est refusé en 400 `invalid_body` par `validateAuthSpecShape`.
+**Ce qui change** : `fetchAddonToken` vérifie que l'hôte résolu se termine par `.scalingo.com` avant d'émettre, et passe par `egressFetch`. Le refus lève, ce qui remonte en 502 `auth_addon_failed` par le chemin existant de `src/middleware/proxy.ts`. Idem **prévu** pour la validation à la génération : un `AuthSpec` `scalingo-addon` dont l'`apiUrl` n'est pas Scalingo doit être refusé en 400 `invalid_body` par `validateAuthSpecShape`. **Non livré, et il faut le lire comme tel** : `validateAuthSpecShape` ne contrôle que la forme de l'`apiUrl`, chaîne non vide et préfixe `https://`. La contrainte d'hôte n'existe qu'à l'exécution, dans `fetchAddonToken`. Le bearer ne part donc nulle part, mais un blob à `apiUrl` hostile se génère sans erreur et n'échoue qu'au premier appel, en 502. AC-43.18 reste ouvert.
 
 **Justification** : ce mode est spécifique à Scalingo par construction (ADR-0008). La contrainte d'agnosticisme porte sur `target`, pas sur un mode d'auth propriétaire.
 
@@ -132,7 +143,7 @@ export function canonicalizePath(rawPath: string): string;
 
 export interface AccessVerdict {
   allowed: boolean;
-  denialReason?: "method" | "path" | "path_encoded" | "body" | "query";
+  denialReason?: "method" | "path" | "path_encoded" | "body" | "query" | "invalid_path";
   queryConstrained: boolean;   // toujours false dans ce lot, voir « Hors lot »
 }
 
@@ -219,6 +230,8 @@ export function checkRequestAccess(
 C'est l'étape qui matérialise la frontière de périmètre. Trois changements, aucun ne touche au blob.
 
 **Fichiers** : `src/routes/ui.tsx` (`/api/test-scope` et `/api/generate`), `src/middleware/scope-limits.ts`, `src/ui/client/test-scope.ts`, `src/ui/config/form-scopes.tsx` (copie du verdict).
+
+**Périmé depuis l'ADR-0010** : `/api/test-scope` a été supprimée, elle répond 404 et ne figure plus dans l'OpenAPI. Le test de scope est devenu purement client, `src/ui/client/test-scope.ts` important `checkRequestAccess` directement. AC-46.2 n'a donc plus d'objet : il n'existe plus deux implémentations du verdict à comparer, ce qui est la forme forte de la garantie anti-divergence que cette étape visait. Le reste de l'étape est inchangé.
 
 **Ce qui change** :
 
