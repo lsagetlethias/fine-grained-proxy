@@ -1,0 +1,27 @@
+/*
+  Correctif de rendu des diagrammes Mermaid.
+
+  Symptome : sur la slide du flow, les libelles des participants sortent de leurs
+  boites et se chevauchent, alors que les rectangles et les fleches sont au bon
+  endroit. Intermittent, en dev comme sur le deck construit.
+
+  Cause : Chromium ne refait pas le layout du texte SVG quand l'echelle accumulee
+  change par une simple mise a jour de transform. Slidev applique
+  `transform: scale(var(--slidev-slide-scale))` sur #slide-content, et cette
+  variable vaut 0 pendant les premieres secondes (la taille du conteneur n'est pas
+  encore observee). Quand un diagramme Mermaid est insere pendant cette fenetre,
+  son texte est mis en page avec un facteur d'echelle qui devient faux des que la
+  variable prend sa valeur reelle, et il n'est jamais recalcule. Les <rect> et les
+  chemins, eux, se repeignent correctement : d'ou le decalage entre les deux.
+
+  Correctif : accrocher une propriete heritee et sensible au layout sur cette meme
+  variable. Chaque changement d'echelle force alors un recalcul de style qui
+  traverse le shadow root du composant Mermaid et redeclenche le layout du texte.
+  word-spacing est neutre visuellement ici : la valeur reste au centieme de pixel.
+
+  La dependance a var(--slidev-slide-scale) EST le correctif. Remplacer cette
+  expression par une constante fait revenir le bug (verifie).
+*/
+.mermaid {
+  word-spacing: calc(var(--slidev-slide-scale, 1) * 0.01px);
+}
