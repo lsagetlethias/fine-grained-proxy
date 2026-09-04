@@ -18,6 +18,7 @@ export const MAX_QUERY_PARAM_NAME_LENGTH = 64;
 
 export interface QueryParamNames {
   names: string[];
+  repeats: [string, number][];
   truncated: boolean;
 }
 
@@ -29,7 +30,7 @@ export function extractQueryParamNames(search: string): QueryParamNames | null {
   if (search.length === 0 || search === "?") return null;
 
   const names: string[] = [];
-  const seen = new Set<string>();
+  const counts = new Map<string, number>();
   let truncated = false;
 
   for (const [rawName] of new URLSearchParams(search)) {
@@ -38,17 +39,33 @@ export function extractQueryParamNames(search: string): QueryParamNames | null {
       name = name.slice(0, MAX_QUERY_PARAM_NAME_LENGTH);
       truncated = true;
     }
-    if (seen.has(name)) continue;
+    const known = counts.get(name);
+    if (known !== undefined) {
+      counts.set(name, known + 1);
+      continue;
+    }
+    // Au-dela du plafond on cesse de retenir de nouveaux noms, mais on continue de parcourir :
+    // sortir de la boucle sous-compterait les occurrences d'un nom deja retenu qui reapparait
+    // plus loin dans la query, et c'est justement ce compte qui porte le diagnostic.
     if (names.length >= MAX_QUERY_PARAM_NAMES) {
       truncated = true;
-      break;
+      continue;
     }
-    seen.add(name);
+    counts.set(name, 1);
     names.push(name);
   }
 
   if (names.length === 0) return null;
-  return { names, truncated };
+
+  // Seuls les parametres repetes sont listes : un nom absent d'ici est apparu exactement une
+  // fois. Le cas courant ne coute donc aucun octet dans le ring buffer.
+  const repeats: [string, number][] = [];
+  for (const name of names) {
+    const count = counts.get(name) ?? 1;
+    if (count > 1) repeats.push([name, count]);
+  }
+
+  return { names, repeats, truncated };
 }
 
 export interface NetworkContext {
@@ -74,6 +91,9 @@ export function captureNetwork(ctx: NetworkContext): void {
   };
   if (ctx.queryParamNames) {
     entry.queryParamNames = ctx.queryParamNames.names;
+    if (ctx.queryParamNames.repeats.length > 0) {
+      entry.queryParamRepeats = ctx.queryParamNames.repeats;
+    }
     if (ctx.queryParamNames.truncated) entry.queryParamNamesTruncated = true;
   }
   append(ctx.blobId, entry);

@@ -16,6 +16,7 @@
     durationMs: number;
     ipPrefix: string;
     queryParamNames?: string[];
+    queryParamRepeats?: [string, number][];
     queryParamNamesTruncated?: true;
   };
 
@@ -515,9 +516,16 @@
       const label = document.createElement("span");
       label.className = "shrink-0";
       label.textContent = "query :";
+      // Le nombre d'occurrences est la seule information qui explique un refus par plafond :
+      // il n'apparait ni dans le blob, ni dans le formulaire, ni a la generation (§19.4).
+      const repeats = new Map(entry.queryParamRepeats ?? []);
       const list = document.createElement("span");
       list.className = "font-mono truncate";
-      list.textContent = names.join(", ") + (entry.queryParamNamesTruncated ? ", ..." : "");
+      const rendered = names.map((n) => {
+        const count = repeats.get(n);
+        return count === undefined ? n : `${n} x${count}`;
+      });
+      list.textContent = rendered.join(", ") + (entry.queryParamNamesTruncated ? ", ..." : "");
       list.setAttribute("title", list.textContent);
       row3.append(label, list);
       li.append(row3);
