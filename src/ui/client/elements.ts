@@ -21,6 +21,7 @@ export function getElements() {
     scopesTextarea: assertElement("scopes", HTMLTextAreaElement),
     resultSection: assertElement("result-section", HTMLElement),
     errorBanner: assertElement("error-banner", HTMLElement),
+    errorBannerMessage: assertElement("error-banner-message", HTMLElement),
     customTtlWrapper: assertElement("custom-ttl-wrapper", HTMLElement),
     ttlWarning: assertElement("ttl-warning", HTMLElement),
     scopeChips: assertElement("scope-chips", HTMLElement),

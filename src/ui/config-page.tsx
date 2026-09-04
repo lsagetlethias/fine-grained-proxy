@@ -1,4 +1,5 @@
 import { Layout } from "./layout.tsx";
+import { assetUrl } from "./asset-version.ts";
 import { PageFooter, PageHeader } from "./config/page-chrome.tsx";
 import { NameSection, PresetSection, TargetSection } from "./config/form-identity.tsx";
 import {
@@ -45,7 +46,7 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
 
             <ErrorBanner />
 
-            <script defer src="/static/client.js" />
+            <script defer src={assetUrl("/static/client.js")} />
           </div>
 
           <Sidebar />

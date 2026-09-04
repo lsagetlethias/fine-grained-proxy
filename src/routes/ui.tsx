@@ -22,6 +22,7 @@ import { obtainAddonToken } from "../auth/credentials.ts";
 import { validateScopeLimits } from "../middleware/scope-limits.ts";
 import { renderLlmsTxt } from "./llms.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
+import { ASSET_VERSION } from "../ui/asset-version.ts";
 import {
   type BodyFilter,
   checkAccess,
@@ -31,13 +32,6 @@ import {
   type Scope,
 } from "../middleware/scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../constants.ts";
-
-let commitHash = "dev";
-try {
-  commitHash = Deno.readTextFileSync("static/version.txt").trim();
-} catch {
-  // no version.txt, run deno task build to generate it
-}
 
 function getRequestOrigin(c: Context): string {
   const forwardedProto = c.req.header("X-Forwarded-Proto");
@@ -685,7 +679,7 @@ export const uiRoutes = new OpenAPIHono({
 
 uiRoutes.get("/", (c) => {
   c.header("Link", LLMS_LINK_HEADER);
-  return c.html(<ConfigPage commitHash={commitHash} />);
+  return c.html(<ConfigPage commitHash={ASSET_VERSION} />);
 });
 
 uiRoutes.get(LLMS_TXT_PATH, (c) => {

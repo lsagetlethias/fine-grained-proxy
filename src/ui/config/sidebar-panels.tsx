@@ -1,5 +1,7 @@
 import { renderChangelog } from "../changelog-renderer.tsx";
 import { CHANGELOG_MARKDOWN } from "../changelog-data.ts";
+import { ALERT_CAUTION_CLASS, ALERT_INFO_CLASS } from "./constants.ts";
+import { AlertInfoIcon, AlertTriangleIcon } from "./icons.tsx";
 
 export function ExamplesPanel() {
   return (
@@ -172,12 +174,13 @@ export function LogsPanel() {
       <div
         id="logs-feature-off"
         hidden
-        class="rounded-md bg-blue-50 border border-blue-200 p-3 dark:bg-blue-900/20 dark:border-blue-800"
+        class={ALERT_INFO_CLASS}
       >
-        <p class="text-xs text-blue-800 dark:text-blue-300">
+        <AlertInfoIcon />
+        <span>
           Les logs sont d&eacute;sactiv&eacute;s sur cette instance FGP. Contactez l'administrateur
           pour activer <code class="font-mono">FGP_LOGS_ENABLED</code>.
-        </p>
+        </span>
       </div>
 
       <fieldset id="logs-toggles" class="space-y-4">
@@ -235,16 +238,14 @@ export function LogsPanel() {
       <div
         id="logs-detailed-warning"
         hidden
-        class="rounded-md bg-amber-50 border border-amber-200 p-3 dark:bg-amber-900/20 dark:border-amber-800"
+        class={ALERT_CAUTION_CLASS}
       >
-        <p class="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">
-          Attention
-        </p>
-        <p class="text-xs text-amber-700 dark:text-amber-400">
+        <AlertTriangleIcon />
+        <span>
           Activez uniquement si vous avez besoin d'inspecter les payloads. Le body peut contenir des
           informations sensibles, n'ouvrez <code class="font-mono">/logs</code>{" "}
           que sur un poste de confiance.
-        </p>
+        </span>
       </div>
 
       <hr class="border-gray-200 dark:border-gray-700" />

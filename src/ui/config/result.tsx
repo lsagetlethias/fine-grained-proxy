@@ -1,4 +1,10 @@
-import { RESULT_COPY_BTN_CLASS, RESULT_INPUT_CLASS, RESULT_LABEL_CLASS } from "./constants.ts";
+import {
+  ALERT_DANGER_CLASS,
+  RESULT_COPY_BTN_CLASS,
+  RESULT_INPUT_CLASS,
+  RESULT_LABEL_CLASS,
+} from "./constants.ts";
+import { AlertTriangleIcon } from "./icons.tsx";
 export function ResultSection() {
   return (
     <section
@@ -109,7 +115,7 @@ export function ResultSection() {
             <button
               type="button"
               data-copy="result-curl"
-              class="copy-btn self-start rounded-md border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-800 dark:border-green-700 dark:text-green-300 dark:hover:bg-gray-700"
+              class={RESULT_COPY_BTN_CLASS}
               aria-label="Copier la commande curl"
             >
               Copier
@@ -129,7 +135,7 @@ export function ResultSection() {
             <button
               type="button"
               data-copy="result-curl-header"
-              class="copy-btn self-start rounded-md border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-800 dark:border-green-700 dark:text-green-300 dark:hover:bg-gray-700"
+              class={RESULT_COPY_BTN_CLASS}
               aria-label="Copier la commande curl header mode"
             >
               Copier
@@ -145,9 +151,12 @@ export function ErrorBanner() {
   return (
     <div
       id="error-banner"
-      class="mt-4 hidden rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:border-red-700 dark:text-red-300"
+      class={`mt-4 hidden ${ALERT_DANGER_CLASS}`}
       role="alert"
     >
+      <AlertTriangleIcon />
+      {/* Le message va dans ce span, pas sur le conteneur : textContent effacerait l'icone. */}
+      <span id="error-banner-message"></span>
     </div>
   );
 }

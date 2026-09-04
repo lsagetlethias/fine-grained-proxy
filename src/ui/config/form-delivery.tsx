@@ -1,4 +1,6 @@
 import {
+  ALERT_CAUTION_CLASS,
+  ALERT_DANGER_CLASS,
   CONTROL_H,
   HINT_CLASS,
   INPUT_CLASS,
@@ -6,7 +8,7 @@ import {
   PILL_CLASS,
   TTL_PRESETS,
 } from "./constants.ts";
-import { EyeIcon } from "./icons.tsx";
+import { AlertTriangleIcon, EyeIcon } from "./icons.tsx";
 
 export function TtlSection() {
   return (
@@ -49,10 +51,11 @@ export function TtlSection() {
         </div>
         <div
           id="ttl-warning"
-          class="mt-2 hidden rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-300"
+          class={`mt-2 hidden ${ALERT_CAUTION_CLASS}`}
           role="alert"
         >
-          Attention : sans expiration, cette URL restera valide indéfiniment.
+          <AlertTriangleIcon />
+          <span>Attention : sans expiration, cette URL restera valide indéfiniment.</span>
         </div>
       </fieldset>
     </section>
@@ -82,10 +85,6 @@ export function ByokSection() {
           />
         </svg>
         <span class="min-w-0 flex-1">Utiliser ma propre cl&eacute; client</span>
-        {
-          /* Pas de classe utilitaire de display ici : elle l'emporterait sur le
-            [hidden] { display: none } du preflight et le badge resterait visible. */
-        }
         <span
           id="byok-active-badge"
           hidden
@@ -99,20 +98,9 @@ export function ByokSection() {
       <div class="space-y-3 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
         <p
           id="byok-warning"
-          class="flex items-start gap-2 rounded-md border border-red-300 border-l-4 border-l-red-500 bg-red-50 p-2 text-xs text-red-800 dark:border-red-700 dark:border-l-red-500 dark:bg-red-900/30 dark:text-red-300"
+          class={ALERT_DANGER_CLASS}
         >
-          <svg
-            class="h-4 w-4 shrink-0 text-red-600 dark:text-red-400"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              fill-rule="evenodd"
-              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-              clip-rule="evenodd"
-            />
-          </svg>
+          <AlertTriangleIcon />
           <span>
             R&eacute;utiliser une cl&eacute; lie les blobs : sa fuite rend d&eacute;chiffrables tous
             ceux g&eacute;n&eacute;r&eacute;s avec elle.
@@ -137,28 +125,53 @@ export function ByokSection() {
           </div>
 
           <div class="flex flex-wrap gap-2">
-            <input
-              type="password"
-              id="byok-key"
-              placeholder="24 caract&#232;res minimum"
-              autocomplete="off"
-              data-1p-ignore
-              data-lpignore="true"
-              spellcheck={false}
-              aria-describedby="byok-warning byok-strength-label byok-hint"
-              class="min-w-[11rem] flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 dark:aria-[invalid=true]:border-red-500"
-            />
+            <div class="min-w-[11rem] flex-1">
+              <input
+                type="password"
+                id="byok-key"
+                placeholder="24 caract&#232;res minimum"
+                autocomplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                spellcheck={false}
+                aria-describedby="byok-warning byok-strength-label byok-hint"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 dark:aria-[invalid=true]:border-red-500"
+              />
+
+              {
+                /* La jauge est fille du champ et non soeur de la rangee : soeur des
+                  boutons, elle prenait leur largeur en plus de celle du champ. */
+              }
+              <div id="byok-strength" class="mt-2 flex gap-1" aria-hidden="true">
+                <span
+                  data-byok-segment
+                  class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
+                >
+                </span>
+                <span
+                  data-byok-segment
+                  class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
+                >
+                </span>
+                <span
+                  data-byok-segment
+                  class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
+                >
+                </span>
+              </div>
+            </div>
+
             {
               /* Groupes : sous 360 px la rangee replie de toute facon, avec ce conteneur
                 elle replie proprement et le champ y gagne de la largeur. */
             }
-            <div id="byok-actions" class="flex shrink-0 gap-2">
+            <div id="byok-actions" class="flex shrink-0 gap-2 self-start">
               <button
                 type="button"
                 id="btn-byok-reveal"
                 aria-pressed="false"
                 aria-label="Afficher la cl&#233;"
-                class={`${CONTROL_H} w-[2.375rem] shrink-0 inline-flex items-center justify-center rounded-md border border-gray-300 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:hover:text-gray-200`}
+                class={`${CONTROL_H} w-[2.375rem] shrink-0 inline-flex items-center justify-center rounded-md border border-gray-300 p-2 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:hover:text-gray-200`}
               >
                 <EyeIcon />
               </button>
@@ -166,29 +179,11 @@ export function ByokSection() {
                 type="button"
                 id="btn-byok-copy"
                 data-copy="byok-key"
-                class={`${CONTROL_H} copy-btn shrink-0 inline-flex items-center justify-center rounded-md border border-gray-300 px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700`}
+                class={`${CONTROL_H} copy-btn shrink-0 inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700`}
               >
                 Copier
               </button>
             </div>
-          </div>
-
-          <div id="byok-strength" class="mt-2 flex gap-1" aria-hidden="true">
-            <span
-              data-byok-segment
-              class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
-            >
-            </span>
-            <span
-              data-byok-segment
-              class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
-            >
-            </span>
-            <span
-              data-byok-segment
-              class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
-            >
-            </span>
           </div>
 
           <p

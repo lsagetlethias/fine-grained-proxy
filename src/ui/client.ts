@@ -33,7 +33,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
   const appsPerms: AppsPermissionsState = {};
 
   function showError(msg: string): void {
-    els.errorBanner.textContent = msg;
+    els.errorBannerMessage.textContent = msg;
     els.errorBanner.classList.remove("hidden");
     setTimeout(function () {
       els.errorBanner.classList.add("hidden");

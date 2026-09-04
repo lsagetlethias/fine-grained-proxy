@@ -1,5 +1,6 @@
 import {
   ADD_BTN_CLASS,
+  ALERT_CAUTION_CLASS,
   AUTH_MODES,
   CONTROL_H,
   FIELD_CLASS,
@@ -11,7 +12,7 @@ import {
   SCALINGO_REGIONS,
   SUB_LABEL_CLASS,
 } from "./constants.ts";
-import { EyeIcon, TrashIcon } from "./icons.tsx";
+import { AlertTriangleIcon, EyeIcon, TrashIcon } from "./icons.tsx";
 
 export function AuthModeSection() {
   return (
@@ -179,15 +180,18 @@ export function ScalingoAddonSection() {
         <p
           id="addon-target-warning"
           hidden
-          class="mt-2 text-xs text-amber-700 dark:text-amber-300"
+          class={`mt-2 ${ALERT_CAUTION_CLASS}`}
         >
-          Cette cible ne ressemble pas &agrave; une Database API Scalingo. V&eacute;rifiez l'URL
-          cible.
+          <AlertTriangleIcon />
+          <span>
+            Cette cible ne ressemble pas &agrave; une Database API Scalingo. V&eacute;rifiez l'URL
+            cible.
+          </span>
         </p>
 
         <div class="mt-4 flex flex-wrap items-start gap-2">
           <div class="min-w-[14rem] flex-1">
-            <div class="flex items-end gap-2">
+            <div class="flex gap-2">
               <div class="min-w-0 flex-1">
                 <label
                   for="addon-app"
@@ -210,7 +214,7 @@ export function ScalingoAddonSection() {
               <button
                 type="button"
                 id="btn-addon-load"
-                class={`${CONTROL_H} shrink-0 inline-flex items-center justify-center rounded-md bg-fgp-600 px-3 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed dark:focus:ring-offset-gray-900`}
+                class={`${CONTROL_H} self-end shrink-0 inline-flex items-center justify-center rounded-md border border-transparent bg-fgp-600 px-3 py-2 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed dark:focus:ring-offset-gray-900`}
               >
                 Charger
               </button>
@@ -236,7 +240,7 @@ export function ScalingoAddonSection() {
             <select
               id="addon-select"
               disabled
-              class={`${CONTROL_H} w-full rounded-md border border-gray-300 bg-white px-3 text-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:disabled:bg-gray-800/50 dark:disabled:text-gray-500`}
+              class={`${CONTROL_H} w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:disabled:bg-gray-800/50 dark:disabled:text-gray-500`}
             >
               <option value="">Choisissez une base de donn&eacute;es</option>
             </select>
@@ -286,7 +290,7 @@ export function TokenSection() {
         <button
           type="button"
           id="btn-load-apps"
-          class={`${CONTROL_H} hidden shrink-0 inline-flex items-center justify-center rounded-md bg-fgp-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900`}
+          class={`${CONTROL_H} hidden self-end shrink-0 inline-flex items-center justify-center rounded-md border border-transparent bg-fgp-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900`}
         >
           Charger les apps
         </button>

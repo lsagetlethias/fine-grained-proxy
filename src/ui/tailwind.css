@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Le gabarit d'alerte pose display:flex sur des blocs pilotes par l'attribut `hidden`.
+     Sans cette regle ils resteraient visibles : une declaration d'auteur bat toujours celle
+     de l'agent utilisateur, et le preflight ne redeclare pas [hidden]. */
+  [hidden] {
+    display: none !important;
+  }
+}

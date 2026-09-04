@@ -1,4 +1,5 @@
 import { FgpLogo, Layout } from "./layout.tsx";
+import { assetUrl } from "./asset-version.ts";
 
 export function LogsPage() {
   return (
@@ -269,7 +270,7 @@ export function LogsPage() {
         </section>
       </main>
 
-      <script defer src="/static/logs-client.js"></script>
+      <script defer src={assetUrl("/static/logs-client.js")}></script>
     </Layout>
   );
 }

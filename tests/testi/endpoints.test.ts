@@ -44,14 +44,14 @@ Deno.test({
 });
 
 Deno.test({
-  name: 'AC-10.3.1: GET / contains <script defer src="/static/client.js"',
+  name: 'AC-10.3.1: GET / contains <script defer src="/static/client.js" versionne',
   fn: async () => {
     const res = await app.request("/");
     const body = await res.text();
 
     assertEquals(res.status, 200);
     assertEquals(
-      body.includes('<script defer src="/static/client.js"'),
+      body.includes('<script defer src="/static/client.js?v='),
       true,
     );
   },
