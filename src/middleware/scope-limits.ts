@@ -2,7 +2,7 @@ import type { Scope, ScopeEntry } from "./scopes.ts";
 
 // Limites verifiees a la generation. Elles doublent celles appliquees au dechiffrement
 // dans crypto/blob.ts : ici pour un message actionnable, la-bas pour refuser un blob crafte.
-export function validateObjectValue(ov: Record<string, unknown>, depth: number): string | null {
+function validateObjectValue(ov: Record<string, unknown>, depth: number): string | null {
   if (depth > 4) return "Object value nesting exceeds maximum depth of 4";
   if (ov.type === "not") {
     const inner = ov.value as Record<string, unknown>;
