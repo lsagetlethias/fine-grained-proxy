@@ -148,7 +148,7 @@ async function forwardRequest(
   config: BlobConfig,
   proxyPath: string,
   authHeaders: Headers,
-): Promise<Response> {
+): Promise<{ response: Response; decodingDisabled: boolean }> {
   const url = new URL(c.req.url);
   const parsed = parseTargetUrl(config.target);
   if ("error" in parsed) throw new Error("Invalid target");
@@ -174,12 +174,56 @@ async function forwardRequest(
     init.body = c.req.raw.body;
   }
 
-  return await egressFetch(targetUrl, init);
+  // Se lit sur les en-tetes reellement partis, apres toutes les passes : un Range comme
+  // un Accept-Encoding peut venir de l'appelant comme d'un AuthSpec.
+  const decodingDisabled = runtimeDecodingDisabled(headers);
+
+  return { response: await egressFetch(targetUrl, init), decodingDisabled };
 }
 
-function handleUpstreamResponse(response: Response): Response {
+// Mesure sur Deno 2.9.5 : deflate, zstd et tout encodage inconnu ressortent bruts.
+const RUNTIME_DECODED_ENCODINGS = new Set(["gzip", "br"]);
+
+// Deux en-tetes de la requete sortante suffisent a desactiver le decodage automatique du
+// runtime, auquel cas le corps revient compresse. Mesure sur Deno 2.9.5 : un Range, quelle
+// que soit sa valeur et meme si la reponse finit en 200, parce que la reponse peut etre un
+// fragment indecodable ; et un Accept-Encoding valant exactement identity, "identity, gzip"
+// ou "identity;q=0" laissant au contraire le decodage actif.
+function runtimeDecodingDisabled(sentHeaders: Headers): boolean {
+  if (sentHeaders.has("Range")) return true;
+  return (sentHeaders.get("Accept-Encoding") ?? "").trim().toLowerCase() === "identity";
+}
+
+function runtimeDecodedBody(response: Response, decodingDisabled: boolean): boolean {
+  // Sans corps (HEAD, 304) rien n'a ete decode, et le Content-Length amont decrit alors
+  // l'entite, pas ce qu'on transmet : il doit survivre.
+  if (response.body === null || decodingDisabled) return false;
+  const encoding = response.headers.get("Content-Encoding");
+  return encoding !== null && RUNTIME_DECODED_ENCODINGS.has(encoding.trim().toLowerCase());
+}
+
+function handleUpstreamResponse(response: Response, decodingDisabled: boolean): Response {
   const headers = new Headers(response.headers);
   headers.delete("Set-Cookie");
+
+  // Hop-by-hop (RFC 9110 §7.6.1) : decrit le framing du hop amont, pas celui qu'on emet,
+  // et le serveur choisit le sien. Symetrique du strip deja fait sur la requete.
+  headers.delete("Transfer-Encoding");
+
+  // Deviation assumee a la transparence de l'ADR-0006, imposee par le runtime et non par
+  // un choix produit : fetch a deja decode le corps a la reception, mais expose encore
+  // les en-tetes amont qui le decrivaient compresse. Les relayer fait echouer tout client
+  // qui les respecte (undici tente un gunzip sur du clair puis coupe sur "terminated"),
+  // et le Content-Length perime tronque la reponse a la premiere lecture. Garder ces
+  // en-tetes reviendrait a mentir sur ce qu'on envoie.
+  // Le decodage n'etant ni universel ni garanti, la suppression est conditionnelle :
+  // hors des cas couverts par runtimeDecodedBody, le corps ressort bel et bien compresse
+  // et les en-tetes amont sont exacts, les supprimer casserait le client dans l'autre sens.
+  if (runtimeDecodedBody(response, decodingDisabled)) {
+    headers.delete("Content-Encoding");
+    headers.delete("Content-Length");
+  }
+
   headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_UPSTREAM);
 
   return new Response(response.body, {
@@ -380,9 +424,9 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     );
   }
 
-  let response;
+  let forwardResult;
   try {
-    response = await forwardRequest(c, config, proxyPath, authHeaders);
+    forwardResult = await forwardRequest(c, config, proxyPath, authHeaders);
   } catch {
     return await finishWithCapture(
       c,
@@ -398,7 +442,10 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     );
   }
 
-  const forwarded = handleUpstreamResponse(response);
+  const forwarded = handleUpstreamResponse(
+    forwardResult.response,
+    forwardResult.decodingDisabled,
+  );
   return await finishWithCapture(
     c,
     config,
