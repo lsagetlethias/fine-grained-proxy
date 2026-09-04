@@ -1103,6 +1103,97 @@ La jauge est **indicative et non bloquante** : seules les contraintes de §15.3 
 
 ---
 
+### 12.10 Codes d'erreur dans le panneau Doc (copy)
+
+Le panneau Doc ne documente aujourd'hui aucun code d'erreur, et ne mentionne nulle part `X-FGP-Source`. Un utilisateur qui reçoit un 403 n'a donc aucun moyen, depuis l'interface, de savoir si le refus vient de FGP ou de son API cible. C'est le contrat central de l'ADR 0006, et un en-tête dont personne ne connaît l'existence ne sert à rien.
+
+#### Périmètre : les erreurs d'une URL générée, pas celles du formulaire
+
+Cette section documente uniquement les erreurs **reçues en consommant une URL FGP**. Les erreurs de génération (`invalid_key`, `auth_limit_exceeded`, `blob_too_large` au moment de générer, limites de scopes) en sont **exclues** : elles sont déjà affichées en ligne, dans le formulaire, au moment exact où elles se produisent et à côté du champ fautif (§12.7, §12.8, §12.9). Les documenter une seconde fois ici créerait deux sources pour le même texte, qui divergeraient à la première correction.
+
+#### Structure retenue
+
+Nouvelle `<section>` dans l'onglet Doc, titre `<h3>` « Codes d'erreur », **placée juste après « Utilisation de l'URL »** et avant « Partage et import ». C'est l'ordre de lecture réel : on lit comment appeler l'URL, puis ce que signifie ce qu'on récupère.
+
+La section se compose de trois blocs, dans cet ordre :
+
+1. **« D'où vient l'erreur »**, toujours visible. C'est la partie que personne ne connaît, elle ne doit pas demander un clic pour exister.
+2. **« Les erreurs de FGP »**, liste des codes, **repliée** dans un `<details>`. C'est une consultation ponctuelle, pas une lecture.
+3. **« Tout le reste vient de votre API »**, toujours visible, deux phrases.
+
+**Pourquoi replier le deuxième bloc et pas les autres.** Le panneau ne contient aujourd'hui aucune section repliable, donc en introduire une se justifie ou ne se fait pas. Elle se justifie ici parce que les deux besoins sont de natures différentes : comprendre l'attribution d'une erreur est une notion, qui doit être vue sans action ; retrouver un code précis est un geste de recherche, qui suppose déjà de savoir ce qu'on cherche. Replier la notion la rendrait invisible, replier la liste ne coûte qu'un clic à qui la cherche. Les navigateurs actuels ouvrent d'eux-mêmes un `<details>` fermé lors d'une recherche dans la page, donc la liste reste trouvable au `Ctrl+F`.
+
+**Pas de tableau.** Le panneau est latéral et étroit. Chaque code est une paire `<dt>` / `<dd>` sur le motif déjà utilisé par « Infos sur les champs » : le `<dt>` porte le code et son status, le `<dd>` porte la remédiation. Un tableau à colonnes déborderait ou se réduirait à des cellules d'un mot.
+
+**Regroupement par remédiation, pas par status.** Les codes sont groupés selon ce que l'utilisateur doit corriger, parce que c'est la question qu'il se pose. Chaque entrée affiche quand même son status, donc la recherche par code ou par status fonctionne toujours.
+
+#### Bloc 1 : « D'où vient l'erreur » (visible)
+
+| Élément | Texte |
+|---------|-------|
+| Titre du bloc | « D'où vient l'erreur » |
+| Intro | « Toute réponse renvoyée par le proxy porte l'en-tête `X-FGP-Source`. Il dit qui a répondu, avant même de regarder le status. » |
+| Puce `proxy` | « `proxy` : c'est FGP qui a répondu. Le corps a la forme `{error, message}` et le code figure dans la liste ci-dessous. » |
+| Puce `upstream` | « `upstream` : la réponse vient de votre API cible, transmise telle quelle. FGP n'a touché ni au status, ni au corps, ni aux en-têtes. Interprétez-la avec la documentation de cette API. » |
+| Aide pratique | « Ajoutez `-i` à votre commande `curl` pour voir cet en-tête. » |
+
+#### Bloc 2 : « Les erreurs de FGP » (replié)
+
+| Élément | Texte |
+|---------|-------|
+| Libellé du `<summary>` | « Les erreurs de FGP » |
+| Sous-titre du groupe 1 | « La clé ou le blob » |
+| Sous-titre du groupe 2 | « Le périmètre du blob » |
+| Sous-titre du groupe 3 | « FGP n'a pas pu joindre l'API cible » |
+| Sous-titre du groupe 4 | « Anomalies » |
+
+**Groupe 1, « La clé ou le blob »** :
+
+| Code et status | Texte de remédiation |
+|----------------|----------------------|
+| `missing_key` (401) | « L'en-tête `X-FGP-Key` est absent de la requête. Sans la clé client, le blob ne peut pas être déchiffré. » |
+| `invalid_credentials` (401) | « Le déchiffrement a échoué. La clé ne correspond pas à ce blob, le blob a été tronqué ou modifié, ou il a été généré sur une autre instance FGP. » |
+| `blob_too_large` (414) | « Le blob dépasse 4 Ko. Passez en mode en-tête avec `X-FGP-Blob`, ou réduisez le nombre de scopes. » |
+
+**Groupe 2, « Le périmètre du blob »** :
+
+| Code et status | Texte de remédiation |
+|----------------|----------------------|
+| `scope_denied` (403) | « La méthode ou le chemin demandé ne correspond à aucun scope du blob. Si des body filters sont configurés, le contenu de la requête peut aussi être en cause. La section « Tester un scope » rejoue le cas sans consommer d'appel. » |
+| `token_expired` (410) | « Le TTL du blob est dépassé. Une URL expirée ne se prolonge pas, il faut en générer une nouvelle. » |
+| `invalid_body` (400) | « Des body filters sont configurés mais le corps de la requête n'est pas du JSON valide. Vérifiez aussi que l'en-tête `Content-Type` vaut bien `application/json`, sinon la requête est refusée en `scope_denied`. » |
+
+**Groupe 3, « FGP n'a pas pu joindre l'API cible »** :
+
+| Code et status | Texte de remédiation |
+|----------------|----------------------|
+| Intro du groupe | « Ces trois erreurs sont les seules 502 produites par FGP. Toute autre 502 vient de votre API cible : vérifiez `X-FGP-Source` avant de conclure. » |
+| `upstream_unreachable` (502) | « L'API cible n'a répondu à aucun moment : DNS, délai dépassé, connexion refusée ou erreur TLS. Vérifiez l'URL cible du blob. » |
+| `auth_exchange_failed` (502) | « Mode Scalingo API : impossible de s'authentifier auprès de Scalingo. Le token de compte du blob est invalide ou révoqué, ou l'API d'authentification Scalingo est indisponible. » |
+| `auth_addon_failed` (502) | « Mode Scalingo Database API : impossible d'obtenir un token de base de données. Le token de compte est invalide, ou il n'a pas accès à la base configurée dans ce blob. » |
+
+**Groupe 4, « Anomalies »** : trois codes rares, regroupés en une seule entrée pour ne pas allonger la liste.
+
+| Élément | Texte |
+|---------|-------|
+| Entrée unique | « `invalid_request` (400) quand l'URL ne contient pas de chemin après le blob, `invalid_auth_mode` (400) quand le mode d'authentification du blob n'est pas reconnu par cette instance, et `internal_error` (500) qui signale un bug de FGP et mérite un rapport. » |
+
+#### Bloc 3 : « Tout le reste vient de votre API » (visible)
+
+| Élément | Texte |
+|---------|-------|
+| Titre du bloc | « Tout le reste vient de votre API » |
+| Texte | « Un code absent de cette liste n'a pas été produit par FGP. Un 401, un 404, un 429 ou un 500 portant `X-FGP-Source: upstream` sont la réponse de votre API cible, transmise sans modification. FGP ne les reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de votre API exactement comme si vous l'appeliez en direct. » |
+
+#### Contraintes d'intégration
+
+- Les trois messages Scalingo restent alignés sur ceux de §12.8. Une seule formulation pour les deux endroits, la remédiation en plus ici.
+- Aucun tiret cadratin dans l'intégration, **entités HTML comprises** : pas de `&mdash;`. Utiliser deux-points, virgule, parenthèses ou point.
+- Le `<details>` du bloc 2 n'a besoin d'aucun attribut ARIA supplémentaire, l'élément est nativement accessible. Il est fermé par défaut (pas d'attribut `open`).
+- Le bloc 3 n'est pas un encadré d'alerte : c'est une explication, pas un avertissement. Même traitement visuel que les autres paragraphes de la section.
+
+---
+
 ## 13. Limites et non-goals (v4)
 
 - **Pas de révocation** : une URL FGP ne peut pas être révoquée avant son TTL. La seule solution est de révoquer le token sous-jacent.
