@@ -1,7 +1,9 @@
 import { decodeBase64Url, encodeBase64Url } from "@std/encoding/base64url";
 
 import type { Scope, ScopeEntry } from "../middleware/scopes.ts";
-import { type Auth, isValidAuthSpec } from "../auth/spec.ts";
+import { type Auth, checkHeaderName, isValidAuthSpec } from "../auth/spec.ts";
+
+const LEGACY_HEADER_PREFIX = "header:";
 
 export interface BlobLogsConfig {
   enabled: boolean;
@@ -204,6 +206,12 @@ export async function decryptBlob(
   let tokenRequired = true;
   if (typeof auth === "string") {
     if (auth.length === 0) {
+      throw new Error("Invalid blob: malformed BlobConfig");
+    }
+    if (
+      auth.startsWith(LEGACY_HEADER_PREFIX) &&
+      checkHeaderName(auth.slice(LEGACY_HEADER_PREFIX.length)) !== null
+    ) {
       throw new Error("Invalid blob: malformed BlobConfig");
     }
   } else {
