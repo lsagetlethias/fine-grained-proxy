@@ -1,1 +1,1 @@
-web: deno serve --allow-net --allow-env --allow-read --port $PORT src/main.ts
+web: deno run --allow-net --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB --allow-read=static src/main.ts

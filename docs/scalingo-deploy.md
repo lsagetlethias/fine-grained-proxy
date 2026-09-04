@@ -4,7 +4,7 @@ Guide de deploiement de Fine-Grained Proxy sur [Scalingo](https://scalingo.com/)
 
 ## TL;DR
 
-Scalingo ne supporte pas Deno nativement. La solution retenue est le buildpack [`betagouv/deno-buildpack`](https://github.com/betagouv/deno-buildpack), compatible Scalingo. Il installe Deno, cache les deps, et **execute automatiquement `deno task build`** si une task `build` existe dans `deno.json` — ce qui compile les assets CSS + client JS pendant la phase de build du slug, avant le demarrage du dyno.
+Scalingo ne supporte pas Deno nativement. La solution retenue est le buildpack [`betagouv/deno-buildpack`](https://github.com/betagouv/deno-buildpack), compatible Scalingo. Il installe Deno, cache les deps, et **execute automatiquement `deno task build`** si une task `build` existe dans `deno.json`, ce qui compile les assets CSS et client JS pendant la phase de build du slug, avant le demarrage du dyno.
 
 ## Etape par etape
 
@@ -20,7 +20,7 @@ scalingo create fgp-proxy
 scalingo --app fgp-proxy env-set BUILDPACK_URL=https://github.com/betagouv/deno-buildpack.git
 ```
 
-Le buildpack detecte automatiquement le projet via `deno.json` (affiche "Deno" + exit 0, compatible Scalingo). Pendant le build, il detecte la task `build` dans `deno.json` et execute `deno task build` — CSS, client JS, version et changelog sont compiles dans `static/` avant le demarrage du dyno. `static/` et `src/ui/changelog-data.ts` etant gitignores, ce build au deploy est indispensable.
+Le buildpack detecte automatiquement le projet via `deno.json` (affiche "Deno" + exit 0, compatible Scalingo). Pendant le build, il detecte la task `build` dans `deno.json` et execute `deno task build` : CSS, client JS, version et changelog sont compiles dans `static/` avant le demarrage du dyno. `static/` et `src/ui/changelog-data.ts` etant gitignores, ce build au deploy est indispensable.
 
 Si besoin, la commande de build peut etre surchargee via la variable d'environnement `DENO_BUILD_CMD`.
 
@@ -29,10 +29,12 @@ Si besoin, la commande de build peut etre surchargee via la variable d'environne
 Le `Procfile` a la racine du repo :
 
 ```
-web: deno serve --allow-net --allow-env --allow-read --port $PORT src/main.ts
+web: deno run --allow-net --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB --allow-read=static src/main.ts
 ```
 
-`--port $PORT` est obligatoire. `deno serve` ne lit pas la variable d'environnement `PORT` automatiquement — sans ce flag, le serveur binde sur 8000 et Scalingo echoue le health check TCP.
+`deno run` et non `deno serve` : `src/main.ts` appelle `Deno.serve()` sous `import.meta.main` et n'exporte plus `default { fetch }`. Sous `deno serve`, le module afficherait un avertissement et sortirait en code 0, donc le dyno ne demarrerait jamais et Scalingo echouerait le health check TCP.
+
+Pas de flag `--port` : `Deno.serve()` lit `PORT` directement. Les permissions sont les memes que celles du `Dockerfile` et de la task `start`, gardez les trois alignees.
 
 ### 4. Configurer les variables d'environnement
 
@@ -90,7 +92,9 @@ curl https://fgp-proxy.osc-fr1.scalingo.io/healthz
 
 ### PORT
 
-Scalingo injecte `PORT` comme variable d'environnement. `deno serve` ne la lit pas automatiquement — le flag `--port $PORT` dans le Procfile est obligatoire. Scalingo verifie que le process ecoute sur `$PORT` via un TCP SYN check au deploiement.
+Scalingo injecte `PORT` comme variable d'environnement. FGP la lit via `Deno.env.get("PORT")` dans l'appel `Deno.serve()` de `src/main.ts`, avec un defaut a 8000. Aucun flag n'est necessaire dans le Procfile. Scalingo verifie que le process ecoute sur `$PORT` via un TCP SYN check au deploiement.
+
+A noter : `deno serve` ignore la variable `PORT` et le champ `port` d'un export par defaut. C'est la raison pour laquelle le point d'entree utilise un `Deno.serve()` explicite.
 
 ### CompressionStream / Web Crypto
 
@@ -100,7 +104,7 @@ Ces APIs sont fournies par le runtime Deno. Tant que le buildpack installe une v
 
 ### Option A : Deployer sur Deno Deploy
 
-C'est la cible naturelle pour FGP (voir [deno-deploy.md](./deno-deploy.md)). Zero config, support natif complet (JSR, Web Crypto, CompressionStream, `deno serve`).
+C'est la cible naturelle pour FGP (voir [deno-deploy.md](./deno-deploy.md)). Zero config, support natif complet (JSR, Web Crypto, CompressionStream, `Deno.serve()`).
 
 ### Option B : Fly.io ou Railway avec Dockerfile
 
@@ -108,7 +112,7 @@ Ces plateformes supportent les Dockerfiles natifs. Le `Dockerfile` existant a la
 
 ### Option C : Committer les assets buildes
 
-Retirer `static/` et `src/ui/changelog-data.ts` du `.gitignore`, builder localement avant chaque push, committer les artifacts. Le Procfile reste `deno serve --port $PORT ...` sans build.
+Retirer `static/` et `src/ui/changelog-data.ts` du `.gitignore`, builder localement avant chaque push, committer les artifacts. Le Procfile reste `deno run ... src/main.ts` sans build.
 
 ## Recommandation
 
