@@ -81,6 +81,12 @@ export function DocPanel() {
           Codes d'erreur
         </h3>
 
+        <p class="mb-2">
+          Cette section couvre les erreurs re&ccedil;ues en <strong>consommant</strong>{" "}
+          une URL FGP. Les erreurs de g&eacute;n&eacute;ration s'affichent directement sous le champ
+          concern&eacute; du formulaire.
+        </p>
+
         <p class="font-medium text-gray-800 dark:text-gray-200">D'o&ugrave; vient l'erreur</p>
         <p class="mt-1">
           Toute r&eacute;ponse renvoy&eacute;e par le proxy porte l'en-t&ecirc;te{" "}
@@ -141,9 +147,9 @@ export function DocPanel() {
                   <code class="font-mono text-xs">blob_too_large</code> (414)
                 </dt>
                 <dd>
-                  Le blob d&eacute;passe 4 Ko. Passez en mode en-t&ecirc;te avec{" "}
-                  <code class="font-mono text-xs">X-FGP-Blob</code>, ou r&eacute;duisez le nombre de
-                  scopes.
+                  Le blob d&eacute;passe 4 Ko. R&eacute;duisez le nombre de scopes, de body filters
+                  ou de headers d'authentification. Le mode en-t&ecirc;te ne contourne pas cette
+                  limite : elle porte sur la taille du blob, pas sur son transport.
                 </dd>
               </div>
             </dl>
@@ -191,7 +197,7 @@ export function DocPanel() {
 
           <div class="mt-3">
             <p class="font-medium text-gray-700 dark:text-gray-300">
-              FGP n'a pas pu joindre l'API cible
+              FGP n'a pas pu obtenir de credentials ou joindre l'API cible
             </p>
             <p class="mt-1">
               Ces trois erreurs sont les seules 502 produites par FGP. Toute autre 502 vient de
@@ -253,9 +259,11 @@ export function DocPanel() {
           Un code absent de cette liste n'a pas &eacute;t&eacute; produit par FGP. Un 401, un 404,
           un 429 ou un 500 portant <code class="font-mono text-xs">X-FGP-Source: upstream</code>
           {" "}
-          sont la r&eacute;ponse de votre API cible, transmise sans modification. FGP ne les
-          reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de
-          votre API exactement comme si vous l'appeliez en direct.
+          sont la r&eacute;ponse de votre API cible : status et corps inchang&eacute;s, seuls{" "}
+          <code class="font-mono text-xs">X-FGP-Source</code> ajout&eacute; et{" "}
+          <code class="font-mono text-xs">Set-Cookie</code>{" "}
+          retir&eacute;. FGP ne les reformule pas et ne les traduit pas : c'est ce qui vous permet
+          de traiter les erreurs de votre API exactement comme si vous l'appeliez en direct.
         </p>
       </section>
 

@@ -1134,7 +1134,7 @@ La section se compose de trois blocs, dans cet ordre :
 | Titre du bloc | « D'où vient l'erreur » |
 | Intro | « Toute réponse renvoyée par le proxy porte l'en-tête `X-FGP-Source`. Il dit qui a répondu, avant même de regarder le status. » |
 | Puce `proxy` | « `proxy` : c'est FGP qui a répondu. Le corps a la forme `{error, message}` et le code figure dans la liste ci-dessous. » |
-| Puce `upstream` | « `upstream` : la réponse vient de votre API cible, transmise telle quelle. FGP n'a touché ni au status, ni au corps, ni aux en-têtes. Interprétez-la avec la documentation de cette API. » |
+| Puce `upstream` | « `upstream` : la réponse vient de votre API cible. FGP n'a touché ni au status ni au corps. Il ajoute seulement cet en-tête et retire `Set-Cookie`, le proxy étant sans état. Interprétez la réponse avec la documentation de cette API. » |
 | Aide pratique | « Ajoutez `-i` à votre commande `curl` pour voir cet en-tête. » |
 
 #### Bloc 2 : « Les erreurs de FGP » (replié)
@@ -1153,7 +1153,7 @@ La section se compose de trois blocs, dans cet ordre :
 |----------------|----------------------|
 | `missing_key` (401) | « L'en-tête `X-FGP-Key` est absent de la requête. Sans la clé client, le blob ne peut pas être déchiffré. » |
 | `invalid_credentials` (401) | « Le déchiffrement a échoué. La clé ne correspond pas à ce blob, le blob a été tronqué ou modifié, ou il a été généré sur une autre instance FGP. » |
-| `blob_too_large` (414) | « Le blob dépasse 4 Ko. Passez en mode en-tête avec `X-FGP-Blob`, ou réduisez le nombre de scopes. » |
+| `blob_too_large` (414) | « Le blob dépasse 4 Ko. Réduisez le nombre de scopes, de body filters ou de headers d'authentification. Le mode en-tête ne contourne pas cette limite : elle porte sur la taille du blob, pas sur son transport. » |
 
 **Groupe 2, « Le périmètre du blob »** :
 
@@ -1163,7 +1163,7 @@ La section se compose de trois blocs, dans cet ordre :
 | `token_expired` (410) | « Le TTL du blob est dépassé. Une URL expirée ne se prolonge pas, il faut en générer une nouvelle. » |
 | `invalid_body` (400) | « Des body filters sont configurés mais le corps de la requête n'est pas du JSON valide. Vérifiez aussi que l'en-tête `Content-Type` vaut bien `application/json`, sinon la requête est refusée en `scope_denied`. » |
 
-**Groupe 3, « FGP n'a pas pu joindre l'API cible »** :
+**Groupe 3, « FGP n'a pas pu obtenir de credentials ou joindre l'API cible »** :
 
 | Code et status | Texte de remédiation |
 |----------------|----------------------|
@@ -1183,7 +1183,7 @@ La section se compose de trois blocs, dans cet ordre :
 | Élément | Texte |
 |---------|-------|
 | Titre du bloc | « Tout le reste vient de votre API » |
-| Texte | « Un code absent de cette liste n'a pas été produit par FGP. Un 401, un 404, un 429 ou un 500 portant `X-FGP-Source: upstream` sont la réponse de votre API cible, transmise sans modification. FGP ne les reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de votre API exactement comme si vous l'appeliez en direct. » |
+| Texte | « Un code absent de cette liste n'a pas été produit par FGP. Un 401, un 404, un 429 ou un 500 portant `X-FGP-Source: upstream` sont la réponse de votre API cible : status et corps sont inchangés, seuls `X-FGP-Source` est ajouté et `Set-Cookie` retiré. FGP ne les reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de votre API exactement comme si vous l'appeliez en direct. » |
 
 #### Contraintes d'intégration
 
