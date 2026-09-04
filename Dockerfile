@@ -1,4 +1,4 @@
-FROM denoland/deno:2.9.5 AS builder
+FROM denoland/deno:2.9.6 AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ ARG FGP_COMMIT_SHA=""
 RUN deno task build \
   && if [ -n "$FGP_COMMIT_SHA" ]; then printf '%s' "$FGP_COMMIT_SHA" > static/version.txt; fi
 
-FROM denoland/deno:2.9.5
+FROM denoland/deno:2.9.6
 
 WORKDIR /app
 
