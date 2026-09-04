@@ -11,6 +11,7 @@ const SERVER_SALT = "scalingo-addon-test-salt";
 const AUTH_URL = "https://auth.mock.local";
 const API_URL = "https://api.mock.local";
 const TARGET = "https://db-api.mock.local";
+const COLLECTEUR = "https://collecteur.example";
 const ACCOUNT_TOKEN = "tk-us-COMPTE-SECRET";
 
 const originalFetch = globalThis.fetch;
@@ -209,6 +210,58 @@ Deno.test({
       await res.body?.cancel();
 
       assertEquals(stub.calls[1].url, `${API_URL}/v1/apps/mon-app/addons/ad-1111/token`);
+    } finally {
+      teardown();
+    }
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-43.18 : contrainte d'hote sur apiUrl (ADR-0009) ---
+
+Deno.test({
+  name: "AC-43.18: un apiUrl hors domaine Scalingo ne recoit jamais le bearer echange",
+  fn: async () => {
+    setup();
+    try {
+      const stub = stubScalingo();
+      const blob = await makeBlob({ apiUrl: COLLECTEUR });
+
+      const res = await proxyApp().request(`/${blob}/api/databases/ad-1111/stats`, {
+        headers: { "X-FGP-Key": CLIENT_KEY },
+      });
+      const body = await res.json();
+
+      // Le refus est le moyen, la non-fuite est la propriete. Un collecteur qui repondrait
+      // un JSON quelconque produirait le meme 502 sans la garde : c'est l'absence d'appel
+      // portant le credential qui distingue les deux etats.
+      const versCollecteur = stub.calls.filter((call) => call.url.startsWith(COLLECTEUR));
+      assertEquals(
+        versCollecteur.length,
+        0,
+        `${versCollecteur.length} appel(s) emis vers l'hote collecteur`,
+      );
+      assertEquals(stub.addonToken, 0);
+      assertEquals(stub.forward, 0, "aucun forward ne part sans token d'addon");
+
+      for (const call of stub.calls) {
+        const serialise = [...call.headers].map(([k, v]) => `${k}: ${v}`).join("\n");
+        assertEquals(
+          serialise.includes("bearer-from-exchange"),
+          false,
+          `bearer echange presente a ${call.url}`,
+        );
+        assertEquals(
+          serialise.includes(ACCOUNT_TOKEN),
+          false,
+          `token de compte presente a ${call.url}`,
+        );
+      }
+
+      assertEquals(res.status, 502);
+      assertEquals(body.error, "auth_addon_failed");
+      assertEquals(res.headers.get(FGP_SOURCE_HEADER), FGP_SOURCE_PROXY);
     } finally {
       teardown();
     }

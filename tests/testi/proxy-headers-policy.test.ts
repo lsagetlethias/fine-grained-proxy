@@ -104,6 +104,50 @@ Deno.test({
   sanitizeResources: false,
 });
 
+// Registre v5 AC-45.4. Le test ci-dessous porte deja ce numero pour un autre enonce,
+// decalage recense dans docs/review/ac-coverage-v5.md et traite hors de ce lot.
+Deno.test({
+  name: "AC-45.4 (registre v5): les en-tetes nommes par Connection sont retires aussi",
+  fn: async () => {
+    setup();
+    const h = await call({
+      "Connection": "X-Custom-A, X-Custom-B",
+      "X-Custom-A": "valeur-a",
+      "X-Custom-B": "valeur-b",
+      "X-Custom-C": "valeur-c",
+    });
+
+    assertEquals(h.get("connection"), null);
+    assertEquals(h.get("x-custom-a"), null, "en-tete nomme par Connection relaye");
+    assertEquals(h.get("x-custom-b"), null, "en-tete nomme par Connection relaye");
+
+    // Controle negatif : la regle porte sur ce que Connection designe, pas sur tout
+    // en-tete proprietaire. Sans lui, un strip trop large passerait pour une reussite.
+    assertEquals(h.get("x-custom-c"), "valeur-c");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-45.4 bis (registre v5): la designation par Connection ignore casse et espaces",
+  fn: async () => {
+    setup();
+    const h = await call({
+      "Connection": "  x-custom-a ,X-CUSTOM-B  ",
+      "X-Custom-A": "valeur-a",
+      "X-Custom-B": "valeur-b",
+    });
+
+    assertEquals(h.get("x-custom-a"), null);
+    assertEquals(h.get("x-custom-b"), null);
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
 Deno.test({
   name: "AC-45.4: les en-tetes de provenance ne sont pas transmis",
   fn: async () => {

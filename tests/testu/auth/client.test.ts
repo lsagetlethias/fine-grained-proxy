@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import { exchangeToken } from "../../../src/auth/client.ts";
+import { exchangeToken, fetchAddonToken, isScalingoHost } from "../../../src/auth/client.ts";
 
 function stubFetch(
   status: number,
@@ -93,8 +93,56 @@ Deno.test({
   sanitizeResources: false,
 });
 
+Deno.test({
+  name: "AC-43.18 bis: fetchAddonToken n'emet rien vers un apiUrl hors domaine Scalingo",
+  fn: async () => {
+    Deno.env.delete("SCALINGO_API_URL");
+    Deno.env.delete("SCALINGO_AUTH_URL");
+    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
+
+    let calls = 0;
+    globalThis.fetch = (() => {
+      calls++;
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }) as typeof globalThis.fetch;
+
+    await assertRejects(
+      () => fetchAddonToken("bearer-du-compte", "https://collecteur.example", "app", "ad-1"),
+      Error,
+      "apiUrl host is not a Scalingo host",
+    );
+
+    // La garde vaut par le fetch qui n'a pas lieu : le bearer est deja en main a cet
+    // instant, un refus posterieur a l'emission ne protegerait plus rien.
+    assertEquals(calls, 0, "un appel est parti vers l'hote non Scalingo");
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test("AC-43.18 ter: table des hotes acceptes et des faux amis", () => {
+  const cas: [string, boolean][] = [
+    ["https://api.osc-fr1.scalingo.com", true],
+    ["https://scalingo.com", true],
+    ["https://api.osc-secnum-fr1.scalingo.com/", true],
+    ["https://collecteur.example", false],
+    // Le suffixe se lit sur le hostname, pas sur la chaine : ces trois formes contiennent
+    // toutes « scalingo.com » et aucune n'est un hote Scalingo.
+    ["https://scalingo.com.collecteur.example", false],
+    ["https://evil-scalingo.com", false],
+    ["https://collecteur.example/api.osc-fr1.scalingo.com", false],
+    ["https://collecteur.example?h=scalingo.com", false],
+    ["scalingo.com", false],
+    ["file:///etc/passwd", false],
+  ];
+  for (const [url, attendu] of cas) {
+    assertEquals(isScalingoHost(url), attendu, url);
+  }
+});
+
 globalThis.addEventListener("unload", () => {
   globalThis.fetch = originalFetch;
   Deno.env.delete("SCALINGO_AUTH_URL");
+  Deno.env.delete("SCALINGO_API_URL");
   Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
 });
