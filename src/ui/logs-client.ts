@@ -203,7 +203,7 @@
     }
 
     if (!response.body) {
-      showError("Flux de logs vide — déconnecté.", false);
+      showError("Flux de logs vide, déconnecté.", false);
       return;
     }
 
@@ -297,7 +297,7 @@
       return { message: "Paramètre de reconnexion invalide.", retryable: false };
     }
     if (status === 401) {
-      return { message: "Blob ou clé invalide — impossible de déchiffrer.", retryable: false };
+      return { message: "Blob ou clé invalide : impossible de déchiffrer.", retryable: false };
     }
     if (status === 403 && code === "logs_not_enabled") {
       return {
@@ -534,7 +534,7 @@
       const note = document.createElement("div");
       note.className =
         "rounded-md border border-dashed border-gray-300 p-3 text-xs italic text-gray-500 dark:border-gray-600 dark:text-gray-400";
-      note.textContent = "Body trop volumineux — non stocké";
+      note.textContent = "Body trop volumineux, non stocké";
       li.append(note);
     } else {
       try {
@@ -549,7 +549,7 @@
         const err = document.createElement("div");
         err.className =
           "rounded-md border border-dashed border-red-300 p-3 text-xs italic text-red-700 dark:border-red-800 dark:text-red-400";
-        err.textContent = "Déchiffrement impossible — vérifiez votre clé";
+        err.textContent = "Déchiffrement impossible : vérifiez votre clé";
         li.append(err);
       }
     }

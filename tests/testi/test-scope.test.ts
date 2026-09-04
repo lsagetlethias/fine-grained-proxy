@@ -21,7 +21,7 @@ function postTestScope(body: unknown) {
 // --- POST /api/test-scope ---
 
 Deno.test({
-  name: "AC-15.1: Test scope — string scope matche GET",
+  name: "AC-15.1: Test scope, string scope matche GET",
   fn: async () => {
     setup();
     try {
@@ -49,7 +49,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.2: Test scope — method mismatch",
+  name: "AC-15.2: Test scope, method mismatch",
   fn: async () => {
     setup();
     try {
@@ -74,7 +74,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.3: Test scope — path mismatch",
+  name: "AC-15.3: Test scope, path mismatch",
   fn: async () => {
     setup();
     try {
@@ -99,7 +99,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.4: Test scope — pipe methods (GET|POST)",
+  name: "AC-15.4: Test scope, pipe methods (GET|POST)",
   fn: async () => {
     setup();
     try {
@@ -122,7 +122,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.5: Test scope — multiple scopes, un seul matche",
+  name: "AC-15.5: Test scope, multiple scopes, un seul matche",
   fn: async () => {
     setup();
     try {
@@ -146,7 +146,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.6: Test scope — wildcard min 1 char",
+  name: "AC-15.6: Test scope, wildcard min 1 char",
   fn: async () => {
     setup();
     try {
@@ -168,7 +168,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.7: Test scope — body filter matche",
+  name: "AC-15.7: Test scope, body filter matche",
   fn: async () => {
     setup();
     try {
@@ -200,7 +200,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.8: Test scope — body filter mismatch",
+  name: "AC-15.8: Test scope, body filter mismatch",
   fn: async () => {
     setup();
     try {
@@ -232,7 +232,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.9: Test scope — validation rejects missing method",
+  name: "AC-15.9: Test scope, validation rejects missing method",
   fn: async () => {
     setup();
     try {
@@ -253,7 +253,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-15.9: Test scope — validation rejects empty scopes",
+  name: "AC-15.9: Test scope, validation rejects empty scopes",
   fn: async () => {
     setup();
     try {

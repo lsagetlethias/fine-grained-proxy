@@ -2,6 +2,7 @@ import type { BodyFiltersState } from "./body-filters.ts";
 import type { Elements } from "./elements.ts";
 import type { AppsPermissionsState, FilterData, SerializedFilterValue } from "./types.ts";
 import { defaultAppPermissions } from "./types.ts";
+import type { AddonsApi } from "./addons.ts";
 
 export function setupApps(
   els: Elements,
@@ -10,6 +11,7 @@ export function setupApps(
   showError: (msg: string) => void,
   hideError: () => void,
   updateVisibility: () => void,
+  addons: AddonsApi,
 ): void {
   els.btnLoadApps.addEventListener("click", async function () {
     const token = els.tokenInput.value.trim();
@@ -36,6 +38,7 @@ export function setupApps(
       }
       const data = await res.json();
       const apps: string[] = data.apps || [];
+      addons.suggestApps(apps);
       renderApps(els, apps, state, appsPerms, updateVisibility);
     } catch (e) {
       showError("Impossible de charger les apps : " + (e as Error).message);

@@ -3,7 +3,7 @@ const OUT = "src/ui/changelog-data.ts";
 
 const markdown = await Deno.readTextFile(SRC);
 
-const content = `// Auto-generated from ${SRC} by scripts/changelog.ts — do not edit manually.
+const content = `// Auto-generated from ${SRC} by scripts/changelog.ts. Do not edit manually.
 export const CHANGELOG_MARKDOWN = ${JSON.stringify(markdown)};
 `;
 

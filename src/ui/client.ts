@@ -11,6 +11,11 @@ import { setupImportConfig } from "./client/import-config.ts";
 import { setupShareConfig } from "./client/share-config.ts";
 import { setupTabs } from "./client/tabs.ts";
 import { setupLogsTab } from "./client/logs-tab.ts";
+import { setupAuthHeaders } from "./client/auth-headers.ts";
+import { setupAddons } from "./client/addons.ts";
+import { setupByok } from "./client/byok.ts";
+import { syncAuthModeVisibility } from "./client/auth-mode.ts";
+import type { AuthModeDeps } from "./client/auth-mode.ts";
 import type { AppsPermissionsState } from "./client/types.ts";
 
 (function () {
@@ -61,26 +66,34 @@ import type { AppsPermissionsState } from "./client/types.ts";
     els.bodyFiltersPanel.classList.add("hidden");
   });
 
-  setupShareConfig(state.bodyFiltersData);
+  const authDeps: AuthModeDeps = {
+    headers: setupAuthHeaders(),
+    addons: setupAddons(function () {
+      return els.tokenInput.value.trim();
+    }),
+  };
+  const byok = setupByok();
+
+  setupShareConfig(state.bodyFiltersData, authDeps);
 
   els.authSelect.addEventListener("change", function () {
-    if (els.authSelect.value === "header:") {
-      els.authHeaderName.classList.remove("hidden");
-    } else {
-      els.authHeaderName.classList.add("hidden");
-    }
-    els.btnLoadApps.classList.toggle("hidden", els.authSelect.value !== "scalingo-exchange");
+    syncAuthModeVisibility();
+    authDeps.addons.syncTargetWarning();
+  });
+  els.targetInput.addEventListener("input", function () {
+    authDeps.addons.syncTargetWarning();
   });
 
-  setupPresets(els, state, appsPerms, doUpdateVisibility);
-  setupApps(els, state, appsPerms, showError, hideError, doUpdateVisibility);
+  setupPresets(els, state, appsPerms, doUpdateVisibility, authDeps, byok);
+  setupApps(els, state, appsPerms, showError, hideError, doUpdateVisibility, authDeps.addons);
   setupTtl(els);
   const getLogsConfig = setupLogsTab();
-  setupGenerate(els, state.bodyFiltersData, showError, hideError, getLogsConfig);
+  setupGenerate(els, state.bodyFiltersData, showError, hideError, getLogsConfig, authDeps, byok);
   setupClipboard();
-  setupTestScope(state.bodyFiltersData);
-  setupImportConfig();
+  setupTestScope(state.bodyFiltersData, authDeps);
+  setupImportConfig(authDeps);
   setupTabs();
 
+  syncAuthModeVisibility();
   doUpdateVisibility();
 })();

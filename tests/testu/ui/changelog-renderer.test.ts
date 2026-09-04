@@ -156,7 +156,7 @@ Deno.test("changelog renderer: multiple sections", async () => {
   assertStringIncludes(html, "9 avril");
 });
 
-Deno.test("changelog renderer: mixed inline — bold + code + link in one line", async () => {
+Deno.test("changelog renderer: mixed inline, bold + code + link in one line", async () => {
   const html = await render(
     "## Date\n\n- **Breaking** : le code `upstream_error` disparaît, voir [docs](/api/docs)\n",
   );

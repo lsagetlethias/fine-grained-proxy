@@ -126,7 +126,7 @@ Deno.test("AC-3.5: checkAccess: multi-method scope", () => {
   assertEquals(checkAccess(["GET|POST:/v1/apps/*"], "PUT", "/v1/apps/my-app"), false);
 });
 
-Deno.test("AC-3.10: checkAccess: multiple scopes — any match allows", () => {
+Deno.test("AC-3.10: checkAccess: multiple scopes, any match allows", () => {
   const scopes = ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"];
   assertEquals(checkAccess(scopes, "GET", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(scopes, "POST", "/v1/apps/my-app/scale"), true);

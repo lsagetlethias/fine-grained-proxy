@@ -1,5 +1,7 @@
 import { assertElement } from "./elements.ts";
 import { buildScopes } from "./generate.ts";
+import { buildAuthPayload } from "./auth-mode.ts";
+import type { AuthModeDeps } from "./auth-mode.ts";
 import { checkAccess, type Scope } from "../../middleware/scopes.ts";
 import type { FilterData, SerializedScope } from "./types.ts";
 
@@ -64,7 +66,10 @@ function parseTestBody(bodyTextarea: HTMLTextAreaElement, method: string): unkno
   }
 }
 
-export function setupTestScope(bodyFiltersData: Record<string, FilterData[]>): void {
+export function setupTestScope(
+  bodyFiltersData: Record<string, FilterData[]>,
+  authDeps: AuthModeDeps,
+): void {
   const methodSelect = assertElement("test-method", HTMLSelectElement);
   const pathInput = assertElement("test-path", HTMLInputElement);
   const bodySection = assertElement("test-body-section", HTMLElement);
@@ -150,31 +155,32 @@ export function setupTestScope(bodyFiltersData: Record<string, FilterData[]>): v
     const authSelect = document.getElementById("auth") as HTMLSelectElement | null;
 
     if (scopes.length === 0 || path.length === 0) return;
-    if (!tokenInput?.value || !targetInput?.value || !authSelect?.value) {
-      verdictSpan.textContent = "Token, URL cible et mode d'auth requis";
+
+    const authResult = buildAuthPayload(authDeps);
+    if (!authResult.ok) {
+      verdictSpan.textContent = authResult.message;
       verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
       return;
     }
-
-    let auth = authSelect.value;
-    if (auth === "header:") {
-      const headerName = document.getElementById("auth-header-name") as HTMLInputElement | null;
-      if (!headerName?.value) {
-        verdictSpan.textContent = "Nom du header requis";
-        verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
-        return;
-      }
-      auth = "header:" + headerName.value;
+    if (!targetInput?.value || !authSelect?.value) {
+      verdictSpan.textContent = "URL cible et mode d'auth requis";
+      verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
+      return;
+    }
+    if (authResult.requiresToken && !tokenInput?.value) {
+      verdictSpan.textContent = "Token requis";
+      verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
+      return;
     }
 
     const payload: Record<string, unknown> = {
       method,
       path,
       scopes,
-      token: tokenInput.value,
       target: targetInput.value,
-      auth,
+      auth: authResult.auth,
     };
+    if (authResult.requiresToken && tokenInput) payload.token = tokenInput.value;
 
     const bodyValue = bodyTextarea.value.trim();
     if (bodyValue.length > 0 && METHODS_WITH_BODY.includes(method)) {
@@ -213,6 +219,9 @@ export function setupTestScope(bodyFiltersData: Record<string, FilterData[]>): v
 
       if (!data.allowed) {
         verdictSpan.textContent = "Proxy : acc\u00e8s refus\u00e9 (scope)";
+        verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
+      } else if (data.reason === "auth_addon_failed") {
+        verdictSpan.textContent = "Proxy : \u00e9chec auth (token de base de donn\u00e9es)";
         verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
       } else if (data.reason === "auth_exchange_failed") {
         verdictSpan.textContent = "Proxy : \u00e9chec auth (token exchange)";

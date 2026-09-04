@@ -2,6 +2,10 @@ import type { FilterData, SerializedFilterValue, SerializedScope } from "./types
 import { assertElement } from "./elements.ts";
 import type { Elements } from "./elements.ts";
 import { getScopesWithFilters, parseScope } from "./scopes.ts";
+import { buildAuthPayload } from "./auth-mode.ts";
+import type { AuthModeDeps } from "./auth-mode.ts";
+import { markKeyOrigin } from "./byok.ts";
+import type { ByokApi } from "./byok.ts";
 
 export function buildScopes(
   scopesTextarea: HTMLTextAreaElement,
@@ -182,7 +186,9 @@ export function setupGenerate(
   bodyFiltersData: Record<string, FilterData[]>,
   showError: (msg: string) => void,
   hideError: () => void,
-  getLogsConfig?: () => { enabled: boolean; detailed: boolean } | null,
+  getLogsConfig: (() => { enabled: boolean; detailed: boolean } | null) | undefined,
+  authDeps: AuthModeDeps,
+  byok: ByokApi,
 ): void {
   const fgpForm = assertElement("fgp-form", HTMLFormElement);
   fgpForm.addEventListener("submit", async function (e: Event) {
@@ -191,22 +197,23 @@ export function setupGenerate(
 
     const token = els.tokenInput.value.trim();
     const target = els.targetInput.value.trim();
-    let auth = els.authSelect.value;
-    if (auth === "header:") {
-      const headerName = els.authHeaderName.value.trim();
-      if (!headerName) {
-        showError("Nom du header requis.");
-        return;
-      }
-      auth = "header:" + headerName;
+
+    const authResult = buildAuthPayload(authDeps);
+    if (!authResult.ok) {
+      showError(authResult.message);
+      return;
     }
 
-    if (!token) {
+    if (authResult.requiresToken && !token) {
       showError("Token manquant.");
       return;
     }
     if (!target) {
       showError("URL cible manquante.");
+      return;
+    }
+    if (!byok.validate()) {
+      showError("Cl\u00e9 client personnalis\u00e9e invalide.");
       return;
     }
 
@@ -241,15 +248,17 @@ export function setupGenerate(
     const nameInput = document.getElementById("config-name") as HTMLInputElement | null;
     const name = nameInput?.value.trim() || undefined;
     const logs = getLogsConfig ? getLogsConfig() : null;
+    const customKey = byok.readKey();
 
     try {
       const payload: Record<string, unknown> = {
-        token: token,
         target: target,
-        auth: auth,
+        auth: authResult.auth,
         scopes: scopes,
         ttl: ttl,
       };
+      if (authResult.requiresToken) payload.token = token;
+      if (customKey) payload.key = customKey;
       if (name) payload.name = name;
       if (logs) payload.logs = logs;
       const res = await fetch("/api/generate", {
@@ -272,6 +281,7 @@ export function setupGenerate(
       const resultCurlHeader = assertElement("result-curl-header", HTMLElement);
       resultUrl.value = data.url;
       resultKey.value = data.key;
+      markKeyOrigin(customKey.length > 0);
       resultBlob.value = data.blob;
       resultCurl.textContent = 'curl -H "X-FGP-Key: ' + data.key + '" ' + data.url + "v1/apps";
       const origin = new URL(data.url).origin;

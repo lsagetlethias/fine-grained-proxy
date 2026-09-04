@@ -14,9 +14,49 @@ const TTL_PRESETS = [
 const AUTH_MODES = [
   { label: "Bearer token", value: "bearer" },
   { label: "Basic auth", value: "basic" },
-  { label: "Scalingo exchange", value: "scalingo-exchange" },
-  { label: "Header custom", value: "header:" },
+  { label: "Scalingo API", value: "scalingo-exchange" },
+  { label: "Scalingo Database API", value: "scalingo-addon" },
+  { label: "Headers multiples", value: "header:" },
 ];
+
+const SCALINGO_REGIONS = [
+  { label: "Paris (osc-fr1)", value: "osc-fr1" },
+  { label: "SecNumCloud (osc-secnum-fr1)", value: "osc-secnum-fr1" },
+];
+
+const FIELD_CLASS =
+  "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 dark:aria-[invalid=true]:border-red-500";
+
+const REMOVE_BTN_CLASS =
+  "shrink-0 rounded-md p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-fgp-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent dark:hover:text-red-400 dark:hover:bg-red-900/30";
+
+const ADD_BTN_CLASS =
+  "mt-3 inline-flex items-center gap-1 text-sm font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline disabled:text-gray-400 disabled:cursor-not-allowed disabled:no-underline dark:disabled:text-gray-500";
+
+function TrashIcon() {
+  return (
+    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path
+        fill-rule="evenodd"
+        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+        clip-rule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function EyeIcon({ size = "h-5 w-5" }: { size?: string }) {
+  return (
+    <svg class={size} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+      <path
+        fill-rule="evenodd"
+        d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+        clip-rule="evenodd"
+      />
+    </svg>
+  );
+}
 
 export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
   return (
@@ -71,14 +111,23 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Preset
                 </label>
-                <div class="flex items-center gap-3">
-                  <button
-                    type="button"
-                    id="btn-preset-scalingo"
-                    class="rounded-md border border-fgp-500 bg-fgp-50 px-3 py-1.5 text-sm font-medium text-fgp-700 hover:bg-fgp-100 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 dark:bg-fgp-900 dark:text-fgp-200 dark:border-fgp-600 dark:hover:bg-fgp-800 dark:focus:ring-offset-gray-900"
-                  >
-                    Scalingo
-                  </button>
+                <div class="flex flex-wrap items-center gap-3">
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      id="btn-preset-scalingo"
+                      class="rounded-md border border-fgp-500 bg-fgp-50 px-3 py-1.5 text-sm font-medium text-fgp-700 hover:bg-fgp-100 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 dark:bg-fgp-900 dark:text-fgp-200 dark:border-fgp-600 dark:hover:bg-fgp-800 dark:focus:ring-offset-gray-900"
+                    >
+                      Scalingo
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-preset-scalingo-db"
+                      class="rounded-md border border-fgp-500 bg-fgp-50 px-3 py-1.5 text-sm font-medium text-fgp-700 hover:bg-fgp-100 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 dark:bg-fgp-900 dark:text-fgp-200 dark:border-fgp-600 dark:hover:bg-fgp-800 dark:focus:ring-offset-gray-900"
+                    >
+                      Scalingo DB
+                    </button>
+                  </div>
                   <button
                     type="button"
                     id="btn-preset-clear"
@@ -88,8 +137,10 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                   </button>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Pr&eacute;-remplit le formulaire. Le bouton &laquo; Charger les apps &raquo; est
-                  disponible avec le mode d'auth Scalingo exchange.
+                  Pr&eacute;-remplit le formulaire. &laquo; Scalingo &raquo; cible l'API de
+                  contr&ocirc;le (apps, d&eacute;ploiements) et active le bouton &laquo; Charger les
+                  apps &raquo;. &laquo; Scalingo DB &raquo; cible l'API des bases de donn&eacute;es
+                  via un token d'addon.
                 </p>
 
                 <details id="import-details" class="mt-3 group">
@@ -191,27 +242,236 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                 >
                   Mode d'authentification
                 </label>
-                <div class="flex gap-2">
-                  <select
-                    id="auth"
-                    name="auth"
-                    class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
-                  >
-                    {AUTH_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}
-                    </option>)}
-                  </select>
-                  <input
-                    type="text"
-                    id="auth-header-name"
-                    placeholder="X-API-Key"
-                    aria-label="Nom du header d'authentification"
-                    class="hidden w-40 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
-                  />
-                </div>
+                <select
+                  id="auth"
+                  name="auth"
+                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+                >
+                  {AUTH_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
               </section>
 
+              {/* Headers custom */}
+              <section id="custom-headers-section" hidden>
+                <fieldset id="custom-headers-fieldset">
+                  <legend class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Headers d'authentification
+                  </legend>
+                  <div class="mb-2 flex flex-wrap items-baseline justify-end gap-3">
+                    <div class="flex items-center gap-3">
+                      <span
+                        id="custom-headers-count"
+                        class="text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                      >
+                        1 / 8
+                      </span>
+                      <button
+                        type="button"
+                        id="btn-toggle-header-values"
+                        aria-pressed="false"
+                        class="inline-flex items-center gap-1.5 text-xs font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 focus:outline-none focus:underline"
+                      >
+                        <EyeIcon size="h-3.5 w-3.5" />
+                        <span data-toggle-label>Afficher les valeurs</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div id="custom-headers-list" class="space-y-3">
+                    <div
+                      data-header-row
+                      data-header-uid="h1"
+                      class="flex flex-wrap items-start gap-2 border-t border-gray-100 pt-3 first:border-t-0 first:pt-0 sm:border-t-0 sm:pt-0 dark:border-gray-800"
+                    >
+                      <div class="w-full sm:w-44 sm:shrink-0">
+                        <label for="header-name-h1" class="sr-only">Nom du header 1</label>
+                        <input
+                          type="text"
+                          id="header-name-h1"
+                          data-header-name
+                          maxlength={64}
+                          placeholder="X-API-Key"
+                          autocomplete="off"
+                          spellcheck={false}
+                          class={FIELD_CLASS}
+                        />
+                      </div>
+                      <div class="min-w-[12rem] flex-1">
+                        <label for="header-value-h1" class="sr-only">Valeur du header 1</label>
+                        <input
+                          type="password"
+                          id="header-value-h1"
+                          data-header-value
+                          maxlength={1024}
+                          placeholder="Secret envoy&#233; &#224; l'API cible"
+                          autocomplete="off"
+                          data-1p-ignore
+                          data-lpignore="true"
+                          spellcheck={false}
+                          class={FIELD_CLASS}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        data-header-remove
+                        disabled
+                        aria-label="Supprimer le header 1"
+                        title="Au moins un header est requis"
+                        class={REMOVE_BTN_CLASS}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  </div>
+
+                  <button type="button" id="btn-add-header" class={ADD_BTN_CLASS}>
+                    + Ajouter un header
+                  </button>
+
+                  <p id="custom-headers-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Chaque header est envoy&eacute; tel quel &agrave; l'API cible, &agrave; chaque
+                    requ&ecirc;te. Les valeurs sont des secrets : elles sont chiffr&eacute;es dans
+                    le blob et ne sont plus affich&eacute;es apr&egrave;s la
+                    g&eacute;n&eacute;ration. Maximum 8 headers, nom 64 caract&egrave;res, valeur
+                    1024 caract&egrave;res.
+                  </p>
+                  <p
+                    id="custom-headers-single-note"
+                    class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    Avec un seul header, FGP utilise la forme compacte{" "}
+                    <code class="font-mono">header:{"{nom}"}</code>. Comportement identique, blob
+                    plus petit.
+                  </p>
+
+                  <span id="custom-headers-status" class="sr-only" role="status" aria-live="polite">
+                  </span>
+                </fieldset>
+              </section>
+
+              {/* Scalingo Database API */}
+              <section id="scalingo-addon-section" hidden>
+                <fieldset id="scalingo-addon-fieldset" data-addon-state="idle">
+                  <legend class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Base de donn&eacute;es Scalingo
+                  </legend>
+
+                  <span
+                    id="addon-region-label"
+                    class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    R&eacute;gion
+                  </span>
+                  <div
+                    class="flex flex-wrap gap-2"
+                    role="radiogroup"
+                    aria-labelledby="addon-region-label"
+                  >
+                    {SCALINGO_REGIONS.map((region) => (
+                      <label
+                        key={region.value}
+                        class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm cursor-pointer hover:border-fgp-500 has-[:checked]:bg-fgp-600 has-[:checked]:text-white has-[:checked]:border-fgp-600 transition-colors dark:border-gray-600 dark:text-gray-300 dark:hover:border-fgp-400"
+                      >
+                        <input
+                          type="radio"
+                          name="addon-region"
+                          value={region.value}
+                          checked={region.value === "osc-fr1"}
+                          class="sr-only"
+                        />
+                        {region.label}
+                      </label>
+                    ))}
+                  </div>
+
+                  <p
+                    id="addon-region-urls"
+                    class="mt-2 text-xs text-gray-500 dark:text-gray-400"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    D&eacute;termine l'API interrog&eacute;e :{" "}
+                    <code class="font-mono">https://api.osc-fr1.scalingo.com</code>. Cible attendue
+                    pour la Database API :{" "}
+                    <code class="font-mono">https://db-api.osc-fr1.scalingo.com</code>
+                  </p>
+                  <p
+                    id="addon-target-warning"
+                    hidden
+                    class="mt-2 text-xs text-amber-700 dark:text-amber-300"
+                  >
+                    Cette cible ne ressemble pas &agrave; une Database API Scalingo. V&eacute;rifiez
+                    l'URL cible.
+                  </p>
+
+                  <div class="mt-4 flex flex-wrap items-start gap-2">
+                    <div class="flex min-w-[14rem] flex-1 gap-2">
+                      <div class="min-w-0 flex-1">
+                        <label
+                          for="addon-app"
+                          class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                        >
+                          Application
+                        </label>
+                        <input
+                          type="text"
+                          id="addon-app"
+                          list="addon-apps-datalist"
+                          maxlength={64}
+                          placeholder="mon-app"
+                          autocomplete="off"
+                          spellcheck={false}
+                          aria-describedby="addon-status addon-hint"
+                          class={FIELD_CLASS}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        id="btn-addon-load"
+                        class="mt-[1.375rem] shrink-0 rounded-md bg-fgp-600 px-3 py-2 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
+                      >
+                        Charger
+                      </button>
+                    </div>
+
+                    <div class="min-w-[12rem] flex-1">
+                      <label
+                        for="addon-select"
+                        class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                      >
+                        Base de donn&eacute;es
+                      </label>
+                      <select
+                        id="addon-select"
+                        disabled
+                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:disabled:bg-gray-800/50 dark:disabled:text-gray-500"
+                      >
+                        <option value="">Choisissez une base de donn&eacute;es</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <datalist id="addon-apps-datalist"></datalist>
+
+                  <p
+                    id="addon-status"
+                    class="mt-2 text-xs text-gray-500 dark:text-gray-400"
+                    role="status"
+                    aria-live="polite"
+                  >
+                  </p>
+
+                  <p id="addon-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    FGP &eacute;change votre token de compte contre un bearer, puis obtient un token
+                    de base de donn&eacute;es valable 1 heure, renouvel&eacute; automatiquement. Le
+                    consommateur de l'URL ne voit ni l'un ni l'autre. Une requ&ecirc;te qui ne vise
+                    pas cette base est refus&eacute;e. Suggestions d'applications disponibles si
+                    vous avez d&eacute;j&agrave; charg&eacute; la liste des applications.
+                  </p>
+                </fieldset>
+              </section>
               {/* Token */}
-              <section>
+              <section id="token-section">
                 <label
                   for="token"
                   class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
@@ -358,6 +618,153 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                 </fieldset>
               </section>
 
+              {/* BYOK */}
+              <details
+                id="byok-details"
+                class="group rounded-md border border-gray-200 dark:border-gray-700"
+              >
+                <summary
+                  id="byok-summary"
+                  class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fgp-700 hover:text-fgp-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fgp-500 focus-visible:ring-offset-2 rounded-md dark:text-fgp-300 dark:focus-visible:ring-offset-gray-900 [&::-webkit-details-marker]:hidden"
+                >
+                  <svg
+                    class="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Utiliser ma propre cl&eacute; client (avanc&eacute;)</span>
+                  <span
+                    id="byok-active-badge"
+                    hidden
+                    class="ml-auto inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                  >
+                    Cl&eacute; personnalis&eacute;e active
+                  </span>
+                </summary>
+
+                <div class="space-y-3 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+                  <div
+                    id="byok-warning"
+                    class="flex items-start gap-2 rounded-md border border-red-300 border-l-4 border-l-red-500 bg-red-50 p-3 dark:border-red-700 dark:border-l-red-500 dark:bg-red-900/30"
+                  >
+                    <svg
+                      class="h-5 w-5 shrink-0 text-red-600 dark:text-red-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                    <div class="text-xs text-red-800 dark:text-red-300">
+                      <p class="font-semibold">
+                        R&eacute;utiliser une cl&eacute; lie les blobs entre eux : si elle fuite,
+                        tous les blobs g&eacute;n&eacute;r&eacute;s avec cette cl&eacute; deviennent
+                        d&eacute;chiffrables d'un coup.
+                      </p>
+                      <p class="mt-1">
+                        R&eacute;servez la mutualisation aux secrets de CI, et prenez une cl&eacute;
+                        longue et al&eacute;atoire. La cl&eacute; n'est jamais stock&eacute;e : FGP
+                        ne peut ni la retrouver, ni la r&eacute;initialiser. Sans elle, le blob est
+                        inexploitable.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div class="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+                      <label
+                        for="byok-key"
+                        class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        Cl&eacute; personnalis&eacute;e
+                      </label>
+                      <button
+                        type="button"
+                        id="btn-byok-generate"
+                        class="text-xs font-medium text-fgp-600 hover:text-fgp-800 focus:outline-none focus:underline dark:text-fgp-400 dark:hover:text-fgp-200"
+                      >
+                        G&eacute;n&eacute;rer une cl&eacute; forte
+                      </button>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                      <input
+                        type="password"
+                        id="byok-key"
+                        placeholder="24 caract&#232;res minimum"
+                        autocomplete="off"
+                        data-1p-ignore
+                        data-lpignore="true"
+                        spellcheck={false}
+                        aria-describedby="byok-warning byok-strength-label byok-hint"
+                        class="min-w-[12rem] flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 dark:aria-[invalid=true]:border-red-500"
+                      />
+                      <button
+                        type="button"
+                        id="btn-byok-reveal"
+                        aria-pressed="false"
+                        aria-label="Afficher la cl&#233;"
+                        class="shrink-0 rounded-md border border-gray-300 p-2 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:hover:text-gray-200"
+                      >
+                        <EyeIcon />
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-byok-copy"
+                        data-copy="byok-key"
+                        class="copy-btn shrink-0 rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                      >
+                        Copier
+                      </button>
+                    </div>
+
+                    <div id="byok-strength" class="mt-2 flex gap-1" aria-hidden="true">
+                      <span
+                        data-byok-segment
+                        class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
+                      >
+                      </span>
+                      <span
+                        data-byok-segment
+                        class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
+                      >
+                      </span>
+                      <span
+                        data-byok-segment
+                        class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
+                      >
+                      </span>
+                    </div>
+
+                    <p
+                      id="byok-strength-label"
+                      class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                      role="status"
+                      aria-live="polite"
+                    >
+                    </p>
+
+                    <p id="byok-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Laissez vide pour que le serveur g&eacute;n&egrave;re une cl&eacute; unique.
+                      24 caract&egrave;res minimum, ASCII imprimable, sans espace. La jauge mesure
+                      la vari&eacute;t&eacute; des caract&egrave;res saisis, pas la
+                      s&eacute;curit&eacute; r&eacute;elle de la cl&eacute;.
+                    </p>
+                  </div>
+                </div>
+              </details>
+
               {/* Generate */}
               <section>
                 <button
@@ -494,8 +901,16 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                 </div>
 
                 <div>
-                  <label class="block text-xs font-medium text-green-700 dark:text-green-300 mb-1">
-                    Clé (header <code class="font-mono">X-FGP-Key</code>)
+                  <label class="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium text-green-700 dark:text-green-300">
+                    <span>
+                      Cl&eacute; (header <code class="font-mono">X-FGP-Key</code>)
+                    </span>
+                    <span
+                      id="result-key-origin"
+                      class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                    >
+                      g&eacute;n&eacute;r&eacute;e par le serveur
+                    </span>
                   </label>
                   <div class="flex gap-2">
                     <input
@@ -716,8 +1131,8 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                           ?c=
                         </code>{" "}
                         qui encode la configuration (sans le token). Copiez-la pour partager un
-                        template de config &mdash; le destinataire n'aura qu'&agrave; fournir son
-                        propre token.
+                        template de config, le destinataire n'aura qu'&agrave; fournir son propre
+                        token.
                       </p>
                     </div>
                     <div>
@@ -728,8 +1143,8 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                         Le bouton <strong>Importer</strong>{" "}
                         dans les presets permet de d&eacute;coder une URL FGP existante (ou un blob
                         brut) avec sa cl&eacute; client. La configuration est
-                        r&eacute;cup&eacute;r&eacute;e avec le token masqu&eacute; &mdash;
-                        fournissez le token manuellement pour g&eacute;n&eacute;rer ou tester.
+                        r&eacute;cup&eacute;r&eacute;e avec le token masqu&eacute;, fournissez le
+                        token manuellement pour g&eacute;n&eacute;rer ou tester.
                       </p>
                     </div>
                   </div>
@@ -756,20 +1171,26 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
                       <dd class="mt-1">
                         <ul class="list-disc list-inside space-y-0.5">
                           <li>
-                            <code class="font-mono text-xs">bearer</code>{" "}
-                            &mdash; token envoy&eacute; dans{" "}
+                            <code class="font-mono text-xs">bearer</code> : token envoy&eacute; dans
+                            {" "}
                             <code class="font-mono text-xs">Authorization: Bearer</code>
                           </li>
                           <li>
-                            <code class="font-mono text-xs">basic</code> &mdash; Basic Auth
+                            <code class="font-mono text-xs">basic</code> : Basic Auth
                           </li>
                           <li>
-                            <code class="font-mono text-xs">scalingo-exchange</code>{" "}
-                            &mdash; &eacute;change token Scalingo (tk-us-... &rarr; bearer)
+                            Scalingo API (<code class="font-mono text-xs">scalingo-exchange</code>)
+                            {" "}
+                            : &eacute;change token Scalingo (tk-us-... &rarr; bearer)
                           </li>
                           <li>
-                            <code class="font-mono text-xs">header:X-Name</code>{" "}
-                            &mdash; header custom
+                            Scalingo Database API : token d'addon obtenu en trois temps, valable 1h
+                            et renouvel&eacute; automatiquement
+                          </li>
+                          <li>
+                            Headers multiples : jusqu'&agrave; 8 headers d'authentification
+                            envoy&eacute;s tels quels. Un seul header utilise la forme compacte{" "}
+                            <code class="font-mono text-xs">header:X-Name</code>
                           </li>
                         </ul>
                       </dd>
@@ -819,10 +1240,10 @@ POST:/v1/apps/my-app/scale`}</pre>
                     Exemples &amp; r&eacute;f&eacute;rences
                   </h3>
 
-                  {/* Scopes — Exemples */}
+                  {/* Scopes : exemples */}
                   <details>
                     <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
-                      Scopes &mdash; Exemples
+                      Scopes : exemples
                     </summary>
                     <div class="mt-2 text-xs space-y-4 text-gray-600 dark:text-gray-400">
                       <div class="space-y-2">
@@ -936,10 +1357,10 @@ POST:/v1/apps/my-app/scale`}</pre>
                     </div>
                   </details>
 
-                  {/* Body filters — Exemples */}
+                  {/* Body filters : exemples */}
                   <details>
                     <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
-                      Body filters &mdash; Exemples
+                      Body filters : exemples
                     </summary>
                     <div class="mt-2 text-xs space-y-4 text-gray-600 dark:text-gray-400">
                       <p>
@@ -1078,10 +1499,10 @@ POST:/v1/apps/my-app/scale`}</pre>
                     </div>
                   </details>
 
-                  {/* Auth modes — Quand utiliser quoi */}
+                  {/* Auth modes : quand utiliser quoi */}
                   <details>
                     <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
-                      Auth modes &mdash; Quand utiliser quoi
+                      Auth modes : quand utiliser quoi
                     </summary>
                     <div class="mt-2 text-xs space-y-3 text-gray-600 dark:text-gray-400">
                       <div>
@@ -1118,20 +1539,36 @@ POST:/v1/apps/my-app/scale`}</pre>
                       </div>
                       <div>
                         <p class="font-medium text-gray-700 dark:text-gray-300">
-                          <code class="font-mono">header:X-API-Key</code>
+                          Scalingo Database API
                         </p>
                         <p>
-                          Envoie le token dans un header custom. APIs qui n'utilisent pas{" "}
-                          <code class="font-mono">Authorization</code> (Algolia, SendGrid, etc.).
+                          Acc&egrave;s &agrave; la Database API d'une base Scalingo
+                          (<code class="font-mono">
+                            https://db-api.&lt;r&eacute;gion&gt;.scalingo.com
+                          </code>) sans jamais exposer le token de compte. Avec plusieurs bases, FGP
+                          s&eacute;lectionne la bonne &agrave; partir de l'identifiant
+                          pr&eacute;sent dans le chemin de la requ&ecirc;te.
+                        </p>
+                      </div>
+                      <div>
+                        <p class="font-medium text-gray-700 dark:text-gray-300">
+                          Headers multiples
+                        </p>
+                        <p>
+                          Envoie un &agrave; huit headers d'authentification tels quels. APIs qui
+                          n'utilisent pas <code class="font-mono">Authorization</code>{" "}
+                          (Algolia, SendGrid, etc.) ou qui exigent plusieurs headers (cl&eacute; +
+                          identifiant de client + signature). Aucun appel r&eacute;seau
+                          suppl&eacute;mentaire.
                         </p>
                       </div>
                     </div>
                   </details>
 
-                  {/* Regex — Mini-guide */}
+                  {/* Regex : mini-guide */}
                   <details>
                     <summary class="cursor-pointer text-sm font-medium text-fgp-700 dark:text-fgp-300 hover:text-fgp-500">
-                      Regex &mdash; Mini-guide
+                      Regex : mini-guide
                     </summary>
                     <div class="mt-2 text-xs space-y-3 text-gray-600 dark:text-gray-400">
                       <div class="space-y-1.5">
@@ -1220,7 +1657,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                               main|master
                             </code>{" "}
                             = "main OU master". Dans le champ scopes, le pipe s&eacute;pare les
-                            m&eacute;thodes HTTP &mdash; deux contextes diff&eacute;rents.
+                            m&eacute;thodes HTTP, deux contextes diff&eacute;rents.
                           </p>
                         </div>
                         <div>
@@ -1258,13 +1695,13 @@ POST:/v1/apps/my-app/scale`}</pre>
                           href="/?c=H4sIAAAAAAAA_zSMwQqDMBAF_-UdiyZKoYe9l_5Ab6WHZUkTwZrgriKI_24uXmeG2WE8x2AgJLOi5D2XwWWV9jf3ToXHYYrZSf6jAS-WannRNmySeIqhKpVcgoI-eD3f5Ne-for6G74NzEbQ_dF1xwkAAP__AwDqbEqgbwAAAA"
                           class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
                         >
-                          Scalingo &mdash; lecture seule
+                          Scalingo : lecture seule
                         </a>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
                             GET:/v1/apps/*
                           </code>{" "}
-                          &mdash; scalingo-exchange, 1h
+                          (scalingo-exchange, 1h)
                         </p>
                       </li>
                       <li>
@@ -1272,7 +1709,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                           href="/?c=H4sIAAAAAAAA_4TMvQoCMRAE4HfZ8rhc7kBE0oulgnZiEWJMDvKzZFfxUN_dbaytBmY-5gVsW_AMBiIzktHa4jxUcurWpoGcTXMJdXA1Qw_2zlHkr1X-6aItwctErqInMGfYbU9GPyb5QdJ5UZIKW6evHlNdsi9M4kW9D_vjX6o7uPTAnMBs1qtx_HwBAAD__wMA_H5GBrIAAAA"
                           class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
                         >
-                          Scalingo &mdash; deploy PR
+                          Scalingo : deploy PR
                         </a>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
@@ -1282,7 +1719,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                           <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
                             GET|POST:/v1/apps/my-app-pr*/deployments/*
                           </code>{" "}
-                          &mdash; 24h
+                          (24h)
                         </p>
                       </li>
                       <li>
@@ -1290,13 +1727,13 @@ POST:/v1/apps/my-app/scale`}</pre>
                           href="/?c=H4sIAAAAAAAA_wBSAK3_eyJ0YXJnZXQiOiJodHRwczovL2FwaS5leGFtcGxlLmNvbSIsImF1dGgiOiJiZWFyZXIiLCJzY29wZXMiOlsiR0VUOioiXSwidHRsIjozNjAwfQAAAP__AwDMbCW8UgAAAA"
                           class="font-medium text-fgp-600 hover:text-fgp-800 dark:text-fgp-400 dark:hover:text-fgp-200 underline underline-offset-2"
                         >
-                          API g&eacute;n&eacute;rique &mdash; lecture seule
+                          API g&eacute;n&eacute;rique : lecture seule
                         </a>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
                             GET:*
                           </code>{" "}
-                          &mdash; bearer, 1h
+                          (bearer, 1h)
                         </p>
                       </li>
                     </ul>
@@ -1317,7 +1754,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                           Swagger UI
                         </a>
                         <span class="text-xs text-gray-500 dark:text-gray-400">
-                          {" "}&mdash; documentation interactive de l'API
+                          {" "}: documentation interactive de l'API
                         </span>
                       </li>
                       <li>
@@ -1328,7 +1765,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                           OpenAPI JSON
                         </a>
                         <span class="text-xs text-gray-500 dark:text-gray-400">
-                          {" "}&mdash; sp&eacute;cification OpenAPI 3.0
+                          {" "}: sp&eacute;cification OpenAPI 3.0
                         </span>
                       </li>
                       <li>
@@ -1341,7 +1778,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                           GitHub
                         </a>
                         <span class="text-xs text-gray-500 dark:text-gray-400">
-                          {" "}&mdash; code source, issues, ADR
+                          {" "}: code source, issues, ADR
                         </span>
                       </li>
                     </ul>
@@ -1452,7 +1889,7 @@ POST:/v1/apps/my-app/scale`}</pre>
                   </p>
                   <p class="text-xs text-amber-700 dark:text-amber-400">
                     Activez uniquement si vous avez besoin d'inspecter les payloads. Le body peut
-                    contenir des informations sensibles &mdash; n'ouvrez{" "}
+                    contenir des informations sensibles, n'ouvrez{" "}
                     <code class="font-mono">/logs</code> que sur un poste de confiance.
                   </p>
                 </div>

@@ -62,7 +62,7 @@ function mockUpstream(status: number, body: BodyInit | null, headers?: HeadersIn
     (() => Promise.resolve(new Response(body, { status, headers }))) as typeof globalThis.fetch;
 }
 
-// --- AC-17.1 — Forward 2xx + X-FGP-Source: upstream ---
+// --- AC-17.1 : Forward 2xx + X-FGP-Source: upstream ---
 
 Deno.test({
   name: "AC-17.1: forward transparent 2xx with X-FGP-Source: upstream",
@@ -86,7 +86,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.3 — Forward upstream 403 ---
+// --- AC-17.3 : Forward upstream 403 ---
 
 Deno.test({
   name: "AC-17.3: forward transparent upstream 403 with body and X-FGP-Source: upstream",
@@ -114,7 +114,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.4 — Forward upstream 404 ---
+// --- AC-17.4 : Forward upstream 404 ---
 
 Deno.test({
   name: "AC-17.4: forward transparent upstream 404 with X-FGP-Source: upstream",
@@ -138,7 +138,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.8 — Forward upstream 502 ---
+// --- AC-17.8 : Forward upstream 502 ---
 
 Deno.test({
   name: "AC-17.8: forward transparent upstream 502 preserves status, body, X-FGP-Source: upstream",
@@ -161,7 +161,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.10 — Forward upstream 504 ---
+// --- AC-17.10 : Forward upstream 504 ---
 
 Deno.test({
   name: "AC-17.10: forward transparent upstream 504 with X-FGP-Source: upstream",
@@ -183,7 +183,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.11 — Status atypique ---
+// --- AC-17.11 : Status atypique ---
 
 Deno.test({
   name: "AC-17.11: forward atypical upstream statuses (418, 507, 451, 226)",
@@ -207,7 +207,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.12 — Body upstream byte-exact ---
+// --- AC-17.12 : Body upstream byte-exact ---
 
 Deno.test({
   name: "AC-17.12: upstream body preserved byte-exact (JSON multiline)",
@@ -233,7 +233,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.13 — Body vide preserve ---
+// --- AC-17.13 : Body vide preserve ---
 
 Deno.test({
   name: "AC-17.13: empty upstream body preserved (no JSON error injected)",
@@ -257,7 +257,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.15 — Content-Type application/xml ---
+// --- AC-17.15 : Content-Type application/xml ---
 
 Deno.test({
   name: "AC-17.15: upstream application/xml preserved",
@@ -282,7 +282,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.16 — Content-Type application/octet-stream binaire ---
+// --- AC-17.16 : Content-Type application/octet-stream binaire ---
 
 Deno.test({
   name: "AC-17.16: upstream octet-stream preserved without byte corruption",
@@ -311,7 +311,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.17 — Redirect 302 ---
+// --- AC-17.17 : Redirect 302 ---
 
 Deno.test({
   name: "AC-17.17: upstream 302 with Location header forwarded",
@@ -345,7 +345,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.19 — Multi Set-Cookie stripped ---
+// --- AC-17.19 : Multi Set-Cookie stripped ---
 
 Deno.test({
   name: "AC-17.19: multiple Set-Cookie headers all stripped",
@@ -374,7 +374,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.20 — X-FGP-Source overwrite ---
+// --- AC-17.20 : X-FGP-Source overwrite ---
 
 Deno.test({
   name: "AC-17.20: upstream X-FGP-Source header is overwritten by proxy value",
@@ -399,7 +399,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.21 — X-FGP-Source: proxy on missing_key ---
+// --- AC-17.21 : X-FGP-Source: proxy on missing_key ---
 
 Deno.test({
   name: "AC-17.21: missing_key carries X-FGP-Source: proxy",
@@ -420,7 +420,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.22 — X-FGP-Source: proxy on blob_too_large ---
+// --- AC-17.22 : X-FGP-Source: proxy on blob_too_large ---
 
 Deno.test({
   name: "AC-17.22: blob_too_large carries X-FGP-Source: proxy",
@@ -441,7 +441,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.23 — X-FGP-Source: proxy on invalid_credentials ---
+// --- AC-17.23 : X-FGP-Source: proxy on invalid_credentials ---
 
 Deno.test({
   name: "AC-17.23: invalid_credentials carries X-FGP-Source: proxy",
@@ -464,7 +464,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.24 — X-FGP-Source: proxy on token_expired ---
+// --- AC-17.24 : X-FGP-Source: proxy on token_expired ---
 
 Deno.test({
   name: "AC-17.24: token_expired carries X-FGP-Source: proxy",
@@ -485,7 +485,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.25 — X-FGP-Source: proxy on invalid_auth_mode ---
+// --- AC-17.25 : X-FGP-Source: proxy on invalid_auth_mode ---
 
 Deno.test({
   name: "AC-17.25: invalid_auth_mode carries X-FGP-Source: proxy",
@@ -508,7 +508,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.26 — X-FGP-Source: proxy on invalid_body ---
+// --- AC-17.26 : X-FGP-Source: proxy on invalid_body ---
 
 Deno.test({
   name: "AC-17.26: invalid_body carries X-FGP-Source: proxy",
@@ -553,7 +553,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.27 — X-FGP-Source: proxy on scope_denied ---
+// --- AC-17.27 : X-FGP-Source: proxy on scope_denied ---
 
 Deno.test({
   name: "AC-17.27: scope_denied carries X-FGP-Source: proxy",
@@ -576,7 +576,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.28 — X-FGP-Source: proxy on invalid_request ---
+// --- AC-17.28 : X-FGP-Source: proxy on invalid_request ---
 
 Deno.test({
   name: "AC-17.28: invalid_request carries X-FGP-Source: proxy",
@@ -610,7 +610,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.30 — Fetch throw tous modes ---
+// --- AC-17.30 : Fetch throw tous modes ---
 
 Deno.test({
   name: "AC-17.30: fetch throw all network modes returns 502 upstream_unreachable",
@@ -642,7 +642,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.13 bis — 204 No Content ---
+// --- AC-17.13 bis : 204 No Content ---
 
 Deno.test({
   name: "AC-17.13 bis: 204 No Content forwarded without body",
@@ -665,7 +665,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.16 bis — Body binaire + Content-Length préservé ---
+// --- AC-17.16 bis : Body binaire + Content-Length préservé ---
 
 Deno.test({
   name: "AC-17.16 bis: body binaire Content-Length préservé",
@@ -708,7 +708,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.x — Chunked streaming forward ---
+// --- AC-17.x : Chunked streaming forward ---
 
 Deno.test({
   name: "AC-17.x: chunked streaming forward",
@@ -761,7 +761,7 @@ Deno.test({
   sanitizeResources: false,
 });
 
-// --- AC-17.5 bis — Retry-After en date HTTP ---
+// --- AC-17.5 bis : Retry-After en date HTTP ---
 
 Deno.test({
   name: "AC-17.5 bis: Retry-After date HTTP",

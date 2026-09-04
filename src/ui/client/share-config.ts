@@ -5,6 +5,8 @@ import {
 } from "../../crypto/share.ts";
 import { buildScopes } from "./generate.ts";
 import type { AndCondition, FilterData, SerializedFilterValue } from "./types.ts";
+import { applyAuthToForm, buildShareAuth } from "./auth-mode.ts";
+import type { AuthModeDeps } from "./auth-mode.ts";
 
 let nextRestoreId = 9000;
 
@@ -104,14 +106,12 @@ function restoreBodyFilters(
   }
 }
 
-function readCurrentConfig(bodyFiltersData: Record<string, FilterData[]>): PublicConfig | null {
+function readCurrentConfig(
+  bodyFiltersData: Record<string, FilterData[]>,
+  authDeps: AuthModeDeps,
+): PublicConfig | null {
   const target = (document.getElementById("target") as HTMLInputElement | null)?.value ?? "";
-  const authSelect = (document.getElementById("auth") as HTMLSelectElement | null)?.value ?? "";
-  const authHeaderName =
-    (document.getElementById("auth-header-name") as HTMLInputElement | null)?.value ?? "";
-  const auth = authSelect === "header:" && authHeaderName
-    ? `header:${authHeaderName}`
-    : authSelect;
+  const auth = buildShareAuth(authDeps);
 
   const scopesTextarea = document.getElementById("scopes") as HTMLTextAreaElement | null;
   const rawLines = scopesTextarea?.value.split("\n").filter((l) => l.trim() !== "") ?? [];
@@ -151,13 +151,13 @@ function scopeToLine(scope: unknown): string {
   return String(scope);
 }
 
-const DEFAULT_TITLE = "FGP \u2014 Fine-Grained Proxy";
+const DEFAULT_TITLE = "FGP (Fine-Grained Proxy)";
 
 function updateTitle(name?: string): void {
-  document.title = name ? `${name} \u2014 ${DEFAULT_TITLE}` : DEFAULT_TITLE;
+  document.title = name ? `${name} : ${DEFAULT_TITLE}` : DEFAULT_TITLE;
 }
 
-function applyConfig(config: PublicConfig): void {
+function applyConfig(config: PublicConfig, authDeps: AuthModeDeps): void {
   const nameInput = document.getElementById("config-name") as HTMLInputElement | null;
   if (nameInput && config.name) nameInput.value = config.name;
   updateTitle(config.name);
@@ -165,21 +165,7 @@ function applyConfig(config: PublicConfig): void {
   const targetInput = document.getElementById("target") as HTMLInputElement | null;
   if (targetInput) targetInput.value = config.target;
 
-  const authSelect = document.getElementById("auth") as HTMLSelectElement | null;
-  const authHeaderName = document.getElementById("auth-header-name") as HTMLInputElement | null;
-  if (authSelect) {
-    if (config.auth.startsWith("header:") && config.auth.length > 7) {
-      authSelect.value = "header:";
-      if (authHeaderName) {
-        authHeaderName.value = config.auth.slice(7);
-        authHeaderName.classList.remove("hidden");
-      }
-    } else {
-      authSelect.value = config.auth;
-      if (authHeaderName) authHeaderName.classList.add("hidden");
-    }
-    authSelect.dispatchEvent(new Event("change"));
-  }
+  applyAuthToForm(config.auth, authDeps, true);
 
   const scopesTextarea = document.getElementById("scopes") as HTMLTextAreaElement | null;
   if (scopesTextarea) {
@@ -217,8 +203,11 @@ function applyConfig(config: PublicConfig): void {
   }
 }
 
-async function updateShareUrl(bodyFiltersData: Record<string, FilterData[]>): Promise<void> {
-  const config = readCurrentConfig(bodyFiltersData);
+async function updateShareUrl(
+  bodyFiltersData: Record<string, FilterData[]>,
+  authDeps: AuthModeDeps,
+): Promise<void> {
+  const config = readCurrentConfig(bodyFiltersData, authDeps);
   if (!config) {
     const url = new URL(window.location.href);
     url.searchParams.delete("c");
@@ -232,7 +221,10 @@ async function updateShareUrl(bodyFiltersData: Record<string, FilterData[]>): Pr
   history.replaceState(null, "", url.toString());
 }
 
-export function setupShareConfig(bodyFiltersData: Record<string, FilterData[]>): void {
+export function setupShareConfig(
+  bodyFiltersData: Record<string, FilterData[]>,
+  authDeps: AuthModeDeps,
+): void {
   let initializing = false;
 
   const params = new URLSearchParams(window.location.search);
@@ -240,7 +232,7 @@ export function setupShareConfig(bodyFiltersData: Record<string, FilterData[]>):
   if (encoded) {
     initializing = true;
     decodePublicConfig(encoded).then((config) => {
-      applyConfig(config);
+      applyConfig(config, authDeps);
       restoreBodyFilters(config.scopes, bodyFiltersData);
       const scopesTa = document.getElementById("scopes");
       if (scopesTa) scopesTa.dispatchEvent(new Event("input"));
@@ -261,12 +253,14 @@ export function setupShareConfig(bodyFiltersData: Record<string, FilterData[]>):
     if (initializing) return;
     if (debounceTimer !== null) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      updateShareUrl(bodyFiltersData);
+      updateShareUrl(bodyFiltersData, authDeps);
     }, 500);
   }
 
+  // Liste blanche stricte : #byok-key et les valeurs de headers d'auth sont des secrets,
+  // ils ne doivent jamais atteindre l'URL de partage (historique, logs de proxy, Referer).
   const fields = [
-    "config-name", "target", "auth", "auth-header-name", "scopes", "custom-ttl",
+    "config-name", "target", "auth", "scopes", "custom-ttl",
     "test-method", "test-path", "test-body",
   ];
 
@@ -285,6 +279,12 @@ export function setupShareConfig(bodyFiltersData: Record<string, FilterData[]>):
   document.querySelectorAll<HTMLInputElement>("input[name=ttl]").forEach((radio) => {
     radio.addEventListener("change", scheduleUpdate);
   });
+
+  const headersList = document.getElementById("custom-headers-list");
+  if (headersList) {
+    headersList.addEventListener("input", scheduleUpdate);
+    headersList.addEventListener("change", scheduleUpdate);
+  }
 
   const bodyFiltersPanel = document.getElementById("body-filters-list");
   if (bodyFiltersPanel) {

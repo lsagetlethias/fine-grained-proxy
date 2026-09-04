@@ -1,7 +1,9 @@
+import type { Auth } from "../auth/spec.ts";
+
 export interface PublicConfig {
   name?: string;
   target: string;
-  auth: string;
+  auth: Auth;
   scopes: unknown[];
   ttl: number;
   test?: {

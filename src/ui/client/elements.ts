@@ -13,8 +13,8 @@ export function getElements() {
   return {
     targetInput: assertElement("target", HTMLInputElement),
     authSelect: assertElement("auth", HTMLSelectElement),
-    authHeaderName: assertElement("auth-header-name", HTMLInputElement),
     tokenInput: assertElement("token", HTMLInputElement),
+    tokenSection: assertElement("token-section", HTMLElement),
     btnLoadApps: assertElement("btn-load-apps", HTMLButtonElement),
     appsSection: assertElement("apps-section", HTMLElement),
     appsList: assertElement("apps-list", HTMLElement),

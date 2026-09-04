@@ -59,7 +59,7 @@ function createApp(): Hono {
 }
 
 Deno.test({
-  name: "AC-14.1: Header blob mode — requête basique GET forward 200",
+  name: "AC-14.1: Header blob mode, requête basique GET forward 200",
   fn: async () => {
     setup();
     try {
@@ -95,7 +95,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-14.2: Header blob mode — X-FGP-Blob et X-FGP-Key strippés avant forward",
+  name: "AC-14.2: Header blob mode, X-FGP-Blob et X-FGP-Key strippés avant forward",
   fn: async () => {
     setup();
     try {
@@ -133,7 +133,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-14.3: Fallback URL mode — sans header X-FGP-Blob, le mode URL fonctionne",
+  name: "AC-14.3: Fallback URL mode, sans header X-FGP-Blob, le mode URL fonctionne",
   fn: async () => {
     setup();
     try {
@@ -171,7 +171,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-14.4: Header blob mode — missing X-FGP-Key returns 401 missing_key",
+  name: "AC-14.4: Header blob mode, missing X-FGP-Key returns 401 missing_key",
   fn: async () => {
     setup();
     try {
@@ -194,7 +194,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-14.5: Header blob mode — invalid blob returns 401 invalid_credentials",
+  name: "AC-14.5: Header blob mode, invalid blob returns 401 invalid_credentials",
   fn: async () => {
     setup();
     try {
@@ -216,7 +216,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-14.6: Header blob mode — expired token returns 410 token_expired",
+  name: "AC-14.6: Header blob mode, expired token returns 410 token_expired",
   fn: async () => {
     setup();
     try {
@@ -242,7 +242,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-14.7: Header blob mode — scope denied returns 403 scope_denied",
+  name: "AC-14.7: Header blob mode, scope denied returns 403 scope_denied",
   fn: async () => {
     setup();
     try {
@@ -271,7 +271,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-14.8: Header blob mode — query string preserved dans l'URL target",
+  name: "AC-14.8: Header blob mode, query string preserved dans l'URL target",
   fn: async () => {
     setup();
     try {

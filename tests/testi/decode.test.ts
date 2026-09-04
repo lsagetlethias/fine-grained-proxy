@@ -24,7 +24,7 @@ function postDecode(body: unknown) {
 }
 
 Deno.test({
-  name: "AC-16.1: Decode — config complète avec token redacté",
+  name: "AC-16.1: Decode, config complète avec token redacté",
   fn: async () => {
     setup();
     try {
@@ -63,7 +63,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-16.2: Decode — mauvaise clé retourne 401",
+  name: "AC-16.2: Decode, mauvaise clé retourne 401",
   fn: async () => {
     setup();
     try {
@@ -95,7 +95,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-16.3: Decode — blob corrompu retourne 401",
+  name: "AC-16.3: Decode, blob corrompu retourne 401",
   fn: async () => {
     setup();
     try {
@@ -113,7 +113,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-16.4: Decode — body invalide retourne 400 (blob manquant)",
+  name: "AC-16.4: Decode, body invalide retourne 400 (blob manquant)",
   fn: async () => {
     setup();
     try {
@@ -131,7 +131,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-16.4: Decode — body invalide retourne 400 (key manquant)",
+  name: "AC-16.4: Decode, body invalide retourne 400 (key manquant)",
   fn: async () => {
     setup();
     try {
@@ -149,7 +149,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "AC-16.5: Decode — blob v3 avec scopes structurés",
+  name: "AC-16.5: Decode, blob v3 avec scopes structurés",
   fn: async () => {
     setup();
     try {
@@ -196,7 +196,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: 'AC-16.6: Decode — token court (< 4 chars) retourne "****"',
+  name: 'AC-16.6: Decode, token court (< 4 chars) retourne "****"',
   fn: async () => {
     setup();
     try {

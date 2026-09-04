@@ -1,8 +1,21 @@
+import type { Auth } from "../../auth/spec.ts";
 import { assertElement } from "./elements.ts";
+import { applyAuthToForm } from "./auth-mode.ts";
+import type { AuthModeDeps } from "./auth-mode.ts";
+
+interface RedactedHeaderEntry {
+  name: string;
+  valueRedacted: string;
+}
+
+type DecodedAuth =
+  | string
+  | { type: "headers"; headers: RedactedHeaderEntry[] }
+  | { type: "scalingo-addon"; app: string; addonId: string; apiUrl?: string };
 
 interface DecodeResponse {
   target: string;
-  auth: string;
+  auth: DecodedAuth;
   scopes: unknown[];
   ttl: number;
   createdAt: number;
@@ -35,25 +48,21 @@ function scopeToString(scope: unknown): string {
   return `${methods}:${entry.pattern}`;
 }
 
-function applyDecodedConfig(data: DecodeResponse): void {
+// Une valeur redactee n'est jamais reutilisable pour regenerer : elle revient vide,
+// avec la consigne de ressaisie portee par le placeholder et le hint de section.
+function toFormAuth(auth: DecodedAuth): Auth {
+  if (typeof auth === "string") return auth;
+  if (auth.type === "headers") {
+    return { type: "headers", headers: auth.headers.map((h) => ({ name: h.name, value: "" })) };
+  }
+  return auth;
+}
+
+function applyDecodedConfig(data: DecodeResponse, authDeps: AuthModeDeps): void {
   const targetInput = document.getElementById("target") as HTMLInputElement | null;
   if (targetInput) targetInput.value = data.target;
 
-  const authSelect = document.getElementById("auth") as HTMLSelectElement | null;
-  const authHeaderName = document.getElementById("auth-header-name") as HTMLInputElement | null;
-  if (authSelect) {
-    if (data.auth.startsWith("header:") && data.auth.length > 7) {
-      authSelect.value = "header:";
-      if (authHeaderName) {
-        authHeaderName.value = data.auth.slice(7);
-        authHeaderName.classList.remove("hidden");
-      }
-    } else {
-      authSelect.value = data.auth;
-      if (authHeaderName) authHeaderName.classList.add("hidden");
-    }
-    authSelect.dispatchEvent(new Event("change"));
-  }
+  applyAuthToForm(toFormAuth(data.auth), authDeps, true);
 
   const scopesTextarea = document.getElementById("scopes") as HTMLTextAreaElement | null;
   if (scopesTextarea) {
@@ -85,7 +94,7 @@ function applyDecodedConfig(data: DecodeResponse): void {
   }
 }
 
-export function setupImportConfig(): void {
+export function setupImportConfig(authDeps: AuthModeDeps): void {
   const importBlobInput = assertElement("import-blob", HTMLInputElement);
   const importKeyInput = assertElement("import-key", HTMLInputElement);
   const btnDecode = assertElement("btn-import-decode", HTMLButtonElement);
@@ -122,10 +131,10 @@ export function setupImportConfig(): void {
       }
 
       const data = await res.json() as DecodeResponse;
-      applyDecodedConfig(data);
+      applyDecodedConfig(data, authDeps);
 
       importStatus.textContent =
-        `Config import\u00e9e \u2014 token: ${data.tokenRedacted} (fournir le token pour g\u00e9n\u00e9rer/tester)`;
+        `Config import\u00e9e, token: ${data.tokenRedacted} (fournir le token pour g\u00e9n\u00e9rer/tester)`;
       importStatus.className = "text-sm font-medium text-green-600 dark:text-green-400";
     } catch {
       importStatus.textContent = "Erreur r\u00e9seau";

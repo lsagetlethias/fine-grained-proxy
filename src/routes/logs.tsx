@@ -124,6 +124,7 @@ function notFound(c: Context): Response {
 
 logsRoutes.get("/logs", (c) => {
   if (!logsEnabled()) return notFound(c);
+  c.header("Link", '</llms.txt>; rel="describedby"; type="text/markdown"');
   return c.html(<LogsPage />);
 });
 
@@ -231,7 +232,7 @@ logsRoutes.get("/logs/stream", async (c) => {
     status: 200,
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
+      "Cache-Control": "no-store, no-transform",
       "Connection": "keep-alive",
       [FGP_SOURCE_HEADER]: FGP_SOURCE_PROXY,
     },

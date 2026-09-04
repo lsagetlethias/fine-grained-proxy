@@ -244,7 +244,7 @@ Deno.test({
     assertEquals(r1.status, 502);
     assertEquals(r2.status, 502);
     assertEquals(r3.status, 502);
-    assertEquals((await r1.json()).error, "upstream_unreachable");
+    assertEquals((await r1.json()).error, "auth_exchange_failed");
     assertEquals(r1.headers.get("X-FGP-Source"), "proxy");
     assertEquals(exchangeCount, 1);
     teardown();

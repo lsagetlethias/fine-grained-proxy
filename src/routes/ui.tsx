@@ -4,7 +4,22 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
 import { decryptBlob, encryptBlob } from "../crypto/blob.ts";
 import { decodePublicConfig, encodePublicConfig } from "../crypto/share.ts";
-import { exchangeToken } from "../auth/client.ts";
+import {
+  CLIENT_KEY_MAX_LENGTH,
+  CLIENT_KEY_MIN_LENGTH,
+  validateClientKey,
+} from "../crypto/client-key.ts";
+import { exchangeToken, normalizeAddons, resolveScalingoApiUrl } from "../auth/client.ts";
+import {
+  type Auth,
+  type AuthSpec,
+  isAuthSpec,
+  isHeadersSpec,
+  validateAuthSpecLimits,
+  validateAuthSpecShape,
+} from "../auth/spec.ts";
+import { obtainAddonToken } from "../auth/credentials.ts";
+import { renderLlmsTxt } from "./llms.ts";
 import { ConfigPage } from "../ui/config-page.tsx";
 import {
   type BodyFilter,
@@ -21,7 +36,7 @@ let commitHash = "dev";
 try {
   commitHash = Deno.readTextFileSync("static/version.txt").trim();
 } catch {
-  // no version.txt — run deno task build to generate it
+  // no version.txt, run deno task build to generate it
 }
 
 function getRequestOrigin(c: Context): string {
@@ -36,7 +51,8 @@ function getRequestOrigin(c: Context): string {
   return new URL(c.req.url).origin;
 }
 
-const DEFAULT_API_URL = "https://api.osc-fr1.scalingo.com";
+const LLMS_TXT_PATH = "/llms.txt";
+const LLMS_LINK_HEADER = `<${LLMS_TXT_PATH}>; rel="describedby"; type="text/markdown"`;
 
 function errorSchema<const T extends readonly [string, ...string[]]>(
   codes: T,
@@ -60,7 +76,7 @@ const ShareDecodeError400Schema = errorSchema(
 );
 
 const GenerateError400Schema = errorSchema(
-  ["invalid_body", "blob_too_large", "scope_limit_exceeded"],
+  ["invalid_body", "blob_too_large", "scope_limit_exceeded", "auth_limit_exceeded", "invalid_key"],
   "GenerateError400",
 );
 const GenerateError500Schema = errorSchema(["server_error"], "GenerateError500");
@@ -70,6 +86,14 @@ const ListAppsError401Schema = errorSchema(["token_exchange_failed"], "ListAppsE
 const ListAppsError502Schema = errorSchema(
   ["upstream_unreachable", "upstream_list_apps_failed"],
   "ListAppsError502",
+);
+
+const ListAddonsError400Schema = errorSchema(["invalid_body"], "ListAddonsError400");
+const ListAddonsError401Schema = errorSchema(["token_exchange_failed"], "ListAddonsError401");
+const ListAddonsError404Schema = errorSchema(["app_not_found"], "ListAddonsError404");
+const ListAddonsError502Schema = errorSchema(
+  ["upstream_unreachable", "upstream_list_addons_failed"],
+  "ListAddonsError502",
 );
 
 const TestScopeError400Schema = errorSchema(["invalid_body"], "TestScopeError400");
@@ -97,17 +121,72 @@ const ScopeEntrySchema = z.object({
 
 const ScopeSchema = z.union([z.string(), ScopeEntrySchema]);
 
+const AuthHeaderEntrySchema = z.object({
+  name: z.string().min(1).openapi({ example: "X-API-Key" }),
+  value: z.string().min(1).openapi({ example: "sk-live-xxxxxxxxxxxx" }),
+});
+
+const ScalingoAddonFields = {
+  app: z.string().min(1).openapi({ example: "my-app" }),
+  addonId: z.string().min(1).openapi({ example: "ad-1111-2222-3333" }),
+  apiUrl: z.string().optional().openapi({ example: "https://api.osc-fr1.scalingo.com" }),
+};
+
+const AuthSpecSchema = z.union([
+  z.object({
+    type: z.literal("headers"),
+    headers: z.array(AuthHeaderEntrySchema).min(1),
+  }),
+  z.object({ type: z.literal("scalingo-addon"), ...ScalingoAddonFields }),
+]).openapi("AuthSpec");
+
+const AuthSchema = z.union([z.string().min(1), AuthSpecSchema]);
+
+const RedactedAuthSpecSchema = z.union([
+  z.object({
+    type: z.literal("headers"),
+    headers: z.array(z.object({ name: z.string(), valueRedacted: z.string() })),
+  }),
+  z.object({ type: z.literal("scalingo-addon"), ...ScalingoAddonFields }),
+]).openapi("RedactedAuthSpec");
+
+// Une URL de partage ne transporte ni secret ni topologie de compte : le mode et la region
+// suffisent au destinataire, il ressaisit ou recharge l'application et la base.
+const ShareAuthSpecSchema = z.union([
+  z.object({
+    type: z.literal("headers"),
+    headers: z.array(z.object({ name: z.string().min(1), value: z.string() })),
+  }),
+  z.object({
+    type: z.literal("scalingo-addon"),
+    app: z.string(),
+    addonId: z.string(),
+    apiUrl: z.string().optional(),
+  }),
+]).openapi("ShareAuthSpec");
+
+const ShareAuthSchema = z.union([z.string().min(1), ShareAuthSpecSchema]);
+
 const LogsConfigSchema = z.object({
   enabled: z.boolean(),
   detailed: z.boolean(),
 }).openapi("LogsConfig");
 
 const GenerateBodySchema = z.object({
-  token: z.string().min(1).openapi({ example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx" }),
+  token: z.string().min(1).optional().openapi({
+    example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    description: "Upstream secret. Required for every auth mode except the headers AuthSpec.",
+  }),
   target: z.string().min(1).openapi({ example: "https://api.osc-fr1.scalingo.com" }),
-  auth: z.string().min(1).openapi({
+  auth: AuthSchema.openapi({
     example: "scalingo-exchange",
-    description: "Auth mode: bearer, basic, scalingo-exchange, or header:{name}",
+    description:
+      "Auth mode: bearer, basic, scalingo-exchange, header:{name}, or a structured AuthSpec",
+  }),
+  key: z.string().optional().openapi({
+    example: "K7x_qP2mVz9-tRbN4wYsH1jGcE8aLdFu",
+    description:
+      `Client key to use instead of a server-generated one. ${CLIENT_KEY_MIN_LENGTH} to ${CLIENT_KEY_MAX_LENGTH} printable ASCII characters, no space.`,
   }),
   scopes: z.array(ScopeSchema).openapi({
     example: ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"],
@@ -156,6 +235,45 @@ const ListAppsResponseSchema = z.object({
   }),
 }).openapi("ListAppsResponse");
 
+const ListAddonsBodySchema = z.object({
+  token: z.string().min(1).openapi({
+    example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    description: "Scalingo API token (tk-us-...)",
+  }),
+  app: z.string().min(1).openapi({
+    example: "my-app",
+    description: "Scalingo application name",
+  }),
+  target: z.string().optional().openapi({
+    example: "https://api.osc-fr1.scalingo.com",
+    description: "Scalingo API URL of the region (defaults to osc-fr1 if omitted)",
+  }),
+}).openapi("ListAddonsBody");
+
+const ListAddonsResponseSchema = z.object({
+  addons: z.array(z.object({
+    id: z.string().openapi({
+      example: "ad-1111-2222-3333",
+      description: "Addon identifier. The only field stored in a blob, as addonId.",
+    }),
+    resourceId: z.string().openapi({
+      example: "my-db-123",
+      description: "Display-only readable name. Never stored in a blob.",
+    }),
+    provider: z.string().openapi({
+      example: "PostgreSQL",
+      description: "Display-only. Never stored in a blob.",
+    }),
+    plan: z.string().openapi({
+      example: "postgresql-starter-512",
+      description: "Display-only. Never stored in a blob.",
+    }),
+  })).openapi({
+    description:
+      "Addons of the application. Only id reaches a blob: resourceId, provider and plan are display-only.",
+  }),
+}).openapi("ListAddonsResponse");
+
 const TestScopeBodySchema = z.object({
   method: z.string().min(1).openapi({ example: "GET" }),
   path: z.string().min(1).openapi({ example: "/v1/apps/my-app" }),
@@ -183,9 +301,11 @@ const TestScopeResponseSchema = z.object({
 const TestProxyBodySchema = z.object({
   method: z.string().min(1).openapi({ example: "GET" }),
   path: z.string().min(1).openapi({ example: "/v1/apps/my-app" }),
-  token: z.string().min(1).openapi({ example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx" }),
+  token: z.string().min(1).optional().openapi({
+    example: "tk-us-xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  }),
   target: z.string().min(1).openapi({ example: "https://api.osc-fr1.scalingo.com" }),
-  auth: z.string().min(1).openapi({ example: "scalingo-exchange" }),
+  auth: AuthSchema.openapi({ example: "scalingo-exchange" }),
   scopes: z.array(ScopeSchema).min(1),
   body: z.unknown().optional(),
 }).openapi("TestProxyBody");
@@ -208,7 +328,10 @@ const DecodeBodySchema = z.object({
 
 const DecodeResponseSchema = z.object({
   target: z.string(),
-  auth: z.string(),
+  auth: z.union([z.string(), RedactedAuthSpecSchema]).openapi({
+    description:
+      "Auth mode. Structured AuthSpec are returned with every secret redacted (header values).",
+  }),
   scopes: z.array(z.unknown()),
   ttl: z.number(),
   createdAt: z.number(),
@@ -221,7 +344,7 @@ const DecodeResponseSchema = z.object({
 
 const ShareEncodeBodySchema = z.object({
   target: z.string().min(1).openapi({ example: "https://api.osc-fr1.scalingo.com" }),
-  auth: z.string().min(1).openapi({ example: "scalingo-exchange" }),
+  auth: ShareAuthSchema.openapi({ example: "scalingo-exchange" }),
   scopes: z.array(ScopeSchema).min(1).openapi({ example: ["GET:/v1/apps/*"] }),
   ttl: z.number().openapi({ example: 3600 }),
   test: z.object({
@@ -242,7 +365,7 @@ const ShareDecodeBodySchema = z.object({
 
 const ShareDecodeResponseSchema = z.object({
   target: z.string(),
-  auth: z.string(),
+  auth: ShareAuthSchema,
   scopes: z.array(z.unknown()),
   ttl: z.number(),
   test: z.object({
@@ -413,6 +536,44 @@ const listAppsRoute = createRoute({
   },
 });
 
+const listAddonsRoute = createRoute({
+  method: "post",
+  path: "/api/list-addons",
+  tags: ["Scalingo"],
+  summary: "List the addons of a Scalingo app",
+  description:
+    "Scalingo helper: lists the addons of an application via token exchange. Returns both addon identifiers (id and resource_id) plus display-only provider and plan.",
+  request: {
+    body: {
+      required: true as const,
+      content: { "application/json": { schema: ListAddonsBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Addons of the application",
+      content: { "application/json": { schema: ListAddonsResponseSchema } },
+    },
+    400: {
+      description: "Invalid body (missing or malformed fields)",
+      content: { "application/json": { schema: ListAddonsError400Schema } },
+    },
+    401: {
+      description: "Scalingo token exchange failed (token invalid or unauthorized)",
+      content: { "application/json": { schema: ListAddonsError401Schema } },
+    },
+    404: {
+      description: "The application does not exist on this Scalingo account",
+      content: { "application/json": { schema: ListAddonsError404Schema } },
+    },
+    502: {
+      description:
+        "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing addons",
+      content: { "application/json": { schema: ListAddonsError502Schema } },
+    },
+  },
+});
+
 const testScopeRoute = createRoute({
   method: "post",
   path: "/api/test-scope",
@@ -513,6 +674,57 @@ function validateScopeLimits(scopes: Scope[]): string | null {
   return null;
 }
 
+function redactSecret(secret: string): string {
+  return secret.length > 4
+    ? secret.slice(0, secret.length - 4).replace(/./g, "*") + secret.slice(-4)
+    : "****";
+}
+
+type RedactedAuth = string | z.infer<typeof RedactedAuthSpecSchema>;
+
+function redactAuth(auth: Auth): RedactedAuth {
+  if (!isAuthSpec(auth)) return auth;
+  if (auth.type === "headers") {
+    return {
+      type: "headers" as const,
+      headers: auth.headers.map((h) => ({ name: h.name, valueRedacted: redactSecret(h.value) })),
+    };
+  }
+  return {
+    type: "scalingo-addon" as const,
+    app: auth.app,
+    addonId: auth.addonId,
+    apiUrl: auth.apiUrl,
+  };
+}
+
+type ShareAuth = z.infer<typeof ShareAuthSchema>;
+
+function shareableAuth(auth: ShareAuth): ShareAuth {
+  if (typeof auth === "string") return auth;
+  if (auth.type === "headers") {
+    return {
+      type: "headers" as const,
+      headers: auth.headers.map((h) => ({ name: h.name, value: "" })),
+    };
+  }
+  return { type: "scalingo-addon" as const, app: "", addonId: "", apiUrl: auth.apiUrl };
+}
+
+// Un AuthSpec headers a une seule entree est la forme canonique header:{name} : blob plus
+// petit, version inchangee, et un seul chemin de code pour le cas le plus courant.
+function normalizeAuthForBlob(
+  auth: Auth,
+  token: string | undefined,
+): { auth: Auth; token?: string } {
+  if (isHeadersSpec(auth) && auth.headers.length === 1) {
+    const entry = auth.headers[0];
+    return { auth: `header:${entry.name}`, token: entry.value };
+  }
+  if (isHeadersSpec(auth)) return { auth };
+  return { auth, token };
+}
+
 export const uiRoutes = new OpenAPIHono({
   defaultHook: (result, c) => {
     if (!result.success) {
@@ -522,16 +734,26 @@ export const uiRoutes = new OpenAPIHono({
 });
 
 uiRoutes.get("/", (c) => {
+  c.header("Link", LLMS_LINK_HEADER);
   return c.html(<ConfigPage commitHash={commitHash} />);
+});
+
+uiRoutes.get(LLMS_TXT_PATH, (c) => {
+  return c.body(renderLlmsTxt(getRequestOrigin(c)), 200, {
+    "Content-Type": "text/markdown; charset=utf-8",
+    "Cache-Control": "public, max-age=3600",
+  });
 });
 
 uiRoutes.openapi(saltRoute, (c) => {
   const salt = Deno.env.get("FGP_SALT") ?? "";
+  c.header("Cache-Control", "no-store");
   return c.json({ salt }, 200);
 });
 
 uiRoutes.openapi(decodeRoute, async (c) => {
   const { blob, key } = c.req.valid("json");
+  c.header("Cache-Control", "no-store");
 
   const serverSalt = Deno.env.get("FGP_SALT");
   if (!serverSalt) {
@@ -548,25 +770,20 @@ uiRoutes.openapi(decodeRoute, async (c) => {
     );
   }
 
-  const token = config.token;
-  const redacted = token.length > 4
-    ? token.slice(0, token.length - 4).replace(/./g, "*") + token.slice(-4)
-    : "****";
-
   return c.json({
     target: config.target,
-    auth: config.auth,
+    auth: redactAuth(config.auth),
     scopes: config.scopes,
     ttl: config.ttl,
     createdAt: config.createdAt,
     version: config.v,
-    tokenRedacted: redacted,
+    tokenRedacted: config.token ? redactSecret(config.token) : "****",
   }, 200);
 });
 
 uiRoutes.openapi(shareEncodeRoute, async (c) => {
   const body = c.req.valid("json");
-  const encoded = await encodePublicConfig(body);
+  const encoded = await encodePublicConfig({ ...body, auth: shareableAuth(body.auth) });
   const origin = getRequestOrigin(c);
   return c.json({ encoded, url: `${origin}/?c=${encoded}` }, 200);
 });
@@ -575,7 +792,7 @@ uiRoutes.openapi(shareDecodeRoute, async (c) => {
   const { encoded } = c.req.valid("json");
   try {
     const config = await decodePublicConfig(encoded);
-    return c.json(config, 200);
+    return c.json({ ...config, auth: shareableAuth(config.auth as ShareAuth) }, 200);
   } catch {
     return c.json(
       { error: "invalid_encoded" as const, message: "Unable to decode config" },
@@ -586,13 +803,22 @@ uiRoutes.openapi(shareDecodeRoute, async (c) => {
 
 uiRoutes.openapi(generateRoute, async (c) => {
   const body = c.req.valid("json");
+  c.header("Cache-Control", "no-store");
 
   const serverSalt = Deno.env.get("FGP_SALT");
   if (!serverSalt) {
     return c.json({ error: "server_error" as const, message: "Server misconfigured" }, 500);
   }
 
-  const clientKey = crypto.randomUUID();
+  let clientKey: string = crypto.randomUUID();
+  if (body.key !== undefined) {
+    clientKey = body.key.trim();
+    const keyError = validateClientKey(clientKey);
+    if (keyError) {
+      return c.json({ error: "invalid_key" as const, message: keyError }, 400);
+    }
+  }
+
   const scopes = body.scopes as Scope[];
 
   const limitError = validateScopeLimits(scopes);
@@ -600,26 +826,47 @@ uiRoutes.openapi(generateRoute, async (c) => {
     return c.json({ error: "scope_limit_exceeded" as const, message: limitError }, 400);
   }
 
+  const requestedAuth = body.auth as Auth;
+  if (isAuthSpec(requestedAuth)) {
+    const shapeError = validateAuthSpecShape(requestedAuth);
+    if (shapeError) {
+      return c.json({ error: "invalid_body" as const, message: shapeError }, 400);
+    }
+    const authLimitError = validateAuthSpecLimits(requestedAuth);
+    if (authLimitError) {
+      return c.json({ error: "auth_limit_exceeded" as const, message: authLimitError }, 400);
+    }
+  }
+
+  const normalized = normalizeAuthForBlob(requestedAuth, body.token);
+  const usesHeadersSpec = isHeadersSpec(normalized.auth);
+  if (!usesHeadersSpec && !normalized.token) {
+    return c.json(
+      { error: "invalid_body" as const, message: "Token is required for this auth mode" },
+      400,
+    );
+  }
+
   const hasStructuredScope = scopes.some((s) => typeof s !== "string");
   const config: {
     v: number;
-    token: string;
+    token?: string;
     target: string;
-    auth: string;
+    auth: Auth;
     scopes: Scope[];
     ttl: number;
     createdAt: number;
     name?: string;
     logs?: { enabled: boolean; detailed: boolean };
   } = {
-    v: hasStructuredScope ? 3 : 2,
-    token: body.token,
+    v: isAuthSpec(normalized.auth) ? 4 : (hasStructuredScope ? 3 : 2),
     target: body.target,
-    auth: body.auth,
+    auth: normalized.auth,
     scopes,
     ttl: body.ttl,
     createdAt: Math.floor(Date.now() / 1000),
   };
+  if (normalized.token) config.token = normalized.token;
   if (body.name && body.name.trim().length > 0) config.name = body.name.trim();
   if (body.logs && body.logs.enabled === true) {
     config.logs = { enabled: true, detailed: body.logs.detailed === true };
@@ -631,7 +878,9 @@ uiRoutes.openapi(generateRoute, async (c) => {
     return c.json(
       {
         error: "blob_too_large" as const,
-        message: "Generated blob exceeds 4KB limit. Reduce scopes.",
+        message: isHeadersSpec(requestedAuth)
+          ? "Generated blob exceeds 4KB limit. Auth header values are incompressible: shorten them, then reduce scopes."
+          : "Generated blob exceeds 4KB limit. Reduce scopes.",
       },
       400,
     );
@@ -655,7 +904,7 @@ uiRoutes.openapi(listAppsRoute, async (c) => {
     );
   }
 
-  const apiUrl = body.target || Deno.env.get("SCALINGO_API_URL") || DEFAULT_API_URL;
+  const apiUrl = resolveScalingoApiUrl(body.target);
   let appsResponse: Response;
   try {
     appsResponse = await fetch(`${apiUrl}/v1/apps`, {
@@ -683,6 +932,60 @@ uiRoutes.openapi(listAppsRoute, async (c) => {
   const data = await appsResponse.json();
   const apps = (data.apps || []).map((a: { name: string }) => a.name).sort();
   return c.json({ apps }, 200);
+});
+
+uiRoutes.openapi(listAddonsRoute, async (c) => {
+  const body = c.req.valid("json");
+
+  let bearer: string;
+  try {
+    bearer = await exchangeToken(body.token);
+  } catch {
+    c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+    return c.json(
+      { error: "token_exchange_failed", message: "Failed to exchange Scalingo token" },
+      401,
+    );
+  }
+
+  const apiUrl = resolveScalingoApiUrl(body.target);
+  let addonsResponse: Response;
+  try {
+    addonsResponse = await fetch(
+      `${apiUrl}/v1/apps/${encodeURIComponent(body.app)}/addons`,
+      { headers: { "Authorization": `Bearer ${bearer}` } },
+    );
+  } catch {
+    c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+    return c.json(
+      { error: "upstream_unreachable", message: "Scalingo API unreachable" },
+      502,
+    );
+  }
+
+  // Une app inexistante n'est pas une panne amont : sans ce cas, une faute de casse sur le
+  // nom de l'application est indiscernable d'un incident Scalingo cote UI.
+  if (addonsResponse.status === 404) {
+    c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+    return c.json(
+      { error: "app_not_found", message: "Application not found on this Scalingo account" },
+      404,
+    );
+  }
+
+  if (!addonsResponse.ok) {
+    c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+    return c.json(
+      {
+        error: "upstream_list_addons_failed",
+        message: `Scalingo returned ${addonsResponse.status}`,
+      },
+      502,
+    );
+  }
+
+  const data = await addonsResponse.json();
+  return c.json({ addons: normalizeAddons(data?.addons) }, 200);
 });
 
 uiRoutes.openapi(testScopeRoute, (c) => {
@@ -746,19 +1049,34 @@ uiRoutes.openapi(testProxyRoute, async (c) => {
   }
 
   const headers = new Headers();
-  if (auth === "scalingo-exchange") {
+  const secret = token ?? "";
+  if (isAuthSpec(auth as Auth)) {
+    const spec = auth as AuthSpec;
+    if (spec.type === "headers") {
+      for (const entry of spec.headers) {
+        headers.set(entry.name, entry.value);
+      }
+    } else {
+      try {
+        const addonToken = await obtainAddonToken(secret, spec.app, spec.addonId, spec.apiUrl);
+        headers.set("Authorization", `Bearer ${addonToken}`);
+      } catch {
+        return c.json({ allowed: true, reason: "auth_addon_failed" }, 200);
+      }
+    }
+  } else if (auth === "scalingo-exchange") {
     try {
-      const bearer = await exchangeToken(token);
+      const bearer = await exchangeToken(secret);
       headers.set("Authorization", `Bearer ${bearer}`);
     } catch {
       return c.json({ allowed: true, reason: "auth_exchange_failed" }, 200);
     }
   } else if (auth === "bearer") {
-    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("Authorization", `Bearer ${secret}`);
   } else if (auth === "basic") {
-    headers.set("Authorization", `Basic ${btoa(":" + token)}`);
-  } else if (auth.startsWith("header:")) {
-    headers.set(auth.slice("header:".length), token);
+    headers.set("Authorization", `Basic ${btoa(":" + secret)}`);
+  } else if (typeof auth === "string" && auth.startsWith("header:")) {
+    headers.set(auth.slice("header:".length), secret);
   }
 
   const targetUrl = `${target.replace(/\/+$/, "")}${path}`;
