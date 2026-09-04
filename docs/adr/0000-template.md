@@ -1,4 +1,4 @@
-# ADR NNNN — [Titre]
+# ADR NNNN : [Titre]
 
 - **Date** : YYYY-MM-DD
 - **Statut** : Proposed | Accepted | Deprecated | Superseded
@@ -13,11 +13,11 @@
 
 ## Options envisagées
 
-### Option A — [Nom]
+### Option A : [Nom]
 - Avantages : ...
 - Inconvénients : ...
 
-### Option B — [Nom]
+### Option B : [Nom]
 - Avantages : ...
 - Inconvénients : ...
 

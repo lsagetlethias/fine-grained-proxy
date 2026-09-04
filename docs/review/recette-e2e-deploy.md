@@ -1,4 +1,4 @@
-# Recette e2e — Deno Deploy live
+# Recette e2e : Deno Deploy live
 
 **Date** : 2026-04-09
 **Instance** : `https://fgp-proxy-k33qkz7bersy.lsagetlethias.deno.net`
@@ -22,7 +22,7 @@
 |---|------|---------|---------|----------|---------|
 | 6 | Generate simple scopes | `token=test-fake-token, target=httpbin.org, scopes=[GET:/get, GET:/headers], ttl=300` | 200, `{url, key}` | 200, url (289 chars) + key retournes | **OK** |
 
-## 3. Proxy e2e — scoping et auth
+## 3. Proxy e2e : scoping et auth
 
 Token genere au step 6, target = httpbin.org.
 

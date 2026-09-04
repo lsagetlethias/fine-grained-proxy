@@ -1,6 +1,6 @@
 # Design Document -- Page `/logs` et onglet « Logs »
 
-**Feature** : `/logs` — Logs par blob (specs.md §14)
+**Feature** : `/logs`, logs par blob (specs.md §14)
 **Date** : 2026-04-22
 **Auteur** : Designer FGP
 **Statut** : Draft -- en attente de review lead
@@ -32,7 +32,7 @@ Deux états mutés par JS côté client :
 
 Un seul DOM servi par le serveur, les deux blocs coexistent avec `hidden` toggled. Zero SPA framework.
 
-### 1.2 État 1 — Formulaire d'auth initial
+### 1.2 État 1 : formulaire d'auth initial
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -81,9 +81,9 @@ Un seul DOM servi par le serveur, les deux blocs coexistent avec `hidden` toggle
 - `<input type="password">` sur la clé client (évite le shoulder-surfing, toggle optionnel œil/barré visible pour révéler).
 - Les deux champs sont `required`. Bouton désactivé tant qu'un des deux est vide (`:disabled` via `input:invalid` sibling + JS léger).
 - À la soumission : bouton passe en état loading (« Connexion en cours... » + spinner inline), puis en cas de succès → bascule sur vue stream. En cas d'erreur → message sous le bouton dans la zone status, champs re-activés.
-- Pré-remplissage depuis `sessionStorage` au `DOMContentLoaded` si des valeurs existent, avec auto-submit optionnel (comportement décidé par le dev — je recommande **pas d'auto-submit**, on pré-remplit juste pour éviter la re-saisie après un F5 accidentel, et l'utilisateur clique Connecter).
+- Pré-remplissage depuis `sessionStorage` au `DOMContentLoaded` si des valeurs existent, avec auto-submit optionnel (comportement décidé par le dev, je recommande **pas d'auto-submit**, on pré-remplit juste pour éviter la re-saisie après un F5 accidentel, et l'utilisateur clique Connecter).
 
-### 1.3 État 2 — Vue stream
+### 1.3 État 2 : vue stream
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -120,7 +120,7 @@ Un seul DOM servi par le serveur, les deux blocs coexistent avec `hidden` toggle
 │   │  }                                                     │   │
 │   │  ─────────────────────────────                        │   │
 │   │  14:22:01.840  POST /v1/apps/my-app/scale              │   │
-│   │  [Body trop volumineux — non stocké]                  │   │
+│   │  [Body trop volumineux, non stocké]                    │   │
 │   │                                                        │   │
 │   └────────────────────────────────────────────────────────┘  │
 │                                                                │
@@ -130,14 +130,14 @@ Un seul DOM servi par le serveur, les deux blocs coexistent avec `hidden` toggle
 **Header de la vue stream** :
 - Titre « Logs d'un blob » (h1), déjà présent en haut.
 - À droite du titre, **indicateur de statut** : un pastille + label. Trois états :
-  - `● Connecté` (vert — `text-green-600` / `dark:text-green-400`)
-  - `● Reconnexion...` (orange pulsant — `text-amber-500` + `animate-pulse`)
-  - `● Erreur` (rouge — `text-red-600` / `dark:text-red-400`)
-- Ligne sous-titre : `blob: <8 chars>...` avec `title` contenant l'identifiant partiel complet (jamais le blob plein en clair dans le DOM visible — principe paranoia légère).
+  - `● Connecté` (vert : `text-green-600` / `dark:text-green-400`)
+  - `● Reconnexion...` (orange pulsant : `text-amber-500` + `animate-pulse`)
+  - `● Erreur` (rouge : `text-red-600` / `dark:text-red-400`)
+- Ligne sous-titre : `blob: <8 chars>...` avec `title` contenant l'identifiant partiel complet (jamais le blob plein en clair dans le DOM visible, principe paranoia légère).
 - Bouton « Se déconnecter » à droite : outline rouge, ferme le stream + purge `sessionStorage` + retour à l'état formulaire.
 
 **Section « Requêtes » (events network)** :
-- Liste verticale, ordre chronologique inverse (plus récent en haut) — décision de design : le lecteur qui arrive voit le plus récent sans scroller, cohérent avec les consoles d'observabilité (Datadog, Grafana Loki). Le stream pousse en haut.
+- Liste verticale, ordre chronologique inverse (plus récent en haut). Décision de design : le lecteur qui arrive voit le plus récent sans scroller, cohérent avec les consoles d'observabilité (Datadog, Grafana Loki). Le stream pousse en haut.
 - Chaque event = une carte compacte à deux lignes :
   - Ligne 1 : `timestamp HH:MM:SS.mmm` (police monospace, gris) · `METHOD` (badge couleur) · `path` (mono)
   - Ligne 2 : `status` (badge coloré) · `duration` · `ipPrefix`
@@ -147,8 +147,8 @@ Un seul DOM servi par le serveur, les deux blocs coexistent avec `hidden` toggle
 - Par défaut **dépliée** si au moins un detailed est arrivé, sinon **repliée** avec count = 0.
 - Le titre `Bodies détaillés (3)` montre le nombre courant en mémoire côté client.
 - Chaque body = une carte avec timestamp + method + path en header, puis body JSON `pretty-printed` dans un `<pre>`, gris clair.
-- Si `truncated: true` → affiche « Body trop volumineux — non stocké » en italique gris à la place du body.
-- Si déchiffrement client-side échoue → « Déchiffrement impossible — vérifiez votre clé » en texte rouge.
+- Si `truncated: true` → affiche « Body trop volumineux, non stocké » en italique gris à la place du body.
+- Si déchiffrement client-side échoue → « Déchiffrement impossible : vérifiez votre clé » en texte rouge.
 - Si `logs.detailed` n'est pas activé pour ce blob (aucun event detailed ne viendra jamais) → message info statique : « Les bodies détaillés ne sont pas activés pour ce blob. Activez-les dans l'onglet Logs de votre configuration. »
 
 ### 1.4 Empty state
@@ -192,7 +192,7 @@ Toutes les erreurs SSE listées au §14.13 sont affichées **à la place** de l'
 
 Mapping error → message (copy reprise §14.13) :
 - 404 → « Les logs sont désactivés sur cette instance. » → bouton unique « Retour au formulaire »
-- 401 → « Blob ou clé invalide — impossible de déchiffrer. » → « Retour au formulaire »
+- 401 → « Blob ou clé invalide : impossible de déchiffrer. » → « Retour au formulaire »
 - 403 → « Les logs ne sont pas activés pour ce blob. Activez-les dans la configuration avant de réessayer. » → « Retour au formulaire »
 - 409 → « Un flux de logs est déjà actif pour ce blob. Fermez l'autre onglet avant de réessayer. » → « Réessayer » + « Retour au formulaire »
 - 410 → « Ce blob est expiré. » → « Retour au formulaire »
@@ -203,7 +203,7 @@ Le bouton `Réessayer` (uniquement en 409) relance le `fetch` vers `/logs/stream
 
 - **Auth → Stream** : formulaire fade-out (`opacity-0` + `pointer-events-none` 150ms), vue stream fade-in. Pas de transition exotique, juste un swap simple.
 - **Stream → Erreur** : le header et le badge de statut mutent in-place, le contenu des deux sections est remplacé par la card d'erreur. Pas de changement de layout pour éviter le reflow.
-- **Stream → Reconnexion (transitoire)** : le badge devient orange pulsant, un toast mince sous le header apparaît brièvement (« Reconnexion... depuis 14:23:18 » — le `since` est affiché en clair pour que l'utilisateur voit que rien n'a été perdu). Le toast disparaît quand la reconnexion réussit.
+- **Stream → Reconnexion (transitoire)** : le badge devient orange pulsant, un toast mince sous le header apparaît brièvement (« Reconnexion... depuis 14:23:18 » ; le `since` est affiché en clair pour que l'utilisateur voit que rien n'a été perdu). Le toast disparaît quand la reconnexion réussit.
 - **Stream → Déconnexion volontaire** : modale de confirmation légère (`<dialog>` natif) : « Fermer le flux et oublier le blob ? » Oui → reset `sessionStorage` → retour au formulaire (vide).
 - **Erreur → Formulaire** : bouton « Retour au formulaire » fait exactement la même chose qu'une déconnexion volontaire mais sans modale.
 
@@ -369,7 +369,7 @@ Variantes :
 <div class="rounded-md border border-dashed border-gray-300 p-3
             text-xs italic text-gray-500 dark:border-gray-600
             dark:text-gray-400">
-  Body trop volumineux — non stocké
+  Body trop volumineux, non stocké
 </div>
 ```
 (en rouge pour déchiffrement : `border-red-300 text-red-700` / dark `border-red-800 text-red-400`)
@@ -522,7 +522,7 @@ function StreamHeader() {
 }
 ```
 
-**NetworkList** — le `<ul>` est alimenté côté client, le SSR envoie seulement l'empty state :
+**NetworkList** : le `<ul>` est alimenté côté client, le SSR envoie seulement l'empty state :
 
 ```tsx
 function NetworkList() {
@@ -555,7 +555,7 @@ function NetworkList() {
 }
 ```
 
-**DetailedList** — même principe :
+**DetailedList**, même principe :
 
 ```tsx
 function DetailedList() {
@@ -614,7 +614,7 @@ Ajout d'un 4e onglet **après Changelog**, même pattern que les autres (classes
 └───────────────────────────────────────────────────────────┘
 ```
 
-Remarque : le onglet « Logs » doit apparaître **indépendamment** de la valeur de `FGP_LOGS_ENABLED`. Le kill switch serveur affecte le comportement (route 404) mais pas la visibilité de l'onglet côté UI — l'utilisateur doit pouvoir voir pourquoi la feature est désactivée. La page `/` n'a de toute façon pas accès à l'état du kill switch côté client (on ne leak pas cette info), donc l'onglet est toujours rendu. L'info « feature off » s'affiche si la génération ultérieure révèle un problème, ou via un check initial au montage de l'onglet (voir §2.5).
+Remarque : le onglet « Logs » doit apparaître **indépendamment** de la valeur de `FGP_LOGS_ENABLED`. Le kill switch serveur affecte le comportement (route 404) mais pas la visibilité de l'onglet côté UI : l'utilisateur doit pouvoir voir pourquoi la feature est désactivée. La page `/` n'a de toute façon pas accès à l'état du kill switch côté client (on ne leak pas cette info), donc l'onglet est toujours rendu. L'info « feature off » s'affiche si la génération ultérieure révèle un problème, ou via un check initial au montage de l'onglet (voir §2.5).
 
 ### 2.2 Contenu du panel Logs
 
@@ -646,7 +646,7 @@ Remarque : le onglet « Logs » doit apparaître **indépendamment** de la valeu
 │  ┌─── ⚠ Attention ─────────────────────────────────────┐│
 │  │  Activez uniquement si vous avez besoin d'inspecter ││
 │  │  les payloads. Le body peut contenir des            ││
-│  │  informations sensibles — n'ouvrez /logs que sur    ││
+│  │  informations sensibles, n'ouvrez /logs que sur     ││
 │  │  un poste de confiance.                             ││
 │  └─────────────────────────────────────────────────────┘│
 │  (visible uniquement quand detailed est coché)           │
@@ -663,7 +663,7 @@ Remarque : le onglet « Logs » doit apparaître **indépendamment** de la valeu
 - Aide toggle principal : « Chaque requête est journalisée en mémoire (méthode, chemin, status, durée, IP tronquée) pendant quelques minutes. »
 - Toggle detailed : « Capturer aussi les bodies détaillés (POST/PUT/PATCH JSON) »
 - Aide toggle detailed : « Le body request est compressé puis chiffré avec votre clé client avant d'être stocké. Le serveur ne peut pas le lire. Multipart exclu. »
-- Warning detailed : « Activez uniquement si vous avez besoin d'inspecter les payloads. Le body peut contenir des informations sensibles — n'ouvrez `/logs` que sur un poste de confiance. »
+- Warning detailed : « Activez uniquement si vous avez besoin d'inspecter les payloads. Le body peut contenir des informations sensibles, n'ouvrez `/logs` que sur un poste de confiance. »
 - Lien : « Ouvrir la console `/logs` »
 - Feature off globalement : « Les logs sont désactivés sur cette instance FGP. Contactez l'administrateur pour activer `FGP_LOGS_ENABLED`. »
 
@@ -673,12 +673,12 @@ Remarque : le onglet « Logs » doit apparaître **indépendamment** de la valeu
 - `logs.detailed` est **désactivé** (attribut `disabled` + opacité réduite) tant que `logs.enabled` est faux. Le label associé reçoit aussi `text-gray-400` pour bien signaler l'indispo.
 - Quand l'utilisateur décoche `logs.enabled`, `logs.detailed` est forcé à faux et le warning disparaît.
 - Quand `logs.detailed` est coché, le warning apparaît en dessous (transition douce optionnelle, pas critique).
-- L'état des checkboxes est persisté dans le même flow que les autres champs de config (même mécanique que TTL presets, auth mode, etc. — serialization dans le blob à la génération et dans le param `?c=` de partage).
+- L'état des checkboxes est persisté dans le même flow que les autres champs de config (même mécanique que TTL presets, auth mode, etc. : serialization dans le blob à la génération et dans le param `?c=` de partage).
 - Par défaut (aucune coche), le champ `logs` est **omis du blob** (cf. §14.4 : blob identique à un blob sans feature logs). Seul un toggle explicite produit `logs: { enabled: true, detailed: ... }`.
 
 ### 2.4 Lien vers `/logs`
 
-Bouton texte discret `text-fgp-600` avec icône `external-link`. Ouvre `/logs` dans un nouvel onglet (`target="_blank"` + `rel="noopener"`). N'inclut **pas** de pré-remplissage URL (ne jamais passer blob/clé dans l'URL — ni query string ni fragment — c'est un principe de sécurité). L'utilisateur devra re-coller manuellement ses credentials dans le formulaire `/logs`. C'est explicite et sûr.
+Bouton texte discret `text-fgp-600` avec icône `external-link`. Ouvre `/logs` dans un nouvel onglet (`target="_blank"` + `rel="noopener"`). N'inclut **pas** de pré-remplissage URL (ne jamais passer blob/clé dans l'URL, ni query string ni fragment, c'est un principe de sécurité). L'utilisateur devra re-coller manuellement ses credentials dans le formulaire `/logs`. C'est explicite et sûr.
 
 ### 2.5 Cas « feature off globalement »
 
@@ -703,7 +703,7 @@ Au montage du panel, un petit `fetch('/logs/health')` (ou `HEAD /logs/stream` sa
 └───────────────────────────────────────────────────────────┘
 ```
 
-Les toggles restent visibles mais tous désactivés, message info en haut de panel. Décision : ne pas les cacher permet à l'utilisateur de comprendre ce qu'il rate, et de savoir quoi demander à l'admin. Je suggère un endpoint dédié léger `GET /logs/health` qui renvoie `{ enabled: boolean }` sans toucher aucun état — à confirmer avec le dev (voir Questions ouvertes §5).
+Les toggles restent visibles mais tous désactivés, message info en haut de panel. Décision : ne pas les cacher permet à l'utilisateur de comprendre ce qu'il rate, et de savoir quoi demander à l'admin. Je suggère un endpoint dédié léger `GET /logs/health` qui renvoie `{ enabled: boolean }` sans toucher aucun état, à confirmer avec le dev (voir Questions ouvertes §5).
 
 ### 2.6 Classes Tailwind suggérées
 
@@ -768,7 +768,7 @@ Les toggles restent visibles mais tous désactivés, message info en haut de pan
       </p>
       <p class="mt-1 text-xs text-amber-700 dark:text-amber-400">
         Activez uniquement si vous avez besoin d'inspecter les payloads.
-        Le body peut contenir des informations sensibles — n'ouvrez
+        Le body peut contenir des informations sensibles, n'ouvrez
         /logs que sur un poste de confiance.
       </p>
     </div>
@@ -849,7 +849,7 @@ function LogsTabPanel() {
 
 - **Form** : chaque `input` a son `<label for="...">`. Les placeholders ne remplacent pas les labels.
 - **Zone de statut submit** : `<span role="status" aria-live="polite">` à côté du bouton Connecter.
-- **Indicateur de statut stream** : `<span role="status" aria-live="polite">` contenant « Connecté » / « Reconnexion... » / « Erreur ». La pastille colorée est décorative (`aria-hidden="true"`) parce que le label texte porte déjà l'info — ne pas doubler l'annonce.
+- **Indicateur de statut stream** : `<span role="status" aria-live="polite">` contenant « Connecté » / « Reconnexion... » / « Erreur ». La pastille colorée est décorative (`aria-hidden="true"`) parce que le label texte porte déjà l'info : ne pas doubler l'annonce.
 - **Live region events** : la `<ul>` des events est `role="log" aria-live="polite" aria-relevant="additions" aria-atomic="false"`. Règle critique : `aria-live` doit être sur le **conteneur des items**, pas sur chaque `<li>`. Ça laisse le navigateur annoncer juste la nouveauté, pas toute la liste.
 - **Anti-spam screen reader** : un stream live peut générer 10 events/s sur un burst, ce qui est insupportable à l'oreille. Le dev doit implémenter un **batching côté client** : toutes les nouvelles entries arrivées dans une fenêtre de 2 secondes sont annoncées sous forme agrégée (« 5 nouvelles requêtes »), plutôt que chacune individuellement. Technique : insérer dans la live region un `<span class="sr-only">` unique toutes les 2s qui résume les adds. Les items visuels peuvent s'ajouter normalement en dehors de la zone aria-live active (ou marquer les `<li>` comme `aria-hidden="true"` pour que seul le span sr-only soit annoncé).
 - **Scroll auto vs ancrage** : si l'utilisateur scroll vers le haut pour lire un event ancien, le scroll auto doit être **désactivé** jusqu'à ce qu'il revienne en bas. Détection via `element.scrollTop > 0`. Un bouton flottant « ↓ Reprendre le défilement auto » (fixed bottom-right de la liste) réactive le comportement. Sans ça, l'utilisateur perd le fil dès qu'il essaie de lire.
@@ -878,7 +878,7 @@ Déjà couvert §3.1 : auto-scroll au top (nouveaux events en haut) **sauf si** 
 
 **Cap proposé** : 200 events network + 50 events detailed côté client (indépendant du ring buffer serveur qui est à 50/10). Quand le cap est atteint, on drop le plus ancien avant d'insérer le nouveau. FIFO simple, pas de virtualisation (overkill pour ces volumes).
 
-Si un jour on dépasse ~1000 items visibles, on basculera sur une virtualisation type `@tanstack/virtual` — mais zero dépendance pour l'instant, on reste au DOM direct.
+Si un jour on dépasse ~1000 items visibles, on basculera sur une virtualisation type `@tanstack/virtual`, mais zero dépendance pour l'instant, on reste au DOM direct.
 
 ### 4.3 Distinction visuelle network vs detailed
 
@@ -893,16 +893,16 @@ Les deux listes partagent le même `ts` et l'utilisateur peut corréler par time
 
 `HH:MM:SS.mmm` en heure **locale** (pas UTC). Raison : un opérateur qui monitore son propre trafic pense en heure locale. La précision milliseconde est nécessaire pour distinguer des events sub-secondes sur un burst.
 
-Conversion côté client : `new Date(ts).toLocaleTimeString('fr-FR', { hour12: false })` + `.toString().padStart(3, '0')` pour les ms. Pas de lib `dayjs`/`date-fns` — `toLocaleTimeString` suffit.
+Conversion côté client : `new Date(ts).toLocaleTimeString('fr-FR', { hour12: false })` + `.toString().padStart(3, '0')` pour les ms. Pas de lib `dayjs`/`date-fns` : `toLocaleTimeString` suffit.
 
-Pas de date affichée par défaut (gain de place). Si le stream reste ouvert au-delà de minuit, le dev peut afficher la date au premier event du jour suivant (« — 23 avril — » comme séparateur). Pas critique v1.
+Pas de date affichée par défaut (gain de place). Si le stream reste ouvert au-delà de minuit, le dev peut afficher la date au premier event du jour suivant (« 23 avril » comme séparateur). Pas critique v1.
 
 ### 4.5 Status code colorisé
 
 Déjà couvert §1.7 (classes Tailwind). Résumé :
 - 2xx vert
 - 3xx bleu (rare en proxy, mais possible si l'upstream redirige)
-- 4xx ambre (pas rouge — les 4xx sont « clients errors » normaux, pas des alertes critiques, réserve le rouge pour 5xx)
+- 4xx ambre (pas rouge : les 4xx sont « clients errors » normaux, pas des alertes critiques, réserve le rouge pour 5xx)
 - 5xx rouge
 
 Le code numérique reste toujours visible (pas juste la couleur) pour les daltoniens. La couleur est un accent, pas l'info principale.
@@ -949,7 +949,7 @@ avec `title` attribute portant le `blobId` 16 chars complet. Si le blob n'a pas 
 
 Le PO a tranché la copy au §14.13. Je flag juste une suggestion que je trouverais plus forte mais qui n'est **pas** intégrée dans les wireframes ci-dessus :
 
-- **Warning detailed** actuel : « Activez uniquement si vous avez besoin d'inspecter les payloads. Le body peut contenir des informations sensibles — n'ouvrez `/logs` que sur un poste de confiance. »
+- **Warning detailed** actuel : « Activez uniquement si vous avez besoin d'inspecter les payloads. Le body peut contenir des informations sensibles, n'ouvrez `/logs` que sur un poste de confiance. »
 - **Variante suggérée** : « Les payloads peuvent contenir des données sensibles (tokens, emails, payloads métier). Ouvrez `/logs` uniquement sur un poste de confiance et désactivez cette option dès que vous n'en avez plus l'usage. »
 
 Ma variante est plus directe sur le quoi (« tokens, emails »), plus explicite sur l'action à prendre après l'inspection (« désactivez dès que vous n'en avez plus l'usage »). À arbitrer par le PO si pertinent.

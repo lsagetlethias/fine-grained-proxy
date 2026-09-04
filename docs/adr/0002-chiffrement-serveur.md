@@ -1,4 +1,4 @@
-# ADR 0002 — Chiffrement du blob côté serveur
+# ADR 0002 : Chiffrement du blob côté serveur
 
 - **Date** : 2026-04-08
 - **Statut** : Accepted
@@ -17,7 +17,7 @@ Le client (navigateur) envoie le token + la config au serveur FGP via HTTPS POST
 
 ## Options envisagées
 
-### Option A — Chiffrement côté client (rejetée)
+### Option A : Chiffrement côté client (rejetée)
 - Avantages : le serveur ne voit jamais le token à la génération, pureté architecturale
 - Inconvénients :
   - **XSS** : 100 lignes de crypto JS inline manipulant le token en clair dans le DOM. Une injection et le token est exfiltré avant chiffrement.
@@ -26,7 +26,7 @@ Le client (navigateur) envoie le token + la config au serveur FGP via HTTPS POST
   - Duplication du pipeline crypto (serveur + navigateur)
   - CompressionStream pas supporté partout (Safari < 16.4)
 
-### Option B — Chiffrement côté serveur (choisi)
+### Option B : Chiffrement côté serveur (choisi)
 - Avantages :
   - Le token transite en POST HTTPS, jamais dans le DOM au-delà de l'input
   - Usage CLI/curl natif
@@ -45,5 +45,5 @@ Le client (navigateur) envoie le token + la config au serveur FGP via HTTPS POST
 
 ## Liens
 
-- ADR 0001 — Stack technique
+- ADR 0001 : Stack technique
 - Référence : caldav2ics utilise le même pattern (chiffrement serveur)

@@ -1,4 +1,4 @@
-# ADR 0005 — Dual mode blob : URL ou header X-FGP-Blob
+# ADR 0005. Dual mode blob : URL ou header X-FGP-Blob
 
 - **Date** : 2026-04-16
 - **Statut** : Accepted
@@ -26,15 +26,15 @@ Le header mode est prioritaire : si `X-FGP-Blob` est présent, le proxy l'utilis
 
 ## Options envisagées
 
-### Option A — Header mode exclusif (remplacement)
+### Option A : Header mode exclusif (remplacement)
 - Avantages : une seule implémentation, pas d'ambiguïté
 - Inconvénients : breaking change pour tous les consommateurs existants, migration forcée
 
-### Option B — Dual mode avec fallback (retenue)
+### Option B : Dual mode avec fallback (retenue)
 - Avantages : rétrocompatible, migration progressive, le header est optionnel
 - Inconvénients : deux chemins d'entrée à maintenir, légère complexité de routage
 
-### Option C — Query parameter `?blob=`
+### Option C : Query parameter `?blob=`
 - Avantages : pas de conflit de routing
 - Inconvénients : les query strings sont loggées par défaut (sécurité), limite totale d'URL inchangée
 
@@ -42,7 +42,7 @@ Le header mode est prioritaire : si `X-FGP-Blob` est présent, le proxy l'utilis
 
 - Les consommateurs existants (blob dans l'URL) continuent de fonctionner sans modification
 - Les nouveaux consommateurs sont encouragés à utiliser le mode header (documenté comme recommandé)
-- Le middleware header est monté globalement (`*`), ce qui signifie que toute requête avec `X-FGP-Blob` est traitée comme proxy, même sur des paths comme `/healthz` — c'est voulu (le header est un signal explicite d'intention proxy)
+- Le middleware header est monté globalement (`*`), ce qui signifie que toute requête avec `X-FGP-Blob` est traitée comme proxy, même sur des paths comme `/healthz`, c'est voulu (le header est un signal explicite d'intention proxy)
 - La factorisation de `handleProxy` simplifie la maintenance de la logique proxy
 
 ## Liens

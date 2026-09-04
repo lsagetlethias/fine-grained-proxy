@@ -1,4 +1,4 @@
-# ADR 0003 — Proxy agnostique avec scopes génériques METHOD:PATH
+# ADR 0003 : Proxy agnostique avec scopes génériques METHOD:PATH
 
 - **Date** : 2026-04-08
 - **Statut** : Accepted
@@ -30,10 +30,10 @@ Le proxy fait du pattern matching sans connaître la sémantique des routes.
 
 Le mode d'authentification est configurable dans le blob :
 
-- `bearer` — le token est passé directement en `Authorization: Bearer {token}`
-- `basic` — le token est passé en `Authorization: Basic {base64(:token)}`
-- `scalingo-exchange` — le token est échangé via POST vers un endpoint d'exchange pour obtenir un bearer temporaire (flow Scalingo : token → bearer 1h)
-- `header:{name}` — le token est passé dans un header custom (ex: `header:X-API-Key`)
+- `bearer` : le token est passé directement en `Authorization: Bearer {token}`
+- `basic` : le token est passé en `Authorization: Basic {base64(:token)}`
+- `scalingo-exchange` : le token est échangé via POST vers un endpoint d'exchange pour obtenir un bearer temporaire (flow Scalingo : token → bearer 1h)
+- `header:{name}` : le token est passé dans un header custom (ex: `header:X-API-Key`)
 
 ### BlobConfig v2
 
@@ -61,15 +61,15 @@ Le mode d'authentification est configurable dans le blob :
 
 ## Options envisagées
 
-### Option A — Scopes nommés Scalingo (rejeté)
+### Option A : Scopes nommés Scalingo (rejeté)
 - Avantages : ergonomique dans l'UI, mapping explicite
 - Inconvénients : couplé à Scalingo, `ROUTE_TABLE` hardcodé, pas extensible
 
-### Option B — Provider pattern (rejeté)
+### Option B : Provider pattern (rejeté)
 - Avantages : structuré, chaque provider définit ses scopes
 - Inconvénients : overhead d'abstraction, il faut un provider par API
 
-### Option C — Scopes METHOD:PATH génériques (choisi)
+### Option C : Scopes METHOD:PATH génériques (choisi)
 - Avantages : agnostique, simple, pas de mapping, fonctionne avec n'importe quelle API REST
 - Inconvénients : moins ergonomique brut (résolu par des presets UI par API)
 
@@ -84,5 +84,5 @@ Le mode d'authentification est configurable dans le blob :
 
 ## Liens
 
-- ADR 0001 — Stack technique
-- ADR 0002 — Chiffrement côté serveur
+- ADR 0001 : Stack technique
+- ADR 0002 : Chiffrement côté serveur

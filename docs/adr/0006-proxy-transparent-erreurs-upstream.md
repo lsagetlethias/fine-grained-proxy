@@ -1,4 +1,4 @@
-# ADR 0006 — Proxy transparent vs gateway opinionated pour les erreurs upstream
+# ADR 0006 : Proxy transparent vs gateway opinionated pour les erreurs upstream
 
 - **Date** : 2026-04-22
 - **Statut** : Accepted
@@ -28,7 +28,7 @@ Plusieurs problèmes sont apparus avec ce modèle :
 - **Correctness proxy** : un proxy HTTP est par nature transparent. Transformer un `500` upstream en `502` change le contrat : le status `502 Bad Gateway` signifie sémantiquement "je n'ai pas réussi à joindre l'upstream", pas "l'upstream a planté en interne".
 - **401 mal attribué** : un `401` upstream signifie que le token configuré dans le blob est invalide côté API cible. C'est un problème de config client (utilisateur qui a généré le blob), pas un problème de proxy. Le transformer en `502` masque cette information et laisse penser à une panne FGP.
 - **Réécriture de body** : la réécriture du 429 efface les informations upstream (détail des quotas, timestamp de reset non standard, etc.) que le client légitime pourrait consommer.
-- **Pas de distinction source** : aucun moyen pour le client de savoir si la réponse vient de FGP ou de l'upstream. Un `401` pouvait être `missing_key` (FGP) ou `invalid_credentials` (FGP) ou un 401 upstream transformé — ambigu.
+- **Pas de distinction source** : aucun moyen pour le client de savoir si la réponse vient de FGP ou de l'upstream. Un `401` pouvait être `missing_key` (FGP) ou `invalid_credentials` (FGP) ou un 401 upstream transformé : ambigu.
 
 ## Décision
 
@@ -48,15 +48,15 @@ Le header `X-FGP-Source` devient le contrat officiel pour que le client distingu
 
 ## Options envisagées
 
-### Option A — Garder le gateway opinionated
+### Option A : Garder le gateway opinionated
 - Avantages : shape d'erreur uniforme pour le client, masquage de l'upstream, rétrocompatibilité totale.
 - Inconvénients : perte d'information upstream (body effacé, status réécrit), mauvaise attribution des 401, viole la sémantique d'un proxy HTTP, rend le debug difficile.
 
-### Option B — Proxy transparent + `X-FGP-Source` (retenue)
+### Option B : Proxy transparent + `X-FGP-Source` (retenue)
 - Avantages : respect du contrat upstream, debug facile, attribution claire des erreurs via header, sémantique HTTP correcte (502 = upstream injoignable, pas upstream en erreur), le client voit exactement ce que l'API cible a répondu.
 - Inconvénients : breaking change pour les clients existants qui matchaient sur les codes FGP (`upstream_error`, `upstream_auth_failed`, body `rate_limited`). Le client doit apprendre à lire `X-FGP-Source`.
 
-### Option C — Modèle hybride (proxy transparent + shim uniforme optionnel)
+### Option C : Modèle hybride (proxy transparent + shim uniforme optionnel)
 - Avantages : rétrocompatibilité via un query param ou header de config.
 - Inconvénients : complexité accrue (deux code paths), ambiguïté pour les consommateurs, tentation de garder les deux modes indéfiniment. Rejetée pour simplicité.
 

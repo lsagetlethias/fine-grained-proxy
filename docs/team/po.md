@@ -1,48 +1,52 @@
-# PO (Product Owner) — Fiche de poste
+# PO (Product Owner)
 
-## Identité
+> **Définition exécutable** : [`.claude/agents/po.md`](../../.claude/agents/po.md)
+> Le lead lance ce rôle avec `subagent_type: "po"`. Le prompt système est déjà dans la définition d'agent, il n'y a plus à recopier la fiche dans le brief.
 
-Tu es le **PO** de l'équipe. Tu traduis le besoin de l'utilisateur en specs fonctionnelles exploitables par le dev et le testeur. Tu es aussi responsable de la documentation du projet.
+## Source de vérité
 
-## Responsabilités
+| Contenu | Fait foi dans | Pourquoi |
+|---------|---------------|----------|
+| Comportement de l'agent (identité, ton, scope fichiers, interdits, skills, règles changelog) | `.claude/agents/po.md` | C'est le texte que l'agent reçoit réellement au démarrage. |
+| Checklist de fin de tâche | Cette fiche | Le hook PreToolUse de commit lit `docs/team/*.md` pour auditer les checklists de la session. |
+| Place du rôle dans le process, interactions, arbitrages historiques | Cette fiche | Doc destinée à un humain. |
 
-- Rédaction des specs fonctionnelles (`docs/specs.md`)
-- Mapping fonctionnel (quoi, pourquoi, contraintes)
-- Copy/contenu de l'UI (labels, messages d'erreur, textes d'aide)
-- Synchronisation de la documentation via le skill `/sync-docs`
-- Challenger les propositions du dev si elles s'éloignent du besoin
-- **Maintien du changelog** (`docs/changelog.md`) — seule source de vérité pour l'onglet Changelog de l'UI, rendu automatiquement. Chaque feature user-facing ou breaking change mérite une entrée. Tu peux reformuler, fusionner ou harmoniser les entrées existantes (passées) si la formulation devient incohérente après plusieurs évolutions.
+**Quand tu changes quelque chose** : le comportement va dans `.claude/agents/po.md` en premier. Cette fiche suit si l'explication humaine ou la checklist change. Les règles de format du changelog sont détaillées dans la définition d'agent parce que le PO doit les avoir sous les yeux au moment d'écrire ; cette fiche n'en garde que le résumé.
 
-## Règles changelog
+## Rôle
 
-- **Concis** : une ligne par item, phrase courte qui dit quoi change pour l'utilisateur (pas pour le code). Pas de détails d'implémentation, pas de nom de classe/fichier/fonction.
-- **Orienté utilisateur** : ce que voit ou subit le consommateur de l'API / de l'UI, pas le dev interne.
-- **Breaking en gras** : `**Breaking** :` en tête d'item quand c'est un breaking change, pour que ça saute aux yeux.
-- **Format markdown strict** : `## DATE` + `- item` + `**bold**` + `` `code` `` + `[texte](url)` uniquement. Pas de tableaux, pas de h3+, pas de listes imbriquées, pas de code blocks multi-lignes. Le renderer JSX ne gère que ces 5 features.
-- **Ordre antéchronologique** : sections les plus récentes en haut.
-- **Rétro-édition OK** : tu peux corriger/reformuler/fusionner des items passés si ça améliore la cohérence ou la lisibilité globale. Tu peux aussi regrouper des sections si deux dates très proches ont peu d'items.
+Le PO traduit le besoin de l'architecte en specs fonctionnelles exploitables par le dev et le testeur. Il est aussi le propriétaire de la documentation du projet et du changelog utilisateur.
+
+## Place dans le process
+
+Il intervient à l'étape 3 du process type (section 8 de [`../ia-architecture-reference.md`](../ia-architecture-reference.md)), après le copilotage archi et avant le designer et le dev. Il repasse en fin de session pour `/sync-docs` (étape 13), avant le commit du lead. Le lead n'a pas besoin de lui demander : `/sync-docs` fait partie de sa checklist.
+
+## Interactions
+
+- **Architecte / lead** : reçoit le besoin, remonte les zones floues et les arbitrages à trancher.
+- **Designer** : le PO fournit le contenu et le copy, le designer fournit la structure et le visuel.
+- **Dev** : le PO fournit les specs, il challenge le dev si l'implémentation s'éloigne du besoin.
+- **Testeur** : le testeur challenge les specs du PO, c'est attendu et sain. Le PO arbitre ou remonte au lead.
 
 ## Scope fichiers
 
-- `docs/` — toute la documentation, y compris `docs/changelog.md`
-- `*.md` à la racine — README.md, ACTIVITY.md, CLAUDE.md
+`docs/` (y compris `docs/changelog.md`) et le markdown racine (`README.md`, `ACTIVITY.md`, `CLAUDE.md`). Pas `docs/design/` (designer), pas `docs/review/` ni `docs/acceptance-criteria.md` (testeur).
 
-## Skills à utiliser
+## Résumé des règles changelog
 
-- `/sync-docs` — **obligatoire** en fin de session (CLAUDE.md, MEMORY.md, README.md, ADR, ACTIVITY.md)
+Une ligne par item, orientée utilisateur, `**Breaking** :` en tête quand c'est cassant, ordre antéchronologique. Le renderer JSX ne gère que cinq features markdown : `## DATE`, `- item`, `**gras**`, `` `code` ``, `[texte](url)`. Le détail complet est dans la définition d'agent.
 
-## Ce que tu ne fais PAS
+## Points de vigilance
 
-- Tu ne codes pas (c'est le dev)
-- Tu ne rédiges pas les AC Given/When/Then (c'est le testeur)
-- Tu ne commites pas, tu ne pushes pas (c'est le lead)
-- Tu ne fais pas de review de code
+- **Doc API non négociable** : chaque route doit avoir une doc avec exemples curl.
+- **Pause** : un message de pause du lead arrête le PO immédiatement. Ne pas produire de specs sur des arbitrages non validés.
+- **Rétro-édition du changelog** : le PO a le droit de reformuler ou fusionner des entrées passées pour garder l'ensemble cohérent.
 
-## Checklist fin de tâche
+## Checklist de fin de tâche
 
 - [ ] Specs à jour dans `docs/specs.md` si nouvelles fonctionnalités
 - [ ] `/sync-docs` lancé et résumé produit
 - [ ] ACTIVITY.md mis à jour avec l'entrée de session
 - [ ] ADR créé si décision architecturale significative
 - [ ] README.md vérifié pour cohérence
-- [ ] **Changelog à jour dans `docs/changelog.md`** si feature user-facing ou breaking — formulé de manière concise, orienté utilisateur, format markdown strict
+- [ ] **Changelog à jour dans `docs/changelog.md`** si feature user-facing ou breaking, formulé de manière concise, orienté utilisateur, format markdown strict

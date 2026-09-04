@@ -1,4 +1,4 @@
-# ADR 0004 — Body filters et scopes structurés (blob v3)
+# ADR 0004 : Body filters et scopes structurés (blob v3)
 
 - **Date** : 2026-04-09
 - **Statut** : Accepted
@@ -45,10 +45,10 @@ type ObjectValue =
 ### Extensibilité
 
 Le discriminated union `type` permet d'ajouter de nouveaux filtres sans casser les existants :
-- `{ type: "not"; value: ObjectValue }` — exclusion
-- `{ type: "regex"; value: string }` — regex
-- `{ type: "range"; value: [number, number] }` — intervalle numérique
-- `{ type: "contains"; value: string }` — substring
+- `{ type: "not"; value: ObjectValue }` : exclusion
+- `{ type: "regex"; value: string }` : regex
+- `{ type: "range"; value: [number, number] }` : intervalle numérique
+- `{ type: "contains"; value: string }` : substring
 
 Un type inconnu du proxy retourne 403 par défaut (deny-unknown).
 
@@ -99,13 +99,13 @@ Et convertit vers/depuis le format structuré à la génération du blob.
 
 ## Options envisagées
 
-### Option A — Body filter dans le string scope (rejeté pour le stockage)
-`POST:/path:field=value|value2` — simple à afficher mais ambigu à parser, limité en expressivité. Gardé comme format d'affichage UI uniquement.
+### Option A : Body filter dans le string scope (rejeté pour le stockage)
+`POST:/path:field=value|value2` : simple à afficher mais ambigu à parser, limité en expressivité. Gardé comme format d'affichage UI uniquement.
 
-### Option B — Scopes structurés avec discriminated union (choisi)
+### Option B : Scopes structurés avec discriminated union (choisi)
 Objet typé avec `type` discriminant. Pas d'ambiguïté, extensible, parsable sans heuristique.
 
-### Option C — Body filters séparés des scopes (rejeté)
+### Option C : Body filters séparés des scopes (rejeté)
 `bodyFilters` comme champ top-level du blob, dissocié des scopes. Moins cohérent car un filter est toujours lié à un scope spécifique.
 
 ## Conséquences
@@ -118,5 +118,5 @@ Objet typé avec `type` discriminant. Pas d'ambiguïté, extensible, parsable sa
 
 ## Liens
 
-- ADR 0003 — Proxy agnostique, scopes METHOD:PATH génériques
+- ADR 0003 : Proxy agnostique, scopes METHOD:PATH génériques
 - Use case : déploiement Scalingo scopé par branche (POST /v1/apps/{app}/deployments)

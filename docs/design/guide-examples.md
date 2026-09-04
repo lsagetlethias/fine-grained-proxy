@@ -1,11 +1,11 @@
-# Guide contextuel — Exemples pour le panel doc UI
+# Guide contextuel : exemples pour le panel doc UI
 
 Contenu destiné aux accordéons du panel latéral droit de la page de configuration.
 Chaque section = un accordéon. Ton concis, orienté action.
 
 ---
 
-## 1. Scopes — Exemples courants
+## 1. Scopes : exemples courants
 
 ### Lecture seule sur toutes les apps
 
@@ -33,7 +33,7 @@ POST:/v1/apps/my-app/scale
 ```
 
 - **Autorise** : tout
-- **Bloque** : rien — à utiliser uniquement pour du debug ou des tokens très courts (TTL 1h)
+- **Bloque** : rien. À utiliser uniquement pour du debug ou des tokens très courts (TTL 1h)
 
 ### Multi-méthodes avec pipe
 
@@ -46,7 +46,7 @@ GET|POST:/v1/apps/*
 
 ---
 
-## 2. Scopes — Edge cases
+## 2. Scopes : edge cases
 
 ### Wildcard mid-path
 
@@ -83,7 +83,7 @@ Matche tout ce qui commence par `/v1/apps/` suivi d'au moins un caractère.
 
 ---
 
-## 3. Body filters — Exemples courants
+## 3. Body filters : exemples courants
 
 Les body filters s'appliquent aux scopes POST, PUT, PATCH. Ils contraignent le contenu JSON du body de la requête.
 
@@ -112,7 +112,7 @@ Filtre : `deployment.git_ref` = wildcard (type "exists")
 
 ---
 
-## 4. Body filters — Edge cases
+## 4. Body filters : edge cases
 
 ### Type exact (boolean)
 
@@ -146,11 +146,11 @@ Filtre : `deployment.git_ref` = regex `^v\d+\.\d+\.\d+$` (semver tags)
 - **Autorise** : body `{"deployment": {"git_ref": "v1.2.3"}}`, `{"deployment": {"git_ref": "v0.10.0"}}`
 - **Bloque** : body `{"deployment": {"git_ref": "v1.2"}}`, `{"deployment": {"git_ref": "main"}}`, `{"deployment": {"git_ref": "v1.2.3-beta"}}`
 
-Limite : le pattern regex est limité à 200 caractères. Le match s'applique uniquement sur des valeurs string. Par défaut le regex est partiel (pas besoin de matcher toute la string) — utilisez `^...$` pour un match exact.
+Limite : le pattern regex est limité à 200 caractères. Le match s'applique uniquement sur des valeurs string. Par défaut le regex est partiel (pas besoin de matcher toute la string). Utilisez `^...$` pour un match exact.
 
 ---
 
-## 5. Auth modes — Quand utiliser quoi
+## 5. Auth modes : quand utiliser quoi
 
 ### bearer
 
@@ -178,7 +178,7 @@ Usage : APIs qui attendent l'authentification dans un header spécifique autre q
 
 ---
 
-## 6. Regex — Mini-guide
+## 6. Regex : mini-guide
 
 ### Patterns courants
 
@@ -194,6 +194,6 @@ Usage : APIs qui attendent l'authentification dans un header spécifique autre q
 
 **Match partiel par défaut** : le pattern `release` matche `release`, mais aussi `my-release-branch`. Pour un match exact, encadrez avec `^...$` : `^release$`.
 
-**Pas d'échappement du pipe** : dans un regex, `main|master` signifie "main OU master". Si vous voulez matcher le caractère `|` littéral, échappez-le : `main\|master`. Mais dans le champ scopes (multi-méthodes), le pipe sépare les méthodes HTTP — ce sont deux contextes différents.
+**Pas d'échappement du pipe** : dans un regex, `main|master` signifie "main OU master". Si vous voulez matcher le caractère `|` littéral, échappez-le : `main\|master`. Mais dans le champ scopes (multi-méthodes), le pipe sépare les méthodes HTTP, ce sont deux contextes différents.
 
 **Limite** : max 200 caractères par pattern. Testées uniquement sur des valeurs string dans le body JSON. Une valeur numérique ou boolean ne sera jamais matchée par un regex.

@@ -1,43 +1,47 @@
-# Testeur — Fiche de poste
+# Testeur / QA
 
-## Identité
+> **Définition exécutable** : [`.claude/agents/testeur.md`](../../.claude/agents/testeur.md)
+> Le lead lance ce rôle avec `subagent_type: "testeur"`. Le prompt système est déjà dans la définition d'agent.
 
-Tu es le **testeur/QA** de l'équipe. Tu challenges les specs du PO, tu rédiges les critères d'acceptation, et tu implémentes les tests. Tu es le garde-fou qualité avant la review du lead.
+## Source de vérité
 
-## Responsabilités
+| Contenu | Fait foi dans | Pourquoi |
+|---------|---------------|----------|
+| Comportement de l'agent (identité, ton, scope fichiers, interdits, skills, nommage des tests) | `.claude/agents/testeur.md` | C'est le texte que l'agent reçoit réellement au démarrage. |
+| Checklist de fin de tâche | Cette fiche | Le hook PreToolUse de commit lit `docs/team/*.md` pour auditer les checklists de la session. |
+| Place du rôle dans le process, interactions, arbitrages historiques | Cette fiche | Doc destinée à un humain. |
 
-- Challenger les specs du PO (cas limites, incohérences, oublis)
-- Rédaction des critères d'acceptation (AC) en format Given/When/Then
-- Implémentation des tests (unit, intégration, e2e) nommés par AC
-- Recette fonctionnelle (vérifier que le comportement correspond aux specs)
-- Matrice de couverture AC vs tests
-- Rapports de review dans `docs/review/`
+**Quand tu changes quelque chose** : le comportement va dans `.claude/agents/testeur.md` en premier. Cette fiche suit si l'explication humaine ou la checklist change.
+
+## Rôle
+
+Le testeur est le garde-fou qualité avant la review du lead. Son job n'est pas de valider ce qu'on lui donne, c'est de chercher activement ce qui casse : cas limites, incohérences entre specs, comportements non spécifiés.
+
+## Place dans le process
+
+Il intervient à l'étape 7 du process type (section 8 de [`../ia-architecture-reference.md`](../ia-architecture-reference.md)) pour challenger les specs et rédiger les AC, puis à l'étape 10 pour implémenter les tests nommés par AC. Le challenge des specs se fait **en parallèle** de l'implémentation du dev, pas après : un problème de spec détecté tôt coûte moins cher.
+
+## Interactions
+
+- **PO** : le testeur challenge ses specs. Les désaccords remontent au lead, qui arbitre ou copilote avec l'architecte.
+- **Dev** : le dev corrige les tests que ses changements cassent, le testeur écrit les scénarios. Si un test révèle un bug applicatif, le testeur ne corrige pas `src/` : il documente et le lead dispatche au dev.
+- **Lead** : review de la matrice de couverture, arbitrage sur les AC contestés.
 
 ## Scope fichiers
 
-- `tests/` — tous les tests (testu, testi, teste2e)
-- `docs/review/` — rapports de recette et de couverture
-- `docs/acceptance-criteria.md` — critères d'acceptation
-
-## Skills à utiliser
-
-- `/add-tests` — pour structurer l'ajout de tests (analyse, classification, proposition, implémentation)
-- `/verif` — pour vérifier que ses tests passent
-
-## Ce que tu ne fais PAS
-
-- Tu ne codes pas les features (c'est le dev)
-- Tu ne rédiges pas les specs fonctionnelles (c'est le PO)
-- Tu ne fais pas de design UI (c'est le designer)
-- Tu ne commites pas, tu ne pushes pas (c'est le lead)
+`tests/` (`testu/`, `testi/`, `teste2e/`), `docs/review/`, `docs/acceptance-criteria.md`. Pas `src/`.
 
 ## Convention de nommage des tests
 
-- Format : `AC-XX.Y: description` (ex: `AC-14.1: Header blob mode — requête basique GET forward 200`)
-- Numérotation séquentielle par feature
-- Vérifier le dernier AC existant avant de numéroter
+Format `AC-XX.Y: description`, numérotation séquentielle par feature. Vérifier le dernier AC existant dans `docs/acceptance-criteria.md` avant de numéroter, pour éviter les collisions quand plusieurs features avancent en parallèle.
 
-## Checklist fin de tâche
+## Points de vigilance
+
+- **Jamais assouplir un test pour le faire passer**, jamais supprimer un check qui échoue. Un test rouge qui révèle un vrai problème est un livrable valide.
+- **Exploration** : LSP avant grep pour comprendre ce qu'il faut tester. Grep reste utile pour les fixtures et les chaînes littérales.
+- **Pause** : un message de pause du lead arrête le testeur immédiatement.
+
+## Checklist de fin de tâche
 
 - [ ] AC rédigés et validés avec le PO/lead
 - [ ] Tests implémentés et nommés par AC

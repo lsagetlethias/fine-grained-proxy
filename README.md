@@ -70,7 +70,7 @@ Reponse :
 
 ### 2. Utiliser l'URL generee pour proxifier
 
-**Mode header (recommande)** — le blob passe en header, l'URL reste propre :
+**Mode header (recommande)**, le blob passe en header et l'URL reste propre :
 
 ```bash
 curl http://localhost:8000/v1/apps \
@@ -78,7 +78,7 @@ curl http://localhost:8000/v1/apps \
   -H "X-FGP-Blob: eyJhbGci..."
 ```
 
-**Mode URL** — le blob est dans l'URL (compatibilite) :
+**Mode URL**, le blob est dans l'URL (compatibilite) :
 
 ```bash
 curl http://localhost:8000/eyJhbGci.../v1/apps \
@@ -110,8 +110,9 @@ Retourne la configuration complete avec le token redacte. Utile pour inspecter o
 | `/` | GET | UI de configuration |
 | `/healthz` | GET | Health check |
 | `/api/salt` | GET | Salt serveur (public) |
-| `/api/generate` | POST | Generation d'URL FGP |
+| `/api/generate` | POST | Generation d'URL FGP. Champ `key` optionnel pour fournir sa propre cle client (24 a 256 caracteres) |
 | `/api/list-apps` | POST | Helper Scalingo : listing des apps |
+| `/api/list-addons` | POST | Helper Scalingo : listing des bases de donnees d'une app |
 | `/api/test-scope` | POST | Test scope matching : verifie si methode + path + body est autorise par des scopes |
 | `/api/test-proxy` | POST | Test end-to-end : appel reel vers l'API cible avec verification scopes et body filters |
 | `/api/decode` | POST | Decode un blob chiffre avec sa cle, retourne la config (token redacte) |
@@ -119,6 +120,7 @@ Retourne la configuration complete avec le token redacte. Utile pour inspecter o
 | `/api/share/decode` | POST | Decode une config partagee depuis un string gzip+base64url |
 | `/api/openapi.json` | GET | Spec OpenAPI 3.0 |
 | `/api/docs` | GET | Swagger UI |
+| `/llms.txt` | GET | Description de FGP au format markdown, destinee aux agents LLM (convention llmstxt.org) |
 | `/logs` | GET | Page UI de consultation des logs d'un blob (opt-in, requiert `FGP_LOGS_ENABLED=1`) |
 | `/logs/stream` | GET | Stream SSE des logs d'un blob (`X-FGP-Blob` + `X-FGP-Key`, heartbeat 15s, cursor `?since=`) |
 | `/logs/health` | GET | Indique si la feature logs est activee sur l'instance (`{enabled}`) |
@@ -139,12 +141,18 @@ L'URL seule est inexploitable. Il faut les deux composants pour dechiffrer.
 
 ### Modes d'authentification
 
-| Mode | Comportement |
-|------|-------------|
-| `bearer` | `Authorization: Bearer {token}` |
-| `basic` | `Authorization: Basic {base64(":"+token)}` |
-| `scalingo-exchange` | Exchange token -> bearer temporaire (1h), avec cache en memoire |
-| `header:{name}` | Header custom (ex: `header:X-API-Key` -> `X-API-Key: {token}`) |
+Quatre modes string (blob v2/v3) et deux modes structures (blob v4, champ `auth` en objet) :
+
+| Mode | Forme | Comportement |
+|------|-------|-------------|
+| `bearer` | string | `Authorization: Bearer {token}` |
+| `basic` | string | `Authorization: Basic {base64(":"+token)}` |
+| `scalingo-exchange` | string | Exchange token -> bearer temporaire (1h), avec cache en memoire. Affiche « Scalingo API » dans l'UI |
+| `header:{name}` | string | Header custom (ex: `header:X-API-Key` -> `X-API-Key: {token}`) |
+| `{ type: "headers" }` | AuthSpec | Plusieurs headers d'authentification envoyes ensemble (8 max). Un seul header retombe sur la forme compacte `header:{name}` |
+| `{ type: "scalingo-addon" }` | AuthSpec | Token d'addon Scalingo obtenu en trois temps et renouvele automatiquement (1h). Affiche « Scalingo Database API » dans l'UI |
+
+Les blobs v2 et v3 restent lisibles sans changement : le passage en v4 n'intervient que si `auth` est un objet. Voir [ADR 0008](docs/adr/0008-auth-structuree-blob-v4.md).
 
 ### Scopes METHOD:PATH + body filters
 
@@ -159,7 +167,7 @@ GET|POST:/v1/apps/*       -> lecture + ecriture
 *:*                       -> acces total
 ```
 
-**Scopes structures** (v3) — avec body filters optionnels :
+**Scopes structures** (v3), avec body filters optionnels :
 ```json
 {
   "methods": ["POST"],
@@ -200,8 +208,11 @@ Feature opt-in gatee par `FGP_LOGS_ENABLED=1`. Activee par blob via le champ `lo
 
 | Commande | Description |
 |----------|-------------|
-| `deno task build` | Build CSS (Tailwind) + client JS (esbuild) + version (SHA git) |
+| `deno task build` | Build CSS (Tailwind) + client JS (esbuild) + version (SHA git) + changelog |
+| `deno task build:css` | Compile `src/ui/tailwind.css` vers `static/styles.css` |
+| `deno task build:client` | Compile les modules TS client vers `static/client.js` (esbuild) |
 | `deno task build:version` | Resout le SHA git du commit courant et l'ecrit dans `static/version.txt` |
+| `deno task build:changelog` | Regenere `src/ui/changelog-data.ts` depuis `docs/changelog.md` |
 | `deno task dev` | Watch parallele CSS + client + serveur |
 | `deno task start` | Build + production |
 | `deno task deploy` | Build + deploy Deno Deploy |
@@ -217,9 +228,10 @@ Feature opt-in gatee par `FGP_LOGS_ENABLED=1`. Activee par blob via le champ `lo
 
 ## Documentation
 
-- [Specifications fonctionnelles v3](docs/specs.md)
+- [Specifications fonctionnelles v4](docs/specs.md)
 - [Criteres d'acceptation](docs/acceptance-criteria.md)
-- [Limites fonctionnelles body filters](docs/limits.md)
+- [Limites fonctionnelles body filters et auth structuree](docs/limits.md)
+- [Changelog](docs/changelog.md)
 - [Architecture Decision Records](docs/adr/)
 - [Guide deploiement Deno Deploy](docs/deno-deploy.md)
 - [Guide deploiement Scalingo](docs/scalingo-deploy.md)

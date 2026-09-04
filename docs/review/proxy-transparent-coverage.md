@@ -1,9 +1,9 @@
-# Matrice de couverture — Proxy transparent (AC-17)
+# Matrice de couverture : Proxy transparent (AC-17)
 
 **Date** : 2026-04-22
-**Ref AC** : `docs/acceptance-criteria.md` — section AC-17
+**Ref AC** : `docs/acceptance-criteria.md`, section AC-17
 **Ref ADR** : `docs/adr/0006-proxy-transparent-erreurs-upstream.md`
-**Statut** : **LIVRE** — `deno task verify` vert, 338 tests passed, tous AC-17.x couverts.
+**Statut** : **LIVRE**. `deno task verify` vert, 338 tests passed, tous AC-17.x couverts.
 
 ## Legende
 
@@ -48,12 +48,12 @@
 | AC-17.27 | X-FGP-Source: proxy sur scope_denied | tests/testi/proxy-transparent.test.ts:559 | OK (new) |
 | AC-17.28 | X-FGP-Source: proxy sur invalid_request | tests/testi/proxy-transparent.test.ts:582 | OK (new) |
 | AC-17.29 | Fetch throw → 502 upstream_unreachable + X-FGP-Source: proxy | tests/testi/proxy-edge-cases.test.ts:115 | OK (rewritten) |
-| AC-17.30 | Fetch throw — tous modes reseau (connexion refusee, DNS, timeout, TLS) | tests/testi/proxy-transparent.test.ts:616 | OK (new) |
+| AC-17.30 | Fetch throw : tous modes reseau (connexion refusee, DNS, timeout, TLS) | tests/testi/proxy-transparent.test.ts:616 | OK (new) |
 | AC-17.31 | app.onError → 500 internal_error + X-FGP-Source: proxy | tests/testi/onerror.test.ts:31 | OK (new) |
-| AC-17.32 | app.onError — pas de leak du message original/stack | tests/testi/onerror.test.ts:59 | OK (new) |
-| AC-17.33 | /api/list-apps — upstream non-ok → 502 upstream_list_apps_failed + X-FGP-Source: proxy | tests/testi/api-edge-cases.test.ts:111 | OK (rewritten) |
-| AC-17.34 | /api/list-apps — fetch throw → 502 upstream_unreachable | tests/testi/api-edge-cases.test.ts:150 | OK (rewritten) |
-| AC-17.35 | /api/list-apps — exchange fail → 401 token_exchange_failed + X-FGP-Source: proxy | tests/testi/api-edge-cases.test.ts:185 | OK (new) |
+| AC-17.32 | app.onError : pas de leak du message original/stack | tests/testi/onerror.test.ts:59 | OK (new) |
+| AC-17.33 | /api/list-apps : upstream non-ok → 502 upstream_list_apps_failed + X-FGP-Source: proxy | tests/testi/api-edge-cases.test.ts:111 | OK (rewritten) |
+| AC-17.34 | /api/list-apps : fetch throw → 502 upstream_unreachable | tests/testi/api-edge-cases.test.ts:150 | OK (rewritten) |
+| AC-17.35 | /api/list-apps : exchange fail → 401 token_exchange_failed + X-FGP-Source: proxy | tests/testi/api-edge-cases.test.ts:185 | OK (new) |
 
 ---
 
@@ -69,17 +69,17 @@
 
 ## Points de vigilance consignes (post-livraison)
 
-### AC-17.17 (redirect 302) — entorse documentee
+### AC-17.17 (redirect 302) : entorse documentee
 
 Le test mock directement un upstream qui renvoie `302 + Location`. Il ne couvre pas le flow reel `fetch` default-follow. Le lead a tranche **option A** : on garde `fetch` en follow automatique, pas de `redirect: "manual"`. Entorse consignee dans l'ADR 0006 et ce document. Consequence : si un upstream renvoie un `302` vers une URL dans le meme domaine, `fetch` va le suivre et le client recevra la reponse finale, pas le `302`. Comportement acceptable compte tenu du cas d'usage (proxy API, pas proxy web). Re-ouvrir si un consommateur signale un besoin de voir les redirects.
 
-### AC-17.33 — nuance par rapport au brief initial
+### AC-17.33 : nuance par rapport au brief initial
 
-Le brief initial parlait de "forward transparent" pour `/api/list-apps` upstream non-ok. Le dev a livre une variante : `502 upstream_list_apps_failed` avec shape FGP + `X-FGP-Source: proxy`. Difference de modele : l'endpoint `/api/list-apps` n'est pas un proxy, c'est un **helper UI** qui appelle Scalingo pour une UX de selection d'apps. Il n'y a pas de client qui attend une reponse Scalingo brute ici — c'est un call cote serveur FGP pour alimenter l'UI. Le choix de shape FGP est coherent avec la nature de l'endpoint. **OK valide**, cette variante est plus juste que le forward transparent initialement ecrit dans l'AC. Le libelle de l'AC-17.33 dans `docs/acceptance-criteria.md` a ete ecrit AVANT cet arbitrage — a reharmoniser avec le PO si desire, mais le comportement livre est le bon.
+Le brief initial parlait de "forward transparent" pour `/api/list-apps` upstream non-ok. Le dev a livre une variante : `502 upstream_list_apps_failed` avec shape FGP + `X-FGP-Source: proxy`. Difference de modele : l'endpoint `/api/list-apps` n'est pas un proxy, c'est un **helper UI** qui appelle Scalingo pour une UX de selection d'apps. Il n'y a pas de client qui attend une reponse Scalingo brute ici : c'est un call cote serveur FGP pour alimenter l'UI. Le choix de shape FGP est coherent avec la nature de l'endpoint. **OK valide**, cette variante est plus juste que le forward transparent initialement ecrit dans l'AC. Le libelle de l'AC-17.33 dans `docs/acceptance-criteria.md` a ete ecrit AVANT cet arbitrage, a reharmoniser avec le PO si desire, mais le comportement livre est le bon.
 
-### AC-17.34/17.35 — pas de distinction fetch throw vs 401 upstream sur l'exchange
+### AC-17.34/17.35 : pas de distinction fetch throw vs 401 upstream sur l'exchange
 
-`exchangeToken` ne distingue pas "fetch throw reseau" vs "401 upstream auth" — les deux tombent dans le meme catch cote endpoint `/api/list-apps`. Le test AC-17.35 valide que toute erreur d'exchange tombe en `401 token_exchange_failed`. Pas de refactor pour distinguer : YAGNI tant qu'aucun consommateur UI n'a besoin de differencier les deux cas. A re-ouvrir si l'UI demande un message distinct "Scalingo auth down" vs "token invalide".
+`exchangeToken` ne distingue pas "fetch throw reseau" vs "401 upstream auth" : les deux tombent dans le meme catch cote endpoint `/api/list-apps`. Le test AC-17.35 valide que toute erreur d'exchange tombe en `401 token_exchange_failed`. Pas de refactor pour distinguer : YAGNI tant qu'aucun consommateur UI n'a besoin de differencier les deux cas. A re-ouvrir si l'UI demande un message distinct "Scalingo auth down" vs "token invalide".
 
 ---
 
@@ -87,9 +87,9 @@ Le brief initial parlait de "forward transparent" pour `/api/list-apps` upstream
 
 Cas de durcissement regression **non bloquants** pour cette PR, a traiter en ticket dedie :
 
-1. **Body binaire + Content-Length** — verifier explicitement que `Content-Length` upstream est preserve et que les bytes ne sont pas corrompus sur image/pdf/blob.
-2. **Chunked transfer-encoding** — test de regression pour preserver le streaming upstream (pas de bufferisation excessive).
-3. **Retry-After en date HTTP** (`Wed, 21 Oct 2015 07:28:00 GMT`) — verifier preservation quand l'upstream utilise le format date plutot que seconds.
-4. **Regression AC-15.1 log token** — regression test explicite que le token interne du blob ne fuit pas dans stdout meme en forward transparent.
+1. **Body binaire + Content-Length** : verifier explicitement que `Content-Length` upstream est preserve et que les bytes ne sont pas corrompus sur image/pdf/blob.
+2. **Chunked transfer-encoding** : test de regression pour preserver le streaming upstream (pas de bufferisation excessive).
+3. **Retry-After en date HTTP** (`Wed, 21 Oct 2015 07:28:00 GMT`) : verifier preservation quand l'upstream utilise le format date plutot que seconds.
+4. **Regression AC-15.1 log token** : regression test explicite que le token interne du blob ne fuit pas dans stdout meme en forward transparent.
 
 Ces 4 points ne creent pas de regression connue dans le code livre ; ils durciraient la couverture contre des regressions futures. Prioriser en backlog.

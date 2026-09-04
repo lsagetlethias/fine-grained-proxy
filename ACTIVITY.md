@@ -1,6 +1,6 @@
-# Activity Log — Fine-Grained Proxy
+# Activity Log : Fine-Grained Proxy
 
-## 2026-04-08 — Initialisation du projet
+## 2026-04-08 : Initialisation du projet
 
 - **Changements** :
   - Init repo git + Deno/Hono
@@ -15,10 +15,10 @@
   - Zero storage avec double clé (blob URL + header client + salt serveur)
   - Bearer cache in-memory chiffré avec clé utilisateur
   - Auth Scalingo : API token → exchange → bearer 1h
-- **ADR** : ADR-0001 — Stack technique
+- **ADR** : ADR-0001 (Stack technique)
 - **Prochaines étapes** : ~~terminées dans la même session~~
 
-## 2026-04-08 — Implémentation complète + refonte agnostique
+## 2026-04-08 : Implémentation complète + refonte agnostique
 
 - **Changements** :
   - Module crypto complet (AES-256-GCM, PBKDF2, gzip, base64url)
@@ -33,18 +33,18 @@
   - OpenAPI 3.0 spec + Swagger UI (/api/docs) + validation Zod
   - Premier commit (95 tests, 15 fichiers source)
 - **Décisions** :
-  - ADR-0002 : Chiffrement côté serveur (pas client-side) — risque XSS, cohérence avec caldav2ics
-  - ADR-0003 : Proxy agnostique, scopes METHOD:PATH génériques — plus de couplage Scalingo
+  - ADR-0002 : Chiffrement côté serveur (pas client-side). Risque XSS, cohérence avec caldav2ics
+  - ADR-0003 : Proxy agnostique, scopes METHOD:PATH génériques. Plus de couplage Scalingo
   - Bearer cache en clair en mémoire (pas chiffré), clé = hash(token) pour partage entre blobs
   - Scopes canoniques dans le blob (pas d'alias write/vars)
   - OpenAPI plutôt que markdown statique pour la doc API
 - **Process** :
-  - Équipe 5 rôles (lead dev, dev, PO, designer, testeur) — le testeur a challengé le PO efficacement
+  - Équipe 5 rôles (lead dev, dev, PO, designer, testeur) : le testeur a challengé le PO efficacement
   - Feedback : le designer ne touche pas à main.ts, le dev doit respecter les pauses, doc API non négociable
   - Copilotage archi avec l'utilisateur sur les décisions structurantes (server-side crypto, proxy agnostique)
 - **Prochaines étapes** : ~~terminées dans les sessions suivantes~~
 
-## 2026-04-08 → 2026-04-09 — Tailscale, OpenAPI, guides déploiement, README
+## 2026-04-08 → 2026-04-09 : Tailscale, OpenAPI, guides déploiement, README
 
 - **Changements** :
   - Compatibilité reverse proxy (X-Forwarded-Host/Proto pour Tailscale)
@@ -52,7 +52,7 @@
   - README.md complet
 - **Prochaines étapes** : ~~terminées dans la session suivante~~
 
-## 2026-04-09 — Body filters, limites fonctionnelles, and/not, UI split
+## 2026-04-09 : Body filters, limites fonctionnelles, and/not, UI split
 
 - **Changements** :
   - ADR-0004 : Body filters et scopes structurés (blob v3)
@@ -69,13 +69,13 @@
   - Limites fonctionnelles documentées dans `docs/limits.md`
   - Specs v3, acceptance criteria v2 synchronisés avec le code
 - **Décisions** :
-  - ADR-0004 : discriminated union `ObjectValue` avec `type` comme discriminant — extensible sans casser l'existant
+  - ADR-0004 : discriminated union `ObjectValue` avec `type` comme discriminant. Extensible sans casser l'existant
   - Blob v3 auto-détecté (si au moins un ScopeEntry → v3, sinon v2)
   - Body filters JSON only (pas de form-data/multipart)
   - Limites structurelles bornées pour prévenir DoS par blob crafté
 - **Prochaines étapes** : ~~terminées dans la session suivante~~
 
-## 2026-04-09 — Extraction JS, zod 4, recette, UX fixes
+## 2026-04-09 : Extraction JS, zod 4, recette, UX fixes
 
 - **Changements** :
   - Extraction JS inline (1400 lignes string template) → `src/ui/client.ts` typé
@@ -92,7 +92,7 @@
   - zod 4 compatible via @hono/zod-openapi 1.2 (la 0.19 ne marchait pas avec zod 4)
 - **Prochaines étapes** : ~~terminées dans la session suivante~~
 
-## 2026-04-09 — Tailwind build-time, regex body filter, preset enrichi, logo, SEO, split modules, a11y
+## 2026-04-09 : Tailwind build-time, regex body filter, preset enrichi, logo, SEO, split modules, a11y
 
 - **Changements** :
   - Tailwind CDN → build-time CSS : `tailwind.config.js` + `src/ui/tailwind.css` → `static/styles.css` via `deno task build:css`
@@ -115,7 +115,7 @@
   - Premier déploiement Deno Deploy
   - Test e2e avec un vrai token Scalingo
 
-## 2026-04-16 — Dual mode blob : header X-FGP-Blob
+## 2026-04-16 : Dual mode blob, header X-FGP-Blob
 
 - **Changements** :
   - Nouveau middleware `blobHeaderProxy()` monté en catch-all avant toutes les routes
@@ -128,11 +128,11 @@
   - 8 tests d'intégration AC-14.1 à AC-14.8 (header mode, fallback URL, strip headers, erreurs, query string)
   - 295 tests, 0 failed
 - **Décisions** :
-  - ADR-0005 : Dual mode blob URL/header — header prioritaire, URL en fallback
+  - ADR-0005 : Dual mode blob URL/header. Header prioritaire, URL en fallback
   - Catch-all middleware (`*`) pour le header mode plutôt qu'une route dédiée
   - Pas de breaking change : mode URL inchangé, champ `blob` additionnel dans la réponse API
 
-## 2026-04-16 — Section "Tester un scope" (UI + API)
+## 2026-04-16 : Section "Tester un scope" (UI + API)
 
 - **Changements** :
   - Nouvel endpoint `POST /api/test-scope` (Zod/OpenAPI) : vérifie si une requête (méthode + path + body) est autorisée par un jeu de scopes
@@ -146,7 +146,7 @@
   - Pas d'ADR : outil de debug UI, pas structurant
   - Matching client-side pour le temps réel (debounce) + appel API uniquement pour les body filters (besoin serveur)
 
-## 2026-04-16 — URL publique `?c=` (config sharing)
+## 2026-04-16 : URL publique `?c=` (config sharing)
 
 - **Changements** :
   - Partage de configuration via paramètre URL `?c=` : gzip + base64url de `{target, auth, scopes, ttl}` (sans token)
@@ -159,7 +159,7 @@
   - Pas d'ADR : encoding standard, pas de décision structurante
   - Pas de token dans l'URL partagée (sécurité)
 
-## 2026-04-16 — Import FGP (decode blob)
+## 2026-04-16 : Import FGP (decode blob)
 
 - **Changements** :
   - Nouvel endpoint `POST /api/decode` : déchiffre un blob avec sa clé client, retourne la config complète avec token redacté
@@ -169,7 +169,7 @@
 - **Décisions** :
   - Token toujours redacté dans la réponse decode (sécurité, jamais renvoyé en clair)
 
-## 2026-04-16 — Fiches de poste, .env, doc, UX polish
+## 2026-04-16 : Fiches de poste, .env, doc, UX polish
 
 - **Changements** :
   - Fiches de poste par rôle dans `docs/team/` : lead, dev, po, testeur, designer
@@ -188,7 +188,7 @@
   - Premier déploiement Deno Deploy
   - Test e2e avec un vrai token Scalingo
 
-## 2026-04-22 — Feature /logs : stream SSE par blob (in-memory, opt-in, zero trust)
+## 2026-04-22 : Feature /logs, stream SSE par blob (in-memory, opt-in, zero trust)
 
 - **Changements** :
   - Nouveau module `src/logs/` : `config.ts` (env `FGP_LOGS_*`), `blob-id.ts` (hash blob → id stable), `events.ts` (types `LogEntry` network/detailed), `capture.ts` (fabrication entry + chiffrement body detailed avec clé client), `store.ts` (ring buffer par blob + subscribe/flushSince + purge inactivité), `ip.ts` (extraction IP derrière reverse proxy).
@@ -215,14 +215,14 @@
   - Tests e2e `/logs` reportés (cohérent avec le suivi e2e global dans `MEMORY.md → project_fgp_followups.md`)
   - Premier déploiement Deno Deploy toujours en attente
 
-## 2026-04-22 — Proxy transparent + header X-FGP-Source
+## 2026-04-22 : Proxy transparent + header X-FGP-Source
 
 - **Changements** :
   - Refactor `src/middleware/proxy.ts` : suppression des transformations de status upstream (plus de `upstream_error`, `upstream_auth_failed`, `rate_limited`). Toute réponse upstream est forwardée telle quelle (status/body/headers, seul `Set-Cookie` strippé).
   - Nouveau header `X-FGP-Source` sur toutes les réponses : `upstream` pour les réponses forwardées, `proxy` pour les erreurs FGP et `upstream_unreachable`.
   - Nouvelle erreur FGP `502 upstream_unreachable` (seul 502 légitime, fetch throw uniquement).
   - `app.onError` global dans `src/main.ts` → `500 internal_error` avec shape FGP + `X-FGP-Source: proxy`, pas de leak de stack ni de message sensible.
-  - Harmonisation `POST /api/list-apps` dans `src/routes/ui.tsx` : modèle hybride (pas proxy transparent car contrat JSON stable attendu par l'UI) — `upstream_unreachable` sur fetch throw, `upstream_list_apps_failed` sur upstream non-OK, `token_exchange_failed` sur échec exchange, tous avec `X-FGP-Source: proxy`.
+  - Harmonisation `POST /api/list-apps` dans `src/routes/ui.tsx` : modèle hybride (pas proxy transparent car contrat JSON stable attendu par l'UI). `upstream_unreachable` sur fetch throw, `upstream_list_apps_failed` sur upstream non-OK, `token_exchange_failed` sur échec exchange, tous avec `X-FGP-Source: proxy`.
   - Nouveau fichier `src/constants.ts` : `FGP_SOURCE_HEADER`, constantes `proxy`/`upstream`, codes d'erreur canoniques.
   - OpenAPI schemas de réponse stricts par route : union `z.enum([...])` sur les error codes autorisés.
   - ADR-0006 : "Proxy transparent vs gateway opinionated pour les erreurs upstream".
@@ -244,3 +244,35 @@
 - **Prochaines étapes** :
   - Tests e2e reportés (suivi dans `MEMORY.md` → `project_fgp_followups.md`, pas droppés, à ressortir plus tard avec un vrai token Scalingo)
   - Premier déploiement Deno Deploy toujours en attente
+
+## 2026-09-03 : Blob v4 (auth structurée), BYOK, /llms.txt, durcissement sécurité
+
+- **Changements** :
+  - Blob v4 : le champ `auth` accepte une union `string | AuthSpec`, même pattern que les scopes v3. Deux nouveaux modes structurés, `{type:"headers"}` (jusqu'à 8 headers d'authentification) et `{type:"scalingo-addon"}` (token d'addon Scalingo obtenu en trois temps, renouvelé automatiquement). Les blobs v2 et v3 restent lisibles sans régénération.
+  - Sérialisation compacte : un AuthSpec `headers` à une seule entrée retombe sur la forme legacy `header:{name}` et le blob reste v2/v3.
+  - Redaction étendue : les valeurs de headers sont des secrets au même titre que `token`, donc redactées par `POST /api/decode`, retirées des URLs de partage `?c=`, et à ressaisir à l'import. Le mode addon ne partage que le mode et la région, jamais `app` ni `addonId`.
+  - BYOK : `POST /api/generate` accepte un champ `key` optionnel (24 à 256 caractères, ASCII imprimable sans espace). Jauge « Diversité » à trois niveaux dans l'UI, avertissement de mutualisation, section repliable où un champ non vide vaut activation.
+  - Nouvelle route `GET /llms.txt` (convention llmstxt.org), en anglais, découvrable par balise `<link rel="describedby">` et header HTTP `Link` sur les réponses HTML FGP.
+  - En-têtes de sécurité HTTP (CSP `default-src 'none'`, `nosniff`, `no-referrer`, HSTS, COOP/CORP, Permissions-Policy) sur une liste explicite de chemins FGP, plus les erreurs `X-FGP-Source: proxy` de la route proxy. CSP dédiée pour `/api/docs` à cause du CDN Swagger.
+  - Nouveaux codes d'erreur : `auth_exchange_failed` et `auth_addon_failed` (502) remplacent `upstream_unreachable` sur un échec d'authentification, `invalid_key` et `auth_limit_exceeded` (400) à la génération, `app_not_found` (404) sur le nouveau helper `POST /api/list-addons`.
+  - Correction `PORT` : la variable était documentée mais sans effet sous `deno serve`, le serveur écoutait 8000 quoi qu'il arrive. Passage à un `Deno.serve()` explicite, la doc devient vraie.
+  - Correction image Docker : les assets compilés n'étaient pas embarqués, l'UI y sortait sans CSS ni JavaScript.
+  - Specs passées en 4.0, `docs/limits.md` étendu aux limites d'auth structurée et à la clé BYOK, entrée de changelog datée.
+  - Nettoyage complet des tirets cadratins sur la documentation et le code, plus alignement doc/code sur les chaînes qui ont un miroir exact.
+- **Décisions** :
+  - ADR-0008 : union `string | AuthSpec` plutôt que des champs frères au niveau du blob, qui auraient rendu structurellement possible un blob incohérent (`auth: "bearer"` avec un `addonId`).
+  - Multi-addon écarté : la résolution par extraction du path reposait sur une ambiguïté de la documentation Scalingo qu'aucun test ne pouvait lever, seulement confirmer. Un blob porte donc exactement une base de données. Réouvrable après recette sur un vrai compte.
+  - Renommage UI des deux modes Scalingo en « Scalingo API » et « Scalingo Database API », libellés seuls, valeurs stockées inchangées pour ne casser aucun blob.
+  - `key: ""` refusé plutôt que traité comme absent : en CI une variable non définie s'interpole en chaîne vide, et l'accepter produirait un blob chiffré avec une clé que le pipeline n'a jamais reçue.
+  - Middleware de sécurité jamais monté sur `*` : la transparence de l'ADR-0006 est garantie par construction et non par une condition d'exclusion. La couverture de la liste explicite est verrouillée par un test de recensement des routes.
+  - Jauge BYOK libellée « Diversité » et non « Force » : avec un plancher à 24 caractères, il n'y a pas de gradient de sécurité à afficher, et une heuristique de diversité n'attrape que les clés répétitives, pas les phrases de passe.
+- **ADR** : ADR-0008
+- **Process** :
+  - Copilotage archi avec l'utilisateur sur les quatre lots, puis six arbitrages en cours de session dont quatre invalidant des specs déjà écrites.
+  - Le PO a signalé la fuite des valeurs de headers dans les URLs de partage `?c=`, non repérée par le lead ni le designer.
+  - Le testeur a posé un veto sur le multi-addon et trouvé la carve-out `/logs` non documentée. Le designer a corrigé une affirmation fausse des specs sur ce que détecte la jauge BYOK.
+  - Le dev sécu a démontré par mesure que `X-FGP-Source` n'est pas posé sur toutes les réponses FGP, ce qui a invalidé une réécriture du périmètre des en-têtes de sécurité proposée par le PO.
+- **Prochaines étapes** :
+  - Recette manuelle du mode Scalingo Database API sur un vrai compte, condition d'entrée du multi-addon
+  - Auto-hébergement des assets Swagger dans `/static/` pour supprimer la CSP dédiée de `/api/docs`
+  - Tests e2e toujours reportés, premier déploiement Deno Deploy toujours en attente

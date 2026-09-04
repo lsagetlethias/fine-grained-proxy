@@ -122,6 +122,12 @@ Un AND sur zero conditions est trivialement vrai (vacuous truth). Ca revient a u
 | ScopeEntry par blob | 10 max | `decryptBlob` validation |
 | Segments dot-path | 6 max | `isValidBodyFilter` |
 | Taille blob | 4096 chars | `proxy.ts` + `ui.tsx` (inchange) |
+| Headers par AuthSpec `headers` | 8 max | validation AuthSpec dans `blob.ts` |
+| Nom de header | 64 chars max | validation AuthSpec dans `blob.ts` |
+| Valeur de header | 1024 chars max | validation AuthSpec dans `blob.ts` |
+| Addons par AuthSpec `scalingo-addon` | exactement 1 | validation AuthSpec dans `blob.ts` |
+| Longueur `app` et `addonId` | 64 chars max | validation AuthSpec dans `blob.ts` |
+| Longueur clé client fournie | 24 à 256 chars | `POST /api/generate` |
 | `not(wildcard)` | interdit | `isValidObjectValue` |
 | `not(not(...))` | interdit | `isValidObjectValue` |
 | `and([])` | interdit | `isValidObjectValue` |
@@ -131,6 +137,67 @@ Toutes les limites sont validees au moment du dechiffrement du blob (`decryptBlo
 
 ---
 
-## 8. Wildcard `*` — minimum 1 caractère
+## 8. Wildcard `*` : minimum 1 caractère
 
 Le wildcard `*` dans un pattern de scope doit matcher au moins un caractère. `GET:/v1/apps/*` matche `/v1/apps/my-app` mais pas `/v1/apps/`. Cela évite les faux positifs sur des paths vides ou des trailing slashes.
+
+---
+
+## 9. Limites du champ `auth` structuré (v4)
+
+Le blob v4 introduit un champ `auth` qui peut être un objet (`AuthSpec`) au lieu d'une simple string. Les mêmes principes que pour les body filters s'appliquent : bornes validées au déchiffrement, blob rejeté au-delà, validation miroir dans l'UI avant génération.
+
+### 9.1 Headers d'authentification multiples
+
+**Valeur : 8 headers max par AuthSpec `headers`**
+
+Aucune API réelle n'exige plus de 8 headers pour s'authentifier. Au-delà de 2 ou 3, on n'est déjà plus dans de l'authentification mais dans du forward de headers déguisé, ce qui n'est pas le rôle de ce champ : l'appelant peut envoyer ses propres headers, ils sont forwardés tels quels.
+
+**Valeur : 64 caractères max pour le nom du header**
+
+Un nom de header HTTP réaliste fait moins de 30 caractères. 64 laisse de la marge sans autoriser un nom absurde. Caractères autorisés : le jeu `token` défini par la RFC 7230, celui qu'HTTP accepte réellement dans un nom de champ. Ne pas inventer une liste maison plus restrictive : elle finirait par refuser un header parfaitement légal utilisé par une API cible. Un nom invalide doit être rejeté, pas assaini : un header mal formé provoquerait une erreur au forward, ou pire, un comportement dépendant du runtime.
+
+**Valeur : 1024 caractères max pour la valeur du header**
+
+Couvre confortablement une clé d'API, un identifiant de client, un HMAC ou un JWT compact. Au-delà, ce n'est plus un secret d'authentification mais un payload, qui n'a rien à faire dans un blob.
+
+**Pourquoi limiter** : les valeurs sont des secrets à haute entropie, donc quasi incompressibles par gzip. Contrairement aux scopes (très répétitifs, compressés à 85-90 %), chaque octet de secret coûte environ 1,37 octet dans le blob base64url final.
+
+**Contrainte réelle : la taille du blob prime.** Une configuration au maximum théorique (8 headers x 1088 caractères) fait environ 8,7 KB bruts, soit plus de 11 KB en base64url : très au-dessus des 4096 caractères autorisés. En pratique, le budget cumulé des valeurs de headers est de l'ordre de **2 KB**, scopes compris. La limite par valeur est un garde-fou, pas un budget utilisable en totalité.
+
+**Conséquence pour l'UI** : quand la génération échoue en `blob_too_large` avec un AuthSpec `headers`, le message doit pointer les valeurs de headers, pas seulement les scopes. Un utilisateur qui colle un gros secret et lit « réduisez vos scopes » cherchera au mauvais endroit.
+
+### 9.2 Base de données Scalingo (couple app / addon)
+
+**Valeur : exactement 1 addon par AuthSpec `scalingo-addon`**
+
+Un blob donne accès à une base de données, pas à un parc. Pour en ouvrir une seconde, on génère un second blob, qui a son TTL, ses scopes et sa clé, donc sa propre révocation.
+
+La limite n'est pas seulement produit, elle est aussi prudentielle. Le multi-addon supposait de résoudre la base visée en extrayant un identifiant du path de la requête, alors que la documentation Scalingo se contredit sur la forme de cet identifiant (le champ `id` selon le texte, une valeur ressemblant à `resource_id` dans les exemples). Des tests écrits sur cette hypothèse auraient validé notre supposition, pas la réalité. Le sujet est fermé tant qu'une recette sur un vrai compte Scalingo n'a pas tranché. Détail complet dans les specs, §11.1.2.
+
+**Valeur : 64 caractères max pour `app` et `addonId`**
+
+Aligné sur les identifiants Scalingo réels (nom d'app limité côté plateforme, identifiant d'addon de type `ad-<uuid>`).
+
+**Impact sans limite** : un blob multi-addon devient un passe-partout de compte, exactement ce que le wildcard `app: "*"` a été refusé pour éviter.
+
+### 9.3 Doublons
+
+- Deux headers de même nom (comparaison insensible à la casse) : interdit. Le dernier écraserait le premier au forward, donc l'un des deux secrets serait mort dans le blob sans que personne ne le voie.
+- Un AuthSpec `scalingo-addon` qui porterait plusieurs addons : rejeté. La forme multi n'existe pas en v4, un blob vise une base et une seule.
+
+---
+
+## 10. Clé client fournie par l'utilisateur
+
+**Valeur : 24 caractères minimum, 256 maximum**
+
+Le minimum protège contre le brute-force hors ligne : le salt serveur est public (`GET /api/salt`), donc la clé client est la seule inconnue protégeant un blob intercepté. PBKDF2 à 100 000 itérations renchérit chaque essai mais ne compense pas une clé courte.
+
+Le maximum est une borne défensive : la clé transite dans le header `X-FGP-Key`, et rien ne justifie une clé de plusieurs kilo-octets.
+
+**Caractères autorisés** : ASCII imprimables `0x21` à `0x7E`, soit tout sauf l'espace et les caractères de contrôle. Contrainte imposée par le transport en header HTTP, pas par la crypto.
+
+**Pourquoi limiter** : une clé mutualisée entre plusieurs blobs mutualise le risque. Si elle fuite ou est cassée, tous les blobs générés avec elle deviennent déchiffrables d'un coup, y compris ceux créés avant la fuite. C'est le prix de la commodité en CI, et il doit être affiché explicitement dans l'UI.
+
+**Impact sans limite** : une clé de 6 caractères rendrait le chiffrement du blob décoratif. Un attaquant qui capte une URL FGP la casse hors ligne, récupère le token upstream en clair, et le proxy n'a servi à rien.

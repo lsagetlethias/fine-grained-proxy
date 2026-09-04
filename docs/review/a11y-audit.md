@@ -1,4 +1,4 @@
-# Audit Accessibilite (a11y) — FGP Config UI
+# Audit Accessibilite (a11y) : FGP Config UI
 
 **Date** : 2026-04-09
 **Fichiers audites** : `src/ui/config-page.tsx`, `src/ui/layout.tsx`, `src/ui/client/body-filters.ts`, `src/ui/client/apps.ts`, `src/ui/client/generate.ts`, `src/ui/client/scopes.ts`, `src/ui/client/clipboard.ts`, `src/ui/client/ttl.ts`, `src/ui/client/presets.ts`
@@ -7,7 +7,7 @@
 
 ## Critiques
 
-### C1 — Aucun `aria-live` sur les zones dynamiques
+### C1 : Aucun `aria-live` sur les zones dynamiques
 
 **Fichiers** : `config-page.tsx` (l.284 `#result-section`, l.359 `#error-banner`), `apps.ts`, `body-filters.ts`
 
@@ -25,7 +25,7 @@ Aucun `aria-live` n'existe dans toute la codebase. Les zones suivantes sont mise
 - Ajouter `aria-live="polite"` sur `#apps-list`.
 - Ajouter `aria-live="polite"` sur `#scope-chips`.
 
-### C2 — Focus pas gere apres ajout/suppression dynamique
+### C2 : Focus pas gere apres ajout/suppression dynamique
 
 **Fichiers** : `body-filters.ts`, `apps.ts`
 
@@ -40,11 +40,11 @@ Apres suppression d'un filtre body ou d'une valeur, le focus est perdu (il retou
 - Apres suppression d'une condition AND : placer le focus sur le bouton "Ajouter une condition".
 - Apres generation reussie : deplacer le focus vers `#result-section` ou vers `#result-url`.
 
-### C3 — Labels "ET" entre filtres non accessibles aux screen readers
+### C3 : Labels "ET" entre filtres non accessibles aux screen readers
 
 **Fichiers** : `body-filters.ts` (l.678-688, l.180-186)
 
-Les labels "ET" visuels entre les blocs de filtres sont affiches comme du texte decoratif. Dans `renderAndBlock` (l.184-185), le "ET" entre conditions est correctement marque `aria-hidden="true"`, et le wrapper a un `role="group"` avec `aria-label="Groupe de conditions ET"` — c'est bien.
+Les labels "ET" visuels entre les blocs de filtres sont affiches comme du texte decoratif. Dans `renderAndBlock` (l.184-185), le "ET" entre conditions est correctement marque `aria-hidden="true"`, et le wrapper a un `role="group"` avec `aria-label="Groupe de conditions ET"`, c'est bien.
 
 Mais dans `renderFilterBlock` (l.678-688), le "ET" entre les filtres de premier niveau n'a qu'un `aria-label="et aussi"` sur un `<span>`. Un `<span>` n'est pas un element interactif ni un landmark, donc `aria-label` est ignore par la plupart des screen readers (ARIA spec : `aria-label` n'est supporte que sur les elements interactifs ou les elements avec un role explicite).
 
@@ -56,7 +56,7 @@ Mais dans `renderFilterBlock` (l.678-688), le "ET" entre les filtres de premier 
 
 ## Importants
 
-### I1 — Pas de skip link
+### I1 : Pas de skip link
 
 **Fichier** : `layout.tsx`
 
@@ -69,7 +69,7 @@ Aucun lien "skip to content" n'existe. Le formulaire principal est precede d'un 
 </a>
 ```
 
-### I2 — Contraste insuffisant des textes "hint"
+### I2 : Contraste insuffisant des textes "hint"
 
 **Fichiers** : `config-page.tsx`, `body-filters.ts`
 
@@ -82,12 +82,12 @@ Plusieurs textes utilisent `text-gray-400` en light mode ou `text-gray-500` en d
 | `text-gray-400` dark | #9ca3af | #111827 (gray-900) | ~6.5:1 (ok) |
 
 Endroits concernes :
-- `config-page.tsx` l.42 : description du projet `text-gray-500 dark:text-gray-400` — ok en dark, fail en light (gray-500 sur gray-50 = ~4.2:1, juste a la limite).
-- `config-page.tsx` l.72-74 : hint du preset `text-gray-400 dark:text-gray-500` — fail en light (~2.9:1), fail en dark (~4.0:1).
-- `config-page.tsx` l.149 : hint du token `text-gray-400 dark:text-gray-500` — meme probleme.
-- `config-page.tsx` l.189 : hint des scopes `text-gray-400 dark:text-gray-500` — meme probleme.
-- `body-filters.ts` l.171-172 : texte "(aucune condition)" `text-gray-400 dark:text-gray-500` — meme probleme.
-- `body-filters.ts` l.524 : label "Valeurs" `text-gray-500 dark:text-gray-400` — light borderline.
+- `config-page.tsx` l.42 : description du projet `text-gray-500 dark:text-gray-400` : ok en dark, fail en light (gray-500 sur gray-50 = ~4.2:1, juste a la limite).
+- `config-page.tsx` l.72-74 : hint du preset `text-gray-400 dark:text-gray-500` : fail en light (~2.9:1), fail en dark (~4.0:1).
+- `config-page.tsx` l.149 : hint du token `text-gray-400 dark:text-gray-500`, meme probleme.
+- `config-page.tsx` l.189 : hint des scopes `text-gray-400 dark:text-gray-500`, meme probleme.
+- `body-filters.ts` l.171-172 : texte "(aucune condition)" `text-gray-400 dark:text-gray-500`, meme probleme.
+- `body-filters.ts` l.524 : label "Valeurs" `text-gray-500 dark:text-gray-400`, light borderline.
 
 WCAG AA exige 4.5:1 pour du texte normal. Ces hints sont en `text-xs` (12px) ce qui les rend encore plus difficiles a lire.
 
@@ -96,7 +96,7 @@ WCAG AA exige 4.5:1 pour du texte normal. Ces hints sont en `text-xs` (12px) ce 
 - En dark mode, remplacer `text-gray-500` par `text-gray-400` (ratio ~6.5:1 sur gray-900).
 - Pattern recommande : `text-gray-500 dark:text-gray-400` partout pour les hints.
 
-### I3 — Bouton "Ajouter des filtres body" sans indication de l'etat
+### I3 : Bouton "Ajouter des filtres body" sans indication de l'etat
 
 **Fichier** : `config-page.tsx` (l.193-199)
 
@@ -106,7 +106,7 @@ Le bouton `#btn-add-body-filters` ouvre le panel body-filters mais n'a aucun att
 - Ajouter `aria-expanded="false/true"` (mis a jour cote JS quand le panel s'ouvre/se ferme).
 - Ajouter `aria-controls="body-filters-panel"`.
 
-### I4 — Chips scope : elements "editer" et "x" sans contexte structurel
+### I4. Chips scope : elements "editer" et "x" sans contexte structurel
 
 **Fichier** : `body-filters.ts` (l.993-1061)
 
@@ -117,7 +117,7 @@ Les chips ont des boutons "editer" et "x" avec des `aria-label` corrects (inclua
 **Correction** :
 - Ajouter `role="list"` sur `#scope-chips` et `role="listitem"` sur chaque chip div.
 
-### I5 — Branches input sans label
+### I5 : Branches input sans label
 
 **Fichier** : `apps.ts` (l.135-140)
 
@@ -125,7 +125,7 @@ L'input de branches de deploiement (`branchInput`) n'a ni `<label>` associe, ni 
 
 **Correction** : Ajouter `aria-label="Branches autorisees pour le deploiement"` sur cet input. Idealement inclure le nom de l'app : `"Branches de deploiement pour " + name`.
 
-### I6 — Selects generes dynamiquement sans labels (body-filters)
+### I6 : Selects generes dynamiquement sans labels (body-filters)
 
 **Fichier** : `body-filters.ts`
 
@@ -133,11 +133,11 @@ La plupart des selects dans `renderFilterBlock` ont des labels corrects (l.719-7
 
 **Correction** : Ajouter `aria-label="Type de la condition d'exclusion"` sur `condNotTypeSelect` (l.49), et `aria-label="Type de la valeur"` sur `cnSubSelect` (l.73).
 
-### I7 — `#result-section` n'a pas de role region
+### I7 : `#result-section` n'a pas de role region
 
 **Fichier** : `config-page.tsx` (l.284)
 
-La section resultat est un `<section>` sans heading ni `aria-label`. Un `<section>` sans nom accessible est traite comme un conteneur generique par les screen readers — il ne constitue pas un landmark. Le `<h2>` "URL generee" (l.287) est present a l'interieur, mais comme la section est `hidden` au chargement, ajouter un `aria-label` serait plus robuste.
+La section resultat est un `<section>` sans heading ni `aria-label`. Un `<section>` sans nom accessible est traite comme un conteneur generique par les screen readers : il ne constitue pas un landmark. Le `<h2>` "URL generee" (l.287) est present a l'interieur, mais comme la section est `hidden` au chargement, ajouter un `aria-label` serait plus robuste.
 
 **Correction** : Ajouter `aria-labelledby` pointant vers le `<h2>`, ou un `aria-label="Resultat de la generation"` sur la section.
 
@@ -145,25 +145,25 @@ La section resultat est un `<section>` sans heading ni `aria-label`. Un `<sectio
 
 ## Mineurs
 
-### M1 — `<header>` sans role banner explicite
+### M1 : `<header>` sans role banner explicite
 
 **Fichier** : `config-page.tsx` (l.22)
 
 Le `<header>` est AVANT `<main>` (l.22-45 puis `<main>` l.47). En tant qu'enfant direct du body (via le div wrapper), `<header>` a implicitement le role `banner`. Pas de probleme, mais a verifier que les screen readers le reconnaissent bien a travers le div intermediaire.
 
-### M2 — Landmarks presents et corrects
+### M2 : Landmarks presents et corrects
 
 `<main>` (l.47), `<aside aria-label="Documentation et aide">` (l.369-371), `<nav>` (l.373), `<footer>` (l.505) : tous presents et correctement structures. Le `<aside>` a un `aria-label`. La `<nav>` est dans l'aside pour le guide d'utilisation, ce qui est semantiquement acceptable.
 
-### M3 — Boutons "Copier" : feedback non accessible
+### M3. Boutons "Copier" : feedback non accessible
 
 **Fichier** : `clipboard.ts` (l.12-15)
 
-Apres copie, le texte du bouton change de "Copier" a "Copie !" pendant 1.5s. Ce changement de texte est annonce par les screen readers car c'est le contenu textuel du bouton qui change — c'est acceptable. Mais les `aria-label` des boutons (ex: "Copier l'URL") ne sont pas mis a jour en parallele, ce qui cree une discordance entre le texte visible et le label annonce. Mineur car temporaire (1.5s).
+Apres copie, le texte du bouton change de "Copier" a "Copie !" pendant 1.5s. Ce changement de texte est annonce par les screen readers car c'est le contenu textuel du bouton qui change, c'est acceptable. Mais les `aria-label` des boutons (ex: "Copier l'URL") ne sont pas mis a jour en parallele, ce qui cree une discordance entre le texte visible et le label annonce. Mineur car temporaire (1.5s).
 
 **Correction possible** : Mettre a jour `aria-label` en meme temps que `textContent`, ou retirer les `aria-label` au profit du `textContent` seul (puisque "Copier" est deja descriptif avec le contexte du label visible au-dessus).
 
-### M4 — Logo SVG sans `aria-hidden`
+### M4 : Logo SVG sans `aria-hidden`
 
 **Fichier** : `layout.tsx` (l.14-25)
 
@@ -171,13 +171,13 @@ Le composant `FgpLogo` injecte un SVG dans un `<span>`. Le SVG n'a pas de `role=
 
 **Correction** : Ajouter `aria-hidden="true"` sur le `<span>` wrapper du logo.
 
-### M5 — Radios TTL visuellement custom mais fonctionnellement ok
+### M5 : Radios TTL visuellement custom mais fonctionnellement ok
 
 **Fichier** : `config-page.tsx` (l.233-248)
 
 Les radios TTL utilisent `class="sr-only"` pour masquer le vrai radio et styliser le label parent. Le pattern `has-[:checked]` permet le style visuel. Du point de vue clavier, les radios natifs sont focusables et navigables avec les fleches. Le `<fieldset>` + `<legend>` est present. Le `role="radiogroup"` est explicite. Tout est correct.
 
-### M6 — Footer link GitHub : pas d'indication "nouvelle fenetre"
+### M6. Footer link GitHub : pas d'indication "nouvelle fenetre"
 
 **Fichier** : `config-page.tsx` (l.506-516)
 

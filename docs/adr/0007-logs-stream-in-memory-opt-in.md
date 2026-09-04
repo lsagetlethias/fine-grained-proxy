@@ -1,4 +1,4 @@
-# ADR 0007 — Logs stream in-memory, opt-in par blob, body chiffré côté client
+# ADR 0007 : Logs stream in-memory, opt-in par blob, body chiffré côté client
 
 - **Date** : 2026-04-22
 - **Statut** : Accepted
@@ -39,46 +39,46 @@ Les sept choix structurants :
 
 5. **SSE via `fetch` streaming, pas `EventSource`**. L'API `EventSource` native ne permet pas d'envoyer des headers custom (`X-FGP-Blob`, `X-FGP-Key`). On utilise donc `fetch` en mode streaming et on parse le format SSE côté client. Un heartbeat `event: ping` toutes les 15 secondes évite les idle kills des reverse proxies.
 
-6. **Cursor `?since=<ts>` pour les reconnects**. Le client track le timestamp du dernier event reçu. À la reconnexion, il passe `since` au serveur qui filtre le ring buffer. Pas de doublons, pas de perte — tant que la déconnexion est plus courte que la durée du ring buffer.
+6. **Cursor `?since=<ts>` pour les reconnects**. Le client track le timestamp du dernier event reçu. À la reconnexion, il passe `since` au serveur qui filtre le ring buffer. Pas de doublons, pas de perte, tant que la déconnexion est plus courte que la durée du ring buffer.
 
 7. **Ring buffer court + purge sur inactivité**. Par blob : 50 entries network + 10 detailed, purge après 10 minutes sans nouvel event. Tout est configurable par env var. Le ring buffer sert le monitoring temps réel et les reconnects courts, pas l'audit historique.
 
 ## Options envisagées
 
-### Option A — Logs persistés en base (rejeté)
+### Option A : Logs persistés en base (rejeté)
 
 Stocker les entries dans une DB (PostgreSQL, SQLite, KV store). Permet l'audit historique, les requêtes arbitraires, la survie inter-isolates.
 
 - Avantages : historique long, requêtes SQL, visibilité multi-instance.
 - Inconvénients : casse la philo zero storage de FGP. Introduit une dépendance infra (DB à provisioner, à sauvegarder, à sécuriser). Impose des choix de rétention. Exfiltration de la DB = exposition des bodies et des patterns d'accès. Rejeté pour cohérence architecturale.
 
-### Option B — Logs globaux non scopés par blob (rejeté)
+### Option B : Logs globaux non scopés par blob (rejeté)
 
 Étendre le `logger()` Hono global, le rendre accessible via une route admin protégée par auth basique.
 
 - Avantages : très simple, pas de nouvelle infra mémoire.
 - Inconvénients : pas de scoping par blob donc l'utilisateur final ne peut pas consulter les siens. Nécessite une auth admin séparée. Logs mélangés = pas exploitables. Rejeté, ne répond pas au besoin.
 
-### Option C — Opt-in in-memory + chiffrement body client-side (retenu)
+### Option C : Opt-in in-memory + chiffrement body client-side (retenu)
 
 Flag dans le blob + kill switch env + ring buffer par blob + body chiffré côté serveur avec la clé client, déchiffré côté client.
 
 - Avantages : cohérent avec zero storage (rien ne survit au redémarrage), zero trust (le serveur ne voit pas les bodies), scoping naturel par blob, kill switch immédiat, aucun coût sur un blob qui ne l'active pas.
 - Inconvénients : visibilité limitée à un isolate (acceptable, cf. décision 1). Pas d'audit long terme (hors scope, cf. US). RAM consommée sur les blobs actifs (estime ~330 KB/blob worst case, largement sous les 512 MB d'un isolate).
 
-### Option D — `EventSource` plutôt que `fetch` streaming (rejeté)
+### Option D : `EventSource` plutôt que `fetch` streaming (rejeté)
 
 API plus standard, reconnect automatique géré par le navigateur.
 
 - Avantages : code client plus simple.
 - Inconvénients : pas de support des headers custom. Le blob et la clé devraient passer en query string, ce qui les expose dans les logs access des reverse proxies et dans l'historique navigateur. Rédhibitoire. Rejeté.
 
-### Option E — Bump de version blob (v4) pour intégrer `logs` (rejeté)
+### Option E : Bump de version blob (v4) pour intégrer `logs` (rejeté)
 
 Au lieu d'un champ optionnel sur v3, créer une version v4 dédiée.
 
 - Avantages : clean break, validation stricte possible.
-- Inconvénients : force tous les blobs existants à être régénérés si les utilisateurs veulent activer les logs. Casse la compat. Pour un ajout non-cassant, un champ optionnel suffit largement — la bump serait gratuite. Rejeté pour YAGNI.
+- Inconvénients : force tous les blobs existants à être régénérés si les utilisateurs veulent activer les logs. Casse la compat. Pour un ajout non-cassant, un champ optionnel suffit largement, la bump serait gratuite. Rejeté pour YAGNI.
 
 ## Conséquences
 

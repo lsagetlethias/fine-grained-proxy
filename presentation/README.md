@@ -1,4 +1,4 @@
-# Prez FGP — forum secu
+# Prez FGP : forum secu
 
 Deck [Slidev](https://sli.dev) pour la presentation technique de Fine-Grained Proxy.
 Format ~25 min, public mixte dev/secu, demo integree UI + terminal.
@@ -72,3 +72,20 @@ Activer `/logs` pour la demo observabilite : `FGP_LOGS_ENABLED=1` cote serveur.
 Probleme → wishlist → idee → flow → blob → double cle → pipeline crypto (en bref)
 → scopes niveau 1 et 2 (body filters) → autres briques → **demo 4 temps**
 → surface d'attaque → `/logs` zero-trust → stack → a retenir.
+
+## Export PDF
+
+`playwright-chromium` n'est pas declare en dependance, volontairement. Le paquet lui-meme
+ne pese que 16 Ko, mais son postinstall telecharge un Chromium d'environ 330 Mo. Surtout,
+`pnpm-workspace.yaml` bloque les postinstall par defaut via `allowBuilds` : l'ajouter en
+devDependency installerait les 16 Ko sans le navigateur, et l'export echouerait quand meme.
+
+Installation ponctuelle, quand un export est necessaire :
+
+```bash
+pnpm add -D playwright-chromium
+pnpm exec playwright install chromium
+pnpm export
+```
+
+La deuxieme ligne est indispensable, c'est elle qui contourne le blocage des postinstall.

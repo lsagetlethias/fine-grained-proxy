@@ -13,7 +13,7 @@ FGP est compatible avec Deno Deploy :
 
 ## Pre-requis : build des assets
 
-Le CSS et le JS client sont compiles depuis les sources. Ces fichiers sont gitignored — ils doivent etre build avant chaque deploy :
+Le CSS et le JS client sont compiles depuis les sources. Ces fichiers sont gitignored, ils doivent etre build avant chaque deploy :
 
 ```bash
 deno task build

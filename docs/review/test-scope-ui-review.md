@@ -1,4 +1,4 @@
-# Review UI — Section "Tester un scope"
+# Review UI : Section "Tester un scope"
 
 ## Resume
 
@@ -15,7 +15,7 @@ La section est bien integree visuellement dans le formulaire et le `<details>` e
 
 ## Issues trouvees
 
-### Issue #1 — Indicateurs sans alternative textuelle pour screen readers
+### Issue #1 : Indicateurs sans alternative textuelle pour screen readers
 
 - **Fichier** : `src/ui/client/test-scope.ts`, lignes 76-90 (`createResultRow`)
 - **Severite** : critique
@@ -27,7 +27,7 @@ La section est bien integree visuellement dans le formulaire et le `<details>` e
   ```
   Ou alternativement, ajouter un `<span class="sr-only">` avec le texte equivalent.
 
-### Issue #2 — Le verdict n'est pas annonce aux screen readers (aria-live manquant)
+### Issue #2 : Le verdict n'est pas annonce aux screen readers (aria-live manquant)
 
 - **Fichier** : `src/ui/config-page.tsx`, ligne 349 (`#test-scope-verdict`)
 - **Severite** : critique
@@ -38,7 +38,7 @@ La section est bien integree visuellement dans le formulaire et le `<details>` e
   ```
   Note : le reste du formulaire utilise deja `aria-live="polite"` sur `#apps-section`, `#scope-chips` et `#result-section`. C'est le meme pattern a suivre.
 
-### Issue #3 — Le container de resultats n'a pas d'aria-live
+### Issue #3 : Le container de resultats n'a pas d'aria-live
 
 - **Fichier** : `src/ui/config-page.tsx`, ligne 339 (`#test-scope-results`)
 - **Severite** : moyenne
@@ -48,7 +48,7 @@ La section est bien integree visuellement dans le formulaire et le `<details>` e
   <div id="test-scope-results" class="space-y-1" aria-live="polite"></div>
   ```
 
-### Issue #4 — Le body filter match indicator `(body \u2713)` / `(body \u2717)` sans alternative
+### Issue #4 : Le body filter match indicator `(body \u2713)` / `(body \u2717)` sans alternative
 
 - **Fichier** : `src/ui/client/test-scope.ts`, lignes 122-126 (`renderResults`)
 - **Severite** : moyenne
@@ -59,14 +59,14 @@ La section est bien integree visuellement dans le formulaire et le `<details>` e
   ```
   Ou creer un second `<span>` avec `role="img"` et `aria-label` comme pour l'Issue #1.
 
-### Issue #5 — Le bouton "Tester" n'a pas de focus ring offset en dark mode
+### Issue #5 : Le bouton "Tester" n'a pas de focus ring offset en dark mode
 
 - **Fichier** : `src/ui/config-page.tsx`, ligne 345 (`#btn-test-scope`)
 - **Severite** : mineure
 - **Description** : Le bouton utilise `focus:ring-2 focus:ring-fgp-500` mais pas `focus:ring-offset-2 dark:focus:ring-offset-gray-900`. Le bouton "Generer l'URL" (ligne 277) et le bouton "Charger les apps" (ligne 144) ont tous les deux `focus:ring-offset-2 dark:focus:ring-offset-gray-900`. Le bouton "Tester" casse la coherence.
 - **Correction proposee** : Ajouter `focus:ring-offset-2 dark:focus:ring-offset-gray-900` aux classes du bouton.
 
-### Issue #6 — Le select "Methode" n'a pas de focus ring
+### Issue #6 : Le select "Methode" n'a pas de focus ring
 
 - **Fichier** : `src/ui/config-page.tsx`, lignes 296-305 (`#test-method`)
 - **Severite** : mineure
@@ -76,21 +76,21 @@ La section est bien integree visuellement dans le formulaire et le `<details>` e
   focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none
   ```
 
-### Issue #7 — L'input "Chemin de test" n'a pas de focus ring
+### Issue #7 : L'input "Chemin de test" n'a pas de focus ring
 
 - **Fichier** : `src/ui/config-page.tsx`, lignes 314-319 (`#test-path`)
 - **Severite** : mineure
 - **Description** : Meme probleme que l'Issue #6. L'input n'a pas les classes `focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none`.
 - **Correction proposee** : Ajouter les memes classes focus que les autres inputs du formulaire.
 
-### Issue #8 — Le textarea "Body JSON" n'a pas de focus ring
+### Issue #8 : Le textarea "Body JSON" n'a pas de focus ring
 
 - **Fichier** : `src/ui/config-page.tsx`, lignes 330-335 (`#test-body`)
 - **Severite** : mineure
 - **Description** : Idem Issues #6 et #7.
 - **Correction proposee** : Ajouter les classes focus standard.
 
-### Issue #9 — Pas de feedback visuel (spinner ou texte) pendant le chargement du test
+### Issue #9 : Pas de feedback visuel (spinner ou texte) pendant le chargement du test
 
 - **Fichier** : `src/ui/client/test-scope.ts`, lignes 195-230
 - **Severite** : mineure
@@ -102,10 +102,10 @@ La section est bien integree visuellement dans le formulaire et le `<details>` e
 | Critere | Statut | Detail |
 |---------|--------|--------|
 | Labels explicites (for/id) | OK | Les 3 champs (methode, chemin, body) ont des `<label for="">` corrects |
-| Indicateurs visuels avec alternatives | KO | Issues #1 et #4 — les checkmark/cross sont purement visuels |
-| Verdict annonce aux AT | KO | Issue #2 — pas d'`aria-live` sur le verdict |
-| Focus visible sur tous les interactifs | KO | Issues #5, #6, #7, #8 — focus ring manquant ou incomplet |
-| Etat disabled perceptible | KO | Issue #9 — pas de style `disabled:` |
+| Indicateurs visuels avec alternatives | KO | Issues #1 et #4 : les checkmark/cross sont purement visuels |
+| Verdict annonce aux AT | KO | Issue #2 : pas d'`aria-live` sur le verdict |
+| Focus visible sur tous les interactifs | KO | Issues #5, #6, #7, #8 : focus ring manquant ou incomplet |
+| Etat disabled perceptible | KO | Issue #9 : pas de style `disabled:` |
 | Contraste couleurs | OK | `text-green-500`/`text-red-400` sur fond blanc/gris-800 passe les ratios WCAG AA |
 | Navigation clavier | OK | Tous les elements sont tabbables nativement (`<select>`, `<input>`, `<button>`, `<details>`) |
 | Semantique HTML | OK | `<details>/<summary>` est semantiquement correct, `<label>` bien lies |

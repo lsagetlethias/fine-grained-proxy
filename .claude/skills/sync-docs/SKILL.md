@@ -18,13 +18,13 @@ git log main..HEAD --oneline
 
 Résume les features et décisions architecturales nouvelles.
 
-## 2. CLAUDE.md — Révision via skill
+## 2. CLAUDE.md : révision via skill
 
 Lance le skill `/claude-md-management:revise-claude-md` avec un résumé des learnings de la session.
 
 Si le skill propose des modifications, les appliquer après validation utilisateur.
 
-## 3. Memory — Synchronisation
+## 3. Memory : synchronisation
 
 Lis MEMORY.md et compare avec CLAUDE.md :
 - **Doublons** : retirer de MEMORY.md (CLAUDE.md fait foi)
@@ -34,7 +34,7 @@ Lis MEMORY.md et compare avec CLAUDE.md :
 
 MEMORY.md doit rester sous 200 lignes.
 
-## 4. README.md — Mise à jour
+## 4. README.md : mise à jour
 
 Vérifie la cohérence avec l'état actuel :
 - Stack & versions à jour
@@ -45,7 +45,7 @@ Vérifie la cohérence avec l'état actuel :
 
 Ne modifier que ce qui est factuellement incorrect ou manquant.
 
-## 5. ADR — Architecture Decision Records
+## 5. ADR : Architecture Decision Records
 
 Un ADR est justifié si :
 - Décision architecturale significative (nouveau pattern, choix technique structurant)
@@ -60,11 +60,11 @@ Si un ADR est justifié :
 3. Rédiger en français : Contexte, Décision, Options envisagées, Conséquences
 4. Date du jour, statut `Accepted`
 
-## 6. ACTIVITY.md — Log d'activité
+## 6. ACTIVITY.md : log d'activité
 
 Ajouter une entrée pour la session courante :
 ```markdown
-## YYYY-MM-DD — [Titre court]
+## YYYY-MM-DD : [Titre court]
 - **Changements** : liste des modifications significatives
 - **Décisions** : décisions prises et pourquoi
 - **ADR** : référence si créé

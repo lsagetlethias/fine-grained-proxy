@@ -1,4 +1,4 @@
-# Recette visuelle UI — FGP
+# Recette visuelle UI : FGP
 
 **Date** : 2026-04-09
 **Environnement** : `FGP_SALT=test-recette deno task start` (localhost:8000)
@@ -8,7 +8,7 @@
 
 ## Résultats par fonctionnalité
 
-### 1. `GET /` — Layout split (form + doc)
+### 1. `GET /` : Layout split (form + doc)
 
 | Critère | Verdict | Détail |
 |---------|---------|--------|
@@ -21,7 +21,7 @@
 
 **Verdict global : OK**
 
-### 2. `GET /api/docs` — Swagger UI
+### 2. `GET /api/docs` : Swagger UI
 
 | Critère | Verdict | Détail |
 |---------|---------|--------|
@@ -32,7 +32,7 @@
 
 **Verdict global : OK**
 
-### 3. `GET /static/client.js` — JS client
+### 3. `GET /static/client.js` : JS client
 
 | Critère | Verdict | Détail |
 |---------|---------|--------|
@@ -42,7 +42,7 @@
 
 **Verdict global : OK**
 
-### 4. `POST /api/generate` — Génération URL + clé
+### 4. `POST /api/generate` : Génération URL + clé
 
 | Critère | Verdict | Détail |
 |---------|---------|--------|
@@ -53,7 +53,7 @@
 
 **Verdict global : OK**
 
-### 5. `GET /api/openapi.json` — Spec OpenAPI
+### 5. `GET /api/openapi.json` : Spec OpenAPI
 
 | Critère | Verdict | Détail |
 |---------|---------|--------|
@@ -62,7 +62,7 @@
 
 **Verdict global : OK**
 
-### 6. Éléments UI dans `GET /` — Vérification HTML
+### 6. Éléments UI dans `GET /` : Vérification HTML
 
 | Élément | Verdict | Détail |
 |---------|---------|--------|
