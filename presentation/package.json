@@ -20,14 +20,14 @@
     "demo:all": "deno run --allow-net --allow-env --allow-read --allow-run demo.ts all"
   },
   "dependencies": {
-    "@iconify-json/carbon": "^1.2.22",
-    "@slidev/cli": "^52.15.2",
+    "@iconify-json/carbon": "^1.2.26",
+    "@slidev/cli": "^52.19.1",
     "@slidev/theme-default": "^0.25.0",
     "@slidev/theme-seriph": "^0.25.0",
-    "vite": "^7.3.5"
+    "vite": "^8.2.2"
   },
   "devDependencies": {
-    "prettier": "^3.8.3",
+    "prettier": "^3.9.6",
     "prettier-plugin-slidev": "^1.0.5"
   },
   "packageManager": "pnpm@11.5.1+sha512.93f7b57422ea7068257235b4c16eb60762eb68e1dc23723199cc739043ea9be2c4143274a399d8c6defa2b1176226d9ca1c4b63482d6200c1a8fbaa78c1d1485"
