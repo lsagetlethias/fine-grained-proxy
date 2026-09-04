@@ -1,4 +1,10 @@
-import { HINT_CLASS, INPUT_CLASS, LABEL_CLASS, SUB_LABEL_CLASS } from "./constants.ts";
+import {
+  CONTROL_H_SM,
+  HINT_CLASS,
+  INPUT_CLASS,
+  LABEL_CLASS,
+  SUB_LABEL_CLASS,
+} from "./constants.ts";
 export function NameSection() {
   return (
     <section>
@@ -112,7 +118,7 @@ export function PresetSection() {
             <button
               type="button"
               id="btn-import-decode"
-              class="rounded-md bg-fgp-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
+              class={`${CONTROL_H_SM} inline-flex items-center justify-center rounded-md bg-fgp-600 px-4 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900`}
             >
               D&eacute;coder
             </button>

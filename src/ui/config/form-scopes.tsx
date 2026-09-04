@@ -1,4 +1,4 @@
-import { HINT_CLASS, LABEL_CLASS, SUB_LABEL_CLASS } from "./constants.ts";
+import { CONTROL_H_SM, HINT_CLASS, LABEL_CLASS, SUB_LABEL_CLASS } from "./constants.ts";
 export function ScopesSection() {
   return (
     <section>
@@ -76,7 +76,7 @@ export function TestScopeSection() {
             </label>
             <select
               id="test-method"
-              class="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+              class={`${CONTROL_H_SM} w-full rounded-md border border-gray-300 bg-white px-2 text-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200`}
             >
               <option value="GET">GET</option>
               <option value="POST">POST</option>
@@ -123,7 +123,7 @@ export function TestScopeSection() {
           <button
             type="button"
             id="btn-test-scope"
-            class="rounded-md bg-fgp-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
+            class={`${CONTROL_H_SM} inline-flex items-center justify-center rounded-md bg-fgp-600 px-4 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900`}
           >
             Tester
           </button>

@@ -208,12 +208,7 @@ export function setupAddons(getToken: () => string): AddonsApi {
   function syncRegion(): void {
     const region = currentRegion();
     regionUrls.textContent = "";
-    regionUrls.append(
-      "Détermine l'API interrogée : ",
-      code(regionApiUrl(region)),
-      ". Cible attendue pour la Database API : ",
-      code(regionDbUrl(region)),
-    );
+    regionUrls.append("Cible : ", code(regionDbUrl(region)));
   }
 
   // Un identifiant d'addon n'est pas valide d'une region a l'autre : laisser une base

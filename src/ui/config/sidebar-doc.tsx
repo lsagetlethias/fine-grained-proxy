@@ -316,8 +316,19 @@ export function DocPanel() {
               L'URL de base de l'API que vous souhaitez proxifier.
             </dd>
           </div>
-          <div>
-            <dt class="font-medium text-gray-800 dark:text-gray-200">Mode d'auth</dt>
+          <div
+            id="doc-auth-modes"
+            tabindex={-1}
+            role="group"
+            aria-labelledby="doc-auth-modes-title"
+            class="focus:outline-none focus-visible:ring-2 focus-visible:ring-fgp-500 rounded-md"
+          >
+            <dt
+              id="doc-auth-modes-title"
+              class="font-medium text-gray-800 dark:text-gray-200"
+            >
+              Mode d'auth
+            </dt>
             <dd>
               Comment le proxy s'authentifie aupr&egrave;s de l'API cible.
             </dd>
@@ -380,8 +391,19 @@ POST:/v1/apps/my-app/scale`}</pre>
               Pass&eacute; ce d&eacute;lai, le proxy refuse les requ&ecirc;tes.
             </dd>
           </div>
-          <div>
-            <dt class="font-medium text-gray-800 dark:text-gray-200">Cl&eacute; client</dt>
+          <div
+            id="doc-client-key"
+            tabindex={-1}
+            role="group"
+            aria-labelledby="doc-client-key-title"
+            class="focus:outline-none focus-visible:ring-2 focus-visible:ring-fgp-500 rounded-md"
+          >
+            <dt
+              id="doc-client-key-title"
+              class="font-medium text-gray-800 dark:text-gray-200"
+            >
+              Cl&eacute; client
+            </dt>
             <dd>
               Par d&eacute;faut, FGP tire une cl&eacute; al&eacute;atoire diff&eacute;rente pour
               chaque blob et vous la renvoie une seule fois. Le bloc &laquo; Utiliser ma propre
@@ -406,6 +428,12 @@ POST:/v1/apps/my-app/scale`}</pre>
               </code>{" "}
               : la cl&eacute; client est donc la seule inconnue qui prot&egrave;ge un blob
               intercept&eacute; contre un cassage hors ligne.
+            </dd>
+            <dd class="mt-1">
+              La jauge affich&eacute;e sous le champ mesure la vari&eacute;t&eacute; des
+              caract&egrave;res saisis. Elle rep&egrave;re une cl&eacute; pauvre, par exemple une
+              r&eacute;p&eacute;tition, mais elle ne mesure pas la s&eacute;curit&eacute;
+              r&eacute;elle : une phrase de passe en langue naturelle y ressort au maximum.
             </dd>
           </div>
         </dl>

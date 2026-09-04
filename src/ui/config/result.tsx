@@ -64,6 +64,14 @@ export function ResultSection() {
               Copier
             </button>
           </div>
+          {
+            /* Deux variantes : « notez cette cle maintenant » adresse a quelqu'un qui vient de
+              la coller depuis son coffre serait un bruit qui decredibilise les avertissements. */
+          }
+          <p id="result-key-note" class="mt-1 text-xs text-green-800 dark:text-green-300">
+            Notez cette cl&eacute; maintenant : FGP ne la stocke pas et ne pourra pas vous la
+            redonner. Sans elle, l'URL est inexploitable.
+          </p>
         </div>
 
         <div>

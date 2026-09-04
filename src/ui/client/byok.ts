@@ -204,9 +204,17 @@ export function setupByok(): ByokApi {
 
 export function markKeyOrigin(providedByUser: boolean): void {
   const badge = document.getElementById("result-key-origin");
-  if (!badge) return;
-  badge.textContent = providedByUser ? "fournie par vous" : "générée par le serveur";
-  badge.className = providedByUser
-    ? "inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-    : "inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300";
+  if (badge) {
+    badge.textContent = providedByUser ? "fournie par vous" : "générée par le serveur";
+    badge.className = providedByUser
+      ? "inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+      : "inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300";
+  }
+
+  const note = document.getElementById("result-key-note");
+  if (note) {
+    note.textContent = providedByUser
+      ? "Cette clé est celle que vous avez fournie. FGP ne la stocke pas."
+      : "Notez cette clé maintenant : FGP ne la stocke pas et ne pourra pas vous la redonner. Sans elle, l'URL est inexploitable.";
+  }
 }

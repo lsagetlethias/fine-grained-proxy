@@ -1,4 +1,11 @@
-import { HINT_CLASS, INPUT_CLASS, LEGEND_CLASS, PILL_CLASS, TTL_PRESETS } from "./constants.ts";
+import {
+  CONTROL_H,
+  HINT_CLASS,
+  INPUT_CLASS,
+  LEGEND_CLASS,
+  PILL_CLASS,
+  TTL_PRESETS,
+} from "./constants.ts";
 import { EyeIcon } from "./icons.tsx";
 
 export function TtlSection() {
@@ -60,7 +67,7 @@ export function ByokSection() {
     >
       <summary
         id="byok-summary"
-        class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fgp-700 hover:text-fgp-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fgp-500 focus-visible:ring-offset-2 rounded-md dark:text-fgp-300 dark:focus-visible:ring-offset-gray-900 [&::-webkit-details-marker]:hidden"
+        class="flex flex-wrap cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fgp-700 hover:text-fgp-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fgp-500 focus-visible:ring-offset-2 rounded-md dark:text-fgp-300 dark:focus-visible:ring-offset-gray-900 [&::-webkit-details-marker]:hidden"
       >
         <svg
           class="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
@@ -74,23 +81,28 @@ export function ByokSection() {
             clip-rule="evenodd"
           />
         </svg>
-        <span>Utiliser ma propre cl&eacute; client (avanc&eacute;)</span>
+        <span class="min-w-0 flex-1">Utiliser ma propre cl&eacute; client</span>
+        {
+          /* Pas de classe utilitaire de display ici : elle l'emporterait sur le
+            [hidden] { display: none } du preflight et le badge resterait visible. */
+        }
         <span
           id="byok-active-badge"
           hidden
-          class="ml-auto inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+          aria-label="Cl&#233; personnalis&#233;e active"
+          class="shrink-0 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
         >
-          Cl&eacute; personnalis&eacute;e active
+          Active
         </span>
       </summary>
 
       <div class="space-y-3 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
-        <div
+        <p
           id="byok-warning"
-          class="flex items-start gap-2 rounded-md border border-red-300 border-l-4 border-l-red-500 bg-red-50 p-3 dark:border-red-700 dark:border-l-red-500 dark:bg-red-900/30"
+          class="flex items-start gap-2 rounded-md border border-red-300 border-l-4 border-l-red-500 bg-red-50 p-2 text-xs text-red-800 dark:border-red-700 dark:border-l-red-500 dark:bg-red-900/30 dark:text-red-300"
         >
           <svg
-            class="h-5 w-5 shrink-0 text-red-600 dark:text-red-400"
+            class="h-4 w-4 shrink-0 text-red-600 dark:text-red-400"
             viewBox="0 0 20 20"
             fill="currentColor"
             aria-hidden="true"
@@ -101,19 +113,11 @@ export function ByokSection() {
               clip-rule="evenodd"
             />
           </svg>
-          <div class="text-xs text-red-800 dark:text-red-300">
-            <p class="font-semibold">
-              R&eacute;utiliser une cl&eacute; lie les blobs entre eux : si elle fuite, tous les
-              blobs g&eacute;n&eacute;r&eacute;s avec cette cl&eacute; deviennent
-              d&eacute;chiffrables d'un coup.
-            </p>
-            <p class="mt-1">
-              R&eacute;servez la mutualisation aux secrets de CI, et prenez une cl&eacute; longue et
-              al&eacute;atoire. La cl&eacute; n'est jamais stock&eacute;e : FGP ne peut ni la
-              retrouver, ni la r&eacute;initialiser. Sans elle, le blob est inexploitable.
-            </p>
-          </div>
-        </div>
+          <span>
+            R&eacute;utiliser une cl&eacute; lie les blobs : sa fuite rend d&eacute;chiffrables tous
+            ceux g&eacute;n&eacute;r&eacute;s avec elle.
+          </span>
+        </p>
 
         <div>
           <div class="mb-1 flex flex-wrap items-baseline justify-between gap-2">
@@ -142,25 +146,31 @@ export function ByokSection() {
               data-lpignore="true"
               spellcheck={false}
               aria-describedby="byok-warning byok-strength-label byok-hint"
-              class="min-w-[12rem] flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 dark:aria-[invalid=true]:border-red-500"
+              class="min-w-[11rem] flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 dark:aria-[invalid=true]:border-red-500"
             />
-            <button
-              type="button"
-              id="btn-byok-reveal"
-              aria-pressed="false"
-              aria-label="Afficher la cl&#233;"
-              class="shrink-0 rounded-md border border-gray-300 p-2 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:hover:text-gray-200"
-            >
-              <EyeIcon />
-            </button>
-            <button
-              type="button"
-              id="btn-byok-copy"
-              data-copy="byok-key"
-              class="copy-btn shrink-0 rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-            >
-              Copier
-            </button>
+            {
+              /* Groupes : sous 360 px la rangee replie de toute facon, avec ce conteneur
+                elle replie proprement et le champ y gagne de la largeur. */
+            }
+            <div id="byok-actions" class="flex shrink-0 gap-2">
+              <button
+                type="button"
+                id="btn-byok-reveal"
+                aria-pressed="false"
+                aria-label="Afficher la cl&#233;"
+                class={`${CONTROL_H} w-[2.375rem] shrink-0 inline-flex items-center justify-center rounded-md border border-gray-300 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:hover:text-gray-200`}
+              >
+                <EyeIcon />
+              </button>
+              <button
+                type="button"
+                id="btn-byok-copy"
+                data-copy="byok-key"
+                class={`${CONTROL_H} copy-btn shrink-0 inline-flex items-center justify-center rounded-md border border-gray-300 px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-fgp-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700`}
+              >
+                Copier
+              </button>
+            </div>
           </div>
 
           <div id="byok-strength" class="mt-2 flex gap-1" aria-hidden="true">
@@ -190,11 +200,18 @@ export function ByokSection() {
           </p>
 
           <p id="byok-hint" class={HINT_CLASS}>
-            Laissez vide pour que le serveur g&eacute;n&egrave;re une cl&eacute; unique. 24
-            caract&egrave;res minimum, ASCII imprimable, sans espace. La jauge mesure la
-            vari&eacute;t&eacute; des caract&egrave;res saisis, pas la s&eacute;curit&eacute;
-            r&eacute;elle de la cl&eacute;.
+            Laissez vide pour que FGP en g&eacute;n&egrave;re une.
           </p>
+
+          <button
+            type="button"
+            id="byok-doc-link"
+            data-goto-doc="doc-client-key"
+            data-return-label="Cl&#233; personnalis&#233;e"
+            class="mt-1 text-xs font-medium text-fgp-600 hover:text-fgp-800 focus:outline-none focus:underline dark:text-fgp-400 dark:hover:text-fgp-200"
+          >
+            En savoir plus sur la cl&eacute; client
+          </button>
         </div>
       </div>
     </details>

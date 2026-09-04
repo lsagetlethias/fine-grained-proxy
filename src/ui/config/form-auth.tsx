@@ -1,6 +1,7 @@
 import {
   ADD_BTN_CLASS,
   AUTH_MODES,
+  CONTROL_H,
   FIELD_CLASS,
   HINT_CLASS,
   LABEL_CLASS,
@@ -173,9 +174,7 @@ export function ScalingoAddonSection() {
           role="status"
           aria-live="polite"
         >
-          D&eacute;termine l'API interrog&eacute;e :{" "}
-          <code class="font-mono">https://api.osc-fr1.scalingo.com</code>. Cible attendue pour la
-          Database API : <code class="font-mono">https://db-api.osc-fr1.scalingo.com</code>
+          Cible : <code class="font-mono">https://db-api.osc-fr1.scalingo.com</code>
         </p>
         <p
           id="addon-target-warning"
@@ -187,33 +186,44 @@ export function ScalingoAddonSection() {
         </p>
 
         <div class="mt-4 flex flex-wrap items-start gap-2">
-          <div class="flex min-w-[14rem] flex-1 gap-2">
-            <div class="min-w-0 flex-1">
-              <label
-                for="addon-app"
-                class={SUB_LABEL_CLASS}
+          <div class="min-w-[14rem] flex-1">
+            <div class="flex items-end gap-2">
+              <div class="min-w-0 flex-1">
+                <label
+                  for="addon-app"
+                  class={SUB_LABEL_CLASS}
+                >
+                  Application
+                </label>
+                <input
+                  type="text"
+                  id="addon-app"
+                  list="addon-apps-datalist"
+                  maxlength={64}
+                  placeholder="mon-app"
+                  autocomplete="off"
+                  spellcheck={false}
+                  aria-describedby="addon-status addon-hint"
+                  class={FIELD_CLASS}
+                />
+              </div>
+              <button
+                type="button"
+                id="btn-addon-load"
+                class={`${CONTROL_H} shrink-0 inline-flex items-center justify-center rounded-md bg-fgp-600 px-3 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed dark:focus:ring-offset-gray-900`}
               >
-                Application
-              </label>
-              <input
-                type="text"
-                id="addon-app"
-                list="addon-apps-datalist"
-                maxlength={64}
-                placeholder="mon-app"
-                autocomplete="off"
-                spellcheck={false}
-                aria-describedby="addon-status addon-hint"
-                class={FIELD_CLASS}
-              />
+                Charger
+              </button>
             </div>
-            <button
-              type="button"
-              id="btn-addon-load"
-              class="mt-[1.375rem] shrink-0 rounded-md bg-fgp-600 px-3 py-2 text-sm font-medium text-white hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
+
+            {/* Sous le champ Application, pas sous le select : c'est ce champ qu'il concerne. */}
+            <p
+              id="addon-status"
+              class="mt-1 w-full text-xs text-gray-500 dark:text-gray-400"
+              role="status"
+              aria-live="polite"
             >
-              Charger
-            </button>
+            </p>
           </div>
 
           <div class="min-w-[12rem] flex-1">
@@ -226,7 +236,7 @@ export function ScalingoAddonSection() {
             <select
               id="addon-select"
               disabled
-              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:disabled:bg-gray-800/50 dark:disabled:text-gray-500"
+              class={`${CONTROL_H} w-full rounded-md border border-gray-300 bg-white px-3 text-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:disabled:bg-gray-800/50 dark:disabled:text-gray-500`}
             >
               <option value="">Choisissez une base de donn&eacute;es</option>
             </select>
@@ -235,21 +245,20 @@ export function ScalingoAddonSection() {
 
         <datalist id="addon-apps-datalist"></datalist>
 
-        <p
-          id="addon-status"
-          class="mt-2 text-xs text-gray-500 dark:text-gray-400"
-          role="status"
-          aria-live="polite"
-        >
+        <p id="addon-hint" class={HINT_CLASS}>
+          Le consommateur ne voit jamais votre token de compte. L'acc&egrave;s est limit&eacute;
+          &agrave; cette base.
         </p>
 
-        <p id="addon-hint" class={HINT_CLASS}>
-          FGP &eacute;change votre token de compte contre un bearer, puis obtient un token de base
-          de donn&eacute;es valable 1 heure, renouvel&eacute; automatiquement. Le consommateur de
-          l'URL ne voit ni l'un ni l'autre. Une requ&ecirc;te qui ne vise pas cette base est
-          refus&eacute;e. Suggestions d'applications disponibles si vous avez d&eacute;j&agrave;
-          charg&eacute; la liste des applications.
-        </p>
+        <button
+          type="button"
+          id="addon-doc-link"
+          data-goto-doc="doc-auth-modes"
+          data-return-label="Base de donn&#233;es"
+          class="mt-1 text-xs font-medium text-fgp-600 hover:text-fgp-800 focus:outline-none focus:underline dark:text-fgp-400 dark:hover:text-fgp-200"
+        >
+          Comment fonctionne ce mode
+        </button>
       </fieldset>
     </section>
   );
@@ -277,7 +286,7 @@ export function TokenSection() {
         <button
           type="button"
           id="btn-load-apps"
-          class="hidden rounded-md bg-fgp-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
+          class={`${CONTROL_H} hidden shrink-0 items-center justify-center rounded-md bg-fgp-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-fgp-700 focus:outline-none focus:ring-2 focus:ring-fgp-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900`}
         >
           Charger les apps
         </button>

@@ -10,6 +10,7 @@ import { setupTestScope } from "./client/test-scope.ts";
 import { setupImportConfig } from "./client/import-config.ts";
 import { setupShareConfig } from "./client/share-config.ts";
 import { setupTabs } from "./client/tabs.ts";
+import { setupDocLinks } from "./client/doc-links.ts";
 import { setupLogsTab } from "./client/logs-tab.ts";
 import { setupAuthHeaders } from "./client/auth-headers.ts";
 import { setupAddons } from "./client/addons.ts";
@@ -93,6 +94,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
   setupTestScope(state.bodyFiltersData, authDeps);
   setupImportConfig(authDeps);
   setupTabs();
+  setupDocLinks();
 
   syncAuthModeVisibility();
   doUpdateVisibility();
