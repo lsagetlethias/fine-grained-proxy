@@ -9,6 +9,30 @@
 
 ---
 
+## Arbitrages rendus le 2026-09-04
+
+**Ce rapport n'est plus un document de questions ouvertes.** L'architecte a tranche l'ensemble des points le jour de sa remise. Cette section fige les decisions ; le corps du rapport en dessous conserve l'argumentation qui y a mene, y compris les mesures, et reste la reference pour comprendre **pourquoi** chaque decision a ete prise.
+
+| Point | Decision |
+|-------|----------|
+| B1, contradiction §6.1 / §6.3 | Accepte. La regle de version s'exprime en **planchers**, jamais en egalites. `auth` objet exige `v >= 4`, des `queryFilters` exigent `v >= 5`, et `v` est le maximum des planchers. |
+| B2, strip silencieux des cles inconnues | Accepte. Une cle inconnue dans un `ScopeEntry` est **refusee**, sur `/api/generate` comme sur `/api/share/encode`. |
+| B3, quatrieme cause de refus sans message | Accepte. Un quatrieme message de diagnostic est ajoute pour le surnombre d'occurrences, et **l'ordre d'evaluation est fixe par la spec** : le comptage precede l'evaluation des valeurs. |
+| B4, restriction de `any` non normative en profondeur | Accepte. La restriction aux chaines devient normative **a toute profondeur** d'un `and` ou d'un `not`, cote validation de blob et cote generation. |
+| B5, plafond de 4 sans porte de sortie | Accepte, **forme A retenue**. Plafond a deux paliers : 4 occurrences pour un `queryFilter` contenant une `regex` a n'importe quelle profondeur, 64 pour tous les autres. Le palier est decide une fois au dechiffrement, ce qui garde `checkRequestAccess` sans etat, condition de son bundling cote navigateur. Le 64 reste a confirmer par mesure. |
+| T1, diagnostic impossible en production | Accepte. La capture network enregistre les **noms** des parametres de query, sans les valeurs. Le PO arbitre la rupture de compatibilite du schema SSE. |
+| T2, testeur menteur en permissif | Niveau 1 retenu : un **troisieme etat**, « autorise par un scope qui ne contraint pas la query ». L'avertissement a la generation part en ticket separe. |
+| T3, analyse de la query | Accepte en entier, point-virgule en non-goal explicite compris. Le PO corrige aussi la justification fausse sur `?flag` et `?flag=`. |
+| T4, double passe brute et canonique | Accepte. L'axe query est evalue **une seule fois**, en amont des deux passes de chemin. Le meme defaut sur les body filters part en ticket separe. |
+| T5, `queryFilters: []` et `v` sous-declaree | Accepte sur recommandation : tableau vide omis et traite comme absent, version sous-declaree rejetee. |
+| T6, doublon de parametre | Accepte sur recommandation : rejet au dechiffrement, miroir de la generation. |
+| T7, message du `?` dans un pattern | Accepte. Le PO livre le texte de remplacement. |
+| T8, registre d'AC decroche | Tranche adoptee integralement. Serie **AC-51 et suivantes**, section « Series existantes hors registre » avec la table de correspondance, version du registre corrigee sans pretendre qu'il est a jour. Le backfill d'AC-43 a AC-50 part en ticket separe avec le PO. |
+
+Les criteres d'acceptation de `docs/acceptance-criteria.md`, series AC-51 a AC-57, sont ecrits **contre ces decisions** et non contre la premiere redaction de §19.
+
+---
+
 ## Verdict d'ensemble
 
 La spec est solide sur ce qu'elle décide. Le déni par défaut, l'opt-in, la restriction de `any`, la matrice `required` et le partage des budgets ADR-0010 sont bien arbitrés et bien argumentés. Ce qui ne va pas est ailleurs : la spec décrit correctement un moteur de matching, et beaucoup moins correctement son insertion dans un produit qui existe déjà. Cinq points bloquent, dont deux sont des fail-open silencieux et un rend la feature inutilisable sur la famille d'API qu'elle cite elle-même comme cas d'usage principal.
@@ -197,7 +221,7 @@ Couvert par AC-52.
 
 ---
 
-## À trancher par l'architecte
+## Points soumis a l'architecte (tous tranches le 2026-09-04, cf. section « Arbitrages rendus »)
 
 ### T1. Le déni par défaut n'a aucun garde-fou de diagnostic en production, et les logs ne capturent pas la query
 
@@ -374,3 +398,30 @@ Réserve mineure, traitée en T1 : l'alerte parle des paramètres « non déclar
 - **Pas de recette d'accessibilité ni de revue visuelle** du formulaire de §12.14 : c'est le périmètre du designer, et il n'y a rien à regarder tant que rien n'est intégré.
 - **Pas d'audit du différentiel de parseur de query côté cibles réelles.** Je documente le risque (T3) à partir du comportement de `URLSearchParams`, mesuré, et du comportement connu de piles amont, non mesuré. Vérifier ce qu'une cible donnée fait de `;` demanderait une cible de test, ce que je n'ai pas.
 - **Le backfill des séries AC-43 à AC-50** est explicitement hors périmètre, argumenté en T8.
+
+---
+
+## Matrice de couverture AC contre tests
+
+Etat au 2026-09-04. `queryFilters` n'existe pas dans `src/`, donc la quasi-totalite des criteres est en attente d'implementation. Cette matrice est le contrat de ce que le dev doit livrer, pas un constat de couverture.
+
+| Serie | Criteres | Couverts aujourd'hui | Fichier de tests cible |
+|-------|----------|----------------------|-------------------------|
+| AC-51, semantique de l'axe query | 16 | 0 | `tests/testu/middleware/query-filters.test.ts` (a creer) |
+| AC-52, plafond a deux paliers | 14 | **4** (AC-52.10 a 52.13) | `tests/testu/middleware/query-occurrences-budget.test.ts` pour les 4 mesures, le reste dans `query-filters.test.ts` |
+| AC-53, validation blob et generation | 18 | 0 | `tests/testu/crypto/blob-validation.test.ts` pour le dechiffrement, `tests/testi/api.test.ts` pour la generation, `tests/testi/api-edge-cases.test.ts` pour AC-53.15 et 53.16 |
+| AC-54, version et retro-compatibilite | 9 | 0 | `tests/testi/retro-compat.test.ts` |
+| AC-55, analyse de la query | 10 | 0 | `tests/testu/middleware/query-filters.test.ts` pour l'analyse, `tests/testi/proxy.test.ts` pour AC-55.8 |
+| AC-56, testeur de scopes | 11 | 0 | `tests/testu/ui/config-page.test.ts` pour la copy, un test dedie pour la parite AC-56.8 |
+| AC-57, capture des noms de parametres | 8 | 0 | `tests/testu/logs-capture.test.ts` et `tests/testi/logs-endpoints.test.ts` |
+| **Total** | **86** | **4** | |
+
+**Les quatre criteres couverts** le sont par `tests/testu/middleware/query-occurrences-budget.test.ts`, livre avec ce rapport, vert et stable sur cinq executions consecutives. Il mesure `matchBodyFilter`, qui est le moteur que `queryFilters` reutilise sans modification (§19.2) : la mesure vaut donc pour l'axe query avant meme que celui-ci existe. Ses seuils sont calibres sur la machine courante et exprimes en rapports, pas en millisecondes absolues, pour ne pas figer la vitesse d'un agent de CI dans un test de politique de securite.
+
+**Trois zones de la matrice demandent une decision avant d'etre implementables** :
+
+- **AC-56, le testeur.** Le diagnostic par scope suppose que la fonction d'autorisation retourne, en plus de son booleen, la cause du refus **et le parametre fautif**. Aujourd'hui `AccessVerdict` porte un `denialReason` unique, global a l'ensemble des scopes, et `checkAccess` ne retourne qu'un booleen. Le fait que `denialReason` puisse deja valoir `"body"` sans qu'aucun chemin de code ne le produise montre que cette structure n'a jamais servi a diagnostiquer. C'est une refonte du type de retour, pas un ajout de champ, et elle doit etre cadree avant que le dev ne commence.
+- **AC-57, la capture.** Le nom du champ et la forme du schema d'events sont au PO, la rupture de compatibilite du flux SSE etant de son ressort (§14.6).
+- **AC-52.11, le chiffre 64.** Le garde-fou est ecrit et vert, mais il valide une propriete de linearite, pas la valeur elle-meme. Si l'architecte revoit le 64, ce test est le premier a relancer.
+
+**Trois series echoueront au premier passage, et c'est leur fonction** : AC-54.3 et AC-54.8 tant que la regle de version reste une egalite, AC-53.15 et AC-53.16 tant que les schemas strippent les cles inconnues, AC-56.6 tant que le quatrieme message de diagnostic n'existe pas. Ce ne sont pas des tests a assouplir.
