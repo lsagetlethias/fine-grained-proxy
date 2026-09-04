@@ -1,5 +1,5 @@
 import { FgpLogo } from "../layout.tsx";
-import { GithubMarkIcon } from "./icons.tsx";
+import { GitHubMarkIcon } from "./icons.tsx";
 
 export function PageHeader() {
   return (
@@ -18,7 +18,7 @@ export function PageHeader() {
           class="text-gray-400 hover:text-fgp-600 dark:hover:text-fgp-400 transition-colors"
           aria-label="Voir le code source sur GitHub"
         >
-          <GithubMarkIcon size={24} />
+          <GitHubMarkIcon size={24} />
         </a>
       </div>
       <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -38,7 +38,7 @@ export function PageFooter({ commitHash }: { commitHash: string }) {
           rel="noopener"
           class="inline-flex items-center gap-1.5 hover:text-fgp-600 dark:hover:text-fgp-400 transition-colors"
         >
-          <GithubMarkIcon size={16} />
+          <GitHubMarkIcon size={16} />
           Fine-Grained Proxy sur GitHub
         </a>
         <span>&middot;</span>
