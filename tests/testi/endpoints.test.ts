@@ -50,10 +50,14 @@ Deno.test({
     const body = await res.text();
 
     assertEquals(res.status, 200);
-    assertEquals(
-      body.includes('<script defer src="/static/client.js?v='),
-      true,
-    );
+    const match = body.match(/<script defer src="(\/static\/client\.js\?v=[^"]+)"/);
+    assertEquals(match !== null, true);
+
+    // L'URL versionnee doit etre servie : sans cette requete, un service statique qui
+    // rejetterait la query casserait tous les assets d'un coup sans faire echouer le test.
+    const asset = await app.request(match![1]);
+    assertEquals(asset.status, 200);
+    await asset.body?.cancel();
   },
   sanitizeOps: false,
   sanitizeResources: false,
