@@ -77,7 +77,7 @@ export function cachedSingleflight(
   cache.clearExpired();
 
   const cached = cache.get(key);
-  if (cached) return Promise.resolve(cached);
+  if (cached !== null) return Promise.resolve(cached);
 
   const pending = cache.getInflight(key);
   if (pending) return pending;
