@@ -26,6 +26,7 @@ src/ui/changelog-data.ts
 
 # Claude Code
 .claude/settings.local.json
+.claude/worktrees/
 
 # Skills marketplace (symlinks + .agents experimental)
 .agents/skills/*
