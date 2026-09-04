@@ -50,7 +50,7 @@ FGP publie un contrat en quatre garanties et une liste explicite de non-garantie
 
 - FGP ne protège pas le créateur d'un blob contre le `target` public qu'il a lui-même choisi. Le blob est une délégation : celui qui le crée choisit sa cible. La politique protège l'hôte FGP et son réseau, pas l'utilisateur contre lui-même.
 - FGP ne garantit pas l'absence de rebinding DNS. Voir les conséquences, c'est la limite structurelle de cette décision.
-- FGP n'inspecte ni ne filtre les réponses upstream, hors `Set-Cookie` (ADR-0006).
+- FGP n'inspecte ni ne filtre le contenu des réponses upstream : jamais le status, jamais le body, jamais un en-tête métier de l'upstream. Il retire un nombre restreint d'en-têtes de transport : `Set-Cookie` et `Transfer-Encoding` toujours, `Content-Encoding` et `Content-Length` seulement quand le runtime a déjà décodé le corps avant FGP (ADR-0006, `docs/specs.md` §11.3).
 - FGP n'est pas un WAF. Hors des filtres explicitement déclarés dans le scope, le contenu de la requête n'est pas examiné.
 - FGP ne contraint aucun paramètre de query tant que la feature `queryFilters` n'est pas livrée. C'est une non-garantie datée, pas un oubli : la décision est prise en §4, son implémentation est différée pour une raison écrite.
 - FGP ne limite ni le débit ni la taille des requêtes sur ses endpoints publics. Cet axe relève d'un lot distinct et reste, à ce jour, un risque assumé.

@@ -12,12 +12,14 @@
 - **Breaking** : les cibles non publiques sont refusées (`target_forbidden`) : boucle locale, réseaux privés, link-local, métadonnées cloud
 - **Breaking** : les redirections de l'API cible ne sont plus suivies. Un 3xx vous est transmis tel quel, avec son `Location`
 - **Breaking** : les corps de requête trop volumineux renvoient `payload_too_large` (413). Le streaming à travers le proxy reste sans plafond
+- **Breaking** : un corps upstream décompressé par FGP gardait `Content-Encoding`/`Content-Length` d'origine, cassant les clients qui les respectent. Retirés, comme `Transfer-Encoding`
 - **Les paramètres de query ne sont pas contraints par les scopes** : un blob autorisé sur `/v1/items` accepte `/v1/items?action=delete`, en attendant la feature
 - Le testeur de scopes de l'interface ne ment plus : il refusait des requêtes que le proxy acceptait. Une seule fonction d'autorisation, partagée avec le proxy
 - Nouvelle variable `FGP_TRUSTED_PROXY_HOPS` pour lire `X-Forwarded-For` derrière un proxy de confiance. Sans elle, les logs utilisent l'adresse du pair
 - Nouvelle variable `FGP_EGRESS_ALLOW_PRIVATE`, réservée au développement : l'activer en production rouvre l'accès au réseau privé de votre hébergeur
 - La limitation de débit est documentée côté opérateur, dans les guides Deno Deploy et Scalingo. FGP n'en implémente pas, un limiteur en mémoire serait inopérant sur Deploy
 - Les assets de l'interface portent une empreinte de contenu : plus de CSS ni de JavaScript périmé après une mise à jour
+- Les sept routes `/api/*` plafonnées déclarent désormais leur `413 payload_too_large` dans l'OpenAPI : le contrat publié était incomplet, pas le comportement
 
 ## 3 septembre 2026
 

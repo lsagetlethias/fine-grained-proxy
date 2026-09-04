@@ -693,7 +693,7 @@
 >
 > **Convention `X-FGP-Source`** :
 > - `proxy` : la reponse est generee par FGP (erreur FGP ou 502 fetch throw ou 500 onError).
-> - `upstream` : la reponse provient de l'API cible (status, headers et body forwardes sans transformation, sauf `Set-Cookie` strippe).
+> - `upstream` : la reponse provient de l'API cible (status et body forwardes sans transformation). Trois en-tetes au plus sont retires : `Set-Cookie` et `Transfer-Encoding` toujours, `Content-Encoding` et son `Content-Length` uniquement quand le runtime a deja decode le corps avant que FGP ne le recoive.
 >
 > **Liste exhaustive des erreurs FGP (shape `{error, message}` + `X-FGP-Source: proxy`)** : `missing_key` (401), `blob_too_large` (414), `invalid_credentials` (401), `token_expired` (410), `invalid_auth_mode` (400), `invalid_body` (400), `scope_denied` (403), `upstream_unreachable` (502), `invalid_request` (400), `internal_error` (500 via `app.onError`).
 

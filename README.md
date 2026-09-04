@@ -210,7 +210,9 @@ Requete -> extraire blob (header X-FGP-Blob prioritaire, sinon premier segment U
   -> verifier scopes vs methode/path/body
   -> auth (bearer, basic, header custom, ou scalingo-exchange avec cache)
   -> forward vers config.target (X-FGP-Key et X-FGP-Blob strippes)
-  -> renvoyer reponse upstream telle quelle (status/body/headers, seul Set-Cookie strippe)
+  -> renvoyer reponse upstream telle quelle (status/body/headers, Set-Cookie et
+     Transfer-Encoding toujours strippes, Content-Encoding/Content-Length seulement
+     si le runtime a deja decode le corps avant FGP)
 ```
 
 Toute reponse du proxy porte le header `X-FGP-Source` : `upstream` quand la reponse vient de l'API cible (forward transparent), `proxy` quand c'est une erreur FGP (shape `{error, message}`). Voir [ADR-0006](docs/adr/0006-proxy-transparent-erreurs-upstream.md).

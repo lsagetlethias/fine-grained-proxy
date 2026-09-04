@@ -238,6 +238,8 @@ La dérivation PBKDF2 est incompressible, elle est nécessaire pour déchiffrer 
 
 Cette dernière couche est une heuristique, donc jamais seule : un motif qui passerait au travers de l'analyse retomberait sur les deux autres.
 
+**Ce budget, comme celui de 256 `ObjectValue` par blob, est désormais réellement tenu par requête (corrigé le 2026-09-04).** Le chemin de matching contrôle le chemin de la requête sur deux formes, brute et canonique (ADR-0009 §3), et les body filters vivaient dans cette même fonction : un appelant qui forçait la seconde passe (un `//` ou un `/./` dans le chemin suffisait) faisait évaluer les body filters une seconde fois, doublant de fait le coût réel à 8 `regex` et 512 `ObjectValue` par requête au lieu des plafonds annoncés ici. La décision de match du corps est maintenant calculée une seule fois par scope et partagée entre les deux passes de chemin : les plafonds de cette section valent ce qu'ils annoncent sur une requête réelle, pas seulement sur le papier.
+
 ### 11.2 Ancrage des regex : une correction de faille, pas de performance
 
 **L'évaluation est ancrée** : le moteur reçoit toujours `^(?:source)$`.

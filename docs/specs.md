@@ -539,7 +539,7 @@ Tous les clients doivent utiliser ce header pour savoir à qui attribuer une err
 
 - Status HTTP : préservé tel quel (y compris 401, 403, 404, 429, 500, 502, 503, 504 upstream).
 - Body : forwardé inchangé (stream), avec le `Content-Type` original.
-- Headers : propagés tels quels, sauf `Set-Cookie` qui reste filtré (le proxy est stateless, entorse acceptée à la transparence pure, cf. section 11.3).
+- Headers : propagés tels quels, sauf `Set-Cookie` et `Transfer-Encoding` (toujours filtrés), et `Content-Encoding`/`Content-Length` quand le runtime a déjà décodé le corps avant que FGP ne le reçoive (`gzip`/`br` sans `Range` ni `Accept-Encoding: identity` sur la requête sortante). Détail complet et justification en section 11.3.
 - Header ajouté : `X-FGP-Source: upstream`.
 
 En particulier :
@@ -830,7 +830,14 @@ Ordre d'application : les headers d'auth issus du blob écrasent ceux de l'appel
 ### 11.3 Headers de réponse
 
 Le proxy propage tous les headers de la réponse de l'API cible, sauf :
-- `Set-Cookie` (filtré, le proxy est stateless et ne doit pas propager de cookies). C'est la seule entorse à la transparence stricte, acceptée pour préserver la nature stateless du proxy.
+
+- `Set-Cookie` : toujours filtré, le proxy est stateless et ne doit pas propager de cookies.
+- `Transfer-Encoding` : toujours filtré. C'est un en-tête hop-by-hop (RFC 9110 §7.6.1), il décrit le framing du hop amont, jamais celui que FGP émet, et aucun proxy conforme ne le relaie.
+- `Content-Encoding` et `Content-Length` : filtrés **uniquement quand le runtime a réellement décodé le corps** avant que FGP ne le reçoive.
+
+**Pourquoi ces deux derniers sont conditionnels, et pas simplement filtrés en bloc.** `fetch` décompresse automatiquement un corps dont l'upstream a annoncé `Content-Encoding: gzip` ou `br`, sauf si la requête sortante porte un `Range` (quelle que soit sa valeur, la réponse pouvant être un fragment indécodable) ou un `Accept-Encoding` valant exactement `identity`, deux cas où le décodage reste désactivé et le corps ressort tel qu'envoyé par l'upstream. Quand le décodage a eu lieu, les en-têtes amont continuent de décrire l'entité compressée d'origine, qui n'existe plus au moment où FGP répond : les laisser passer ferait croire à un client qu'il reçoit du contenu compressé alors qu'il reçoit du clair (un client qui respecte l'en-tête tente de le décompresser et échoue), et un `Content-Length` périmé tronque la réponse à la première lecture. Dans tous les autres cas, hors de ce décodage (encodage que le runtime ne décode pas, ou décodage désactivé par `Range`/`Accept-Encoding: identity`), le corps ressort exactement comme envoyé par l'upstream et ces deux en-têtes restent exacts : ils sont alors relayés sans modification.
+
+Cette suppression conditionnelle n'est pas une entorse supplémentaire à la transparence de l'ADR-0006, elle en découle : garder un en-tête qui décrit un corps que le runtime a déjà transformé reviendrait à mentir sur ce que FGP transmet réellement. La déviation vient du runtime, qui a transformé le corps avant que FGP ne le voie, jamais d'un choix produit. Voir ADR-0006 pour la doctrine complète.
 
 Le proxy ajoute systématiquement le header `X-FGP-Source` sur toutes ses réponses :
 - `X-FGP-Source: upstream` sur les réponses forwardées depuis l'API cible.
@@ -1227,7 +1234,7 @@ La section se compose de trois blocs, dans cet ordre :
 | Titre du bloc | « D'où vient l'erreur » |
 | Intro | « Toute réponse renvoyée par le proxy porte l'en-tête `X-FGP-Source`. Il dit qui a répondu, avant même de regarder le status. » |
 | Puce `proxy` | « `proxy` : c'est FGP qui a répondu. Le corps a la forme `{error, message}` et le code figure dans la liste ci-dessous. » |
-| Puce `upstream` | « `upstream` : la réponse vient de votre API cible. FGP n'a touché ni au status ni au corps. Il ajoute seulement cet en-tête et retire `Set-Cookie`, le proxy étant sans état. Interprétez la réponse avec la documentation de cette API. » |
+| Puce `upstream` | « `upstream` : la réponse vient de votre API cible. FGP n'a touché ni au status ni au corps. Il ajoute cet en-tête et retire trois en-têtes au plus : `Set-Cookie` et `Transfer-Encoding` toujours, `Content-Encoding` et `Content-Length` uniquement si votre corps est arrivé compressé puis décompressé avant de vous être transmis (ils décriraient alors un corps qui n'existe plus). Interprétez la réponse avec la documentation de cette API. » |
 | Aide pratique | « Ajoutez `-i` à votre commande `curl` pour voir cet en-tête. » |
 
 #### Bloc 2 : « Les erreurs de FGP » (replié)
@@ -1296,7 +1303,7 @@ Ce bloc disparaît le jour où `queryFilters` est livré (§18.4). Tant qu'il es
 | Élément | Texte |
 |---------|-------|
 | Titre du bloc | « Tout le reste vient de votre API » |
-| Texte | « Un code absent de cette liste n'a pas été produit par FGP. Un 401, un 404, un 429 ou un 500 portant `X-FGP-Source: upstream` sont la réponse de votre API cible : status et corps sont inchangés, seuls `X-FGP-Source` est ajouté et `Set-Cookie` retiré. FGP ne les reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de votre API exactement comme si vous l'appeliez en direct. » |
+| Texte | « Un code absent de cette liste n'a pas été produit par FGP. Un 401, un 404, un 429 ou un 500 portant `X-FGP-Source: upstream` sont la réponse de votre API cible : status et corps sont inchangés, seuls `X-FGP-Source` est ajouté et quelques en-têtes de transport sont retirés (`Set-Cookie`, `Transfer-Encoding`, et `Content-Encoding`/`Content-Length` si votre corps a été décompressé en route). FGP ne les reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de votre API exactement comme si vous l'appeliez en direct. » |
 
 #### Contraintes d'intégration
 

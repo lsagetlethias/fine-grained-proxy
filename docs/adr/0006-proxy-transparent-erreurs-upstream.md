@@ -34,7 +34,7 @@ Plusieurs problèmes sont apparus avec ce modèle :
 
 Basculer sur un modèle **proxy transparent** :
 
-1. **Toute réponse HTTP reçue de l'upstream est forwardée telle quelle** : status original, body original, headers (sauf `Set-Cookie` qui reste filtré pour préserver la nature stateless). Aucune réécriture. Le header `X-FGP-Source: upstream` est ajouté.
+1. **Toute réponse HTTP reçue de l'upstream est forwardée telle quelle** : status original, body original, headers, à l'exception de ceux dont le maintien mentirait sur ce que FGP transmet réellement. `Set-Cookie` est filtré pour préserver la nature stateless du proxy. `Transfer-Encoding` est filtré parce qu'il décrit le framing du hop amont, jamais celui que FGP émet (RFC 9110 §7.6.1). `Content-Encoding` et `Content-Length` sont filtrés uniquement quand le runtime a déjà décodé un corps `gzip` ou `br` avant que FGP ne le reçoive (sauf si `Range` ou `Accept-Encoding: identity` désactivaient ce décodage sur la requête sortante) : dans ce cas précis, ces deux en-têtes décriraient un corps compressé qui n'existe plus. Dans tous les autres cas, ils sont exacts et forwardés sans y toucher. Aucune réécriture de status ni de body. Le header `X-FGP-Source: upstream` est ajouté.
 
 2. **Les erreurs FGP** (validation de blob, décryptage, TTL, scopes, auth mode invalide, body filters) conservent leur shape `{error, message}` et leurs status actuels, mais portent désormais le header `X-FGP-Source: proxy`.
 
@@ -67,7 +67,7 @@ Le header `X-FGP-Source` devient le contrat officiel pour que le client distingu
 - **Sémantique HTTP correcte** : `502` redevient un vrai `502` (upstream injoignable). `401` upstream reste `401` (token client invalide côté API cible, pas un problème de proxy).
 - **Pas de "magie" de transformation** : simplification du code proxy, moins de surface à maintenir.
 - **Nouveau contrat côté client** : les consommateurs sont encouragés à utiliser `X-FGP-Source` pour router leur gestion d'erreur (`proxy` → problème de config/scopes FGP, `upstream` → problème métier côté API cible).
-- **Set-Cookie toujours filtré** : c'est l'unique entorse à la transparence pure, justifiée par la nature stateless du proxy. Documentée en section 8.1 des specs.
+- **Le filtrage d'en-têtes de réponse s'étend, sans changer de doctrine.** `Set-Cookie` reste filtré pour la statelessness du proxy, `Transfer-Encoding` l'est aussi comme tout en-tête hop-by-hop. `Content-Encoding` et `Content-Length` le sont en plus, mais seulement quand le runtime a déjà décodé le corps avant que FGP ne le reçoive : les garder décrirait alors un corps qui n'est plus celui transmis, ce qui serait un mensonge sur le fil, pas de la transparence. Cette suppression conditionnelle est donc un **renforcement** de la transparence de cet ADR, pas une entorse de plus : la déviation vient du runtime, qui a transformé le corps avant que FGP ne le voie, jamais d'un choix produit de FGP lui-même. Documentée en détail dans `docs/specs.md` section 11.3.
 - **Harmonisation des endpoints internes** : `/api/list-apps` et endpoints similaires basculent sur `upstream_unreachable` pour les fetch throws.
 
 ## Liens
