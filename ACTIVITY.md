@@ -312,9 +312,8 @@
   - Les sept routes déclarent le 415 dans l'OpenAPI servi, un test dérive la parité entre la déclaration et le comportement réel plutôt que de la coder en dur.
   - Documentation : specs (§8.3), critères d'acceptation (AC-47.11, AC-47.12) et changelog mis à jour.
 - **Décisions** :
-  - Le 415 n'a pas été ajouté à la liste des codes d'erreur de la route proxy dans `/llms.txt` ni au panneau Doc de l'UI. Ces deux surfaces documentent exclusivement les erreurs reçues en consommant une URL FGP (`/{blob}/*`) ; le 415 est une erreur des endpoints internes `/api/*`, jamais atteignable via le formulaire puisque le client JS de l'UI pose toujours `Content-Type: application/json`. L'y ajouter aurait été factuellement faux et aurait cassé le test de parité qui compte 15 codes proxy dans `/llms.txt`. Une note informative hors de cette liste a été proposée pour `/llms.txt`, à intégrer par le dev.
+  - Le 415 n'a pas été ajouté à la liste des codes d'erreur de la route proxy dans `/llms.txt` ni au panneau Doc de l'UI. Ces deux surfaces documentent exclusivement les erreurs reçues en consommant une URL FGP (`/{blob}/*`) ; le 415 est une erreur des endpoints internes `/api/*`, jamais atteignable via le formulaire puisque le client JS de l'UI pose toujours `Content-Type: application/json`. L'y ajouter aurait été factuellement faux et aurait cassé le test de parité qui compte 15 codes proxy dans `/llms.txt`. Une note informative a été ajoutée à `/llms.txt` hors de cette liste, à destination d'un agent qui construit lui-même une requête vers `/api/generate`.
 - **Process** :
   - Session reprise après l'interruption réseau d'un agent précédent en plein milieu de la tâche : le code (bump de version, schémas OpenAPI, tests) était déjà livré et vérifié, seule la documentation restait à faire.
 - **Prochaines étapes** :
-  - Intégrer la note `/llms.txt` proposée par le PO (texte et emplacement fournis, hors de la liste des codes de la route proxy)
   - Lancer `deno task build` (ou au moins `build:changelog`) avant déploiement pour propager la nouvelle entrée de changelog dans l'UI
