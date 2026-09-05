@@ -3900,7 +3900,7 @@ Enonce corrige le 2026-09-04. La redaction initiale disait « contrainte par au 
 
 ### AC-56.4 Detail : parametre requis absent
 
-**Given** un scope declarant `{param:"status", required: true}` **et** `{param:"page"}`, et un chemin de test `/v1/items?page=3`
+**Given** un scope declarant `{param:"status", values:[{type:"wildcard"}], required: true}` **et** `{param:"page", values:[{type:"wildcard"}]}`, et un chemin de test `/v1/items?page=3`
 **When** le highlight s'execute
 **Then** la ligne de detail est « Parametre requis "status" absent. »
 
