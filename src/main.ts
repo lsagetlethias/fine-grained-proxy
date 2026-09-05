@@ -1,8 +1,9 @@
-import { Hono, type MiddlewareHandler } from "hono";
+import { type ErrorHandler, Hono, type MiddlewareHandler } from "hono";
 import { serveStatic } from "hono/deno";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
+import { HTTPException } from "hono/http-exception";
 
 import { blobHeaderProxy, proxyMiddleware } from "./middleware/proxy.ts";
 import { uiRoutes } from "./routes/ui.tsx";
@@ -112,15 +113,35 @@ function withProxyErrorSecurity(inner: MiddlewareHandler): MiddlewareHandler {
   };
 }
 
-app.onError((err, c) => {
-  console.error("[fgp] unhandled error:", err);
+// Le projet n'emet jamais d'HTTPException lui-meme, c'est une regle de CLAUDE.md. Mais une
+// dependance peut en lever une, et l'aplatir en 500 transforme un refus de contrat en panne
+// serveur : @hono/zod-openapi 1.6.3 leve un HTTPException 415 sur un Content-Type non JSON,
+// ce qui faisait repondre 500 a toutes les routes /api/* pour une requete simplement mal
+// formee. On honore donc le status porte, en gardant la shape {error, message} du produit.
+const HTTP_EXCEPTION_CODES: Record<number, string> = {
+  400: "invalid_body",
+  413: "payload_too_large",
+  415: "unsupported_media_type",
+};
+
+export const fgpErrorHandler: ErrorHandler = (err, c) => {
+  const status = err instanceof HTTPException ? err.status : 500;
+  const known = HTTP_EXCEPTION_CODES[status];
+
+  // Un 500 reste une anomalie a diagnostiquer, un refus de contrat n'en est pas une.
+  if (status === 500) console.error("[fgp] unhandled error:", err);
+
   const response = c.json(
-    { error: "internal_error", message: "Internal server error" },
-    500,
+    status === 500
+      ? { error: "internal_error", message: "Internal server error" }
+      : { error: known ?? "invalid_request", message: err.message },
+    status,
   );
   response.headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
   return response;
-});
+};
+
+app.onError(fgpErrorHandler);
 
 app.use("*", logger());
 app.use("*", withProxyErrorSecurity(blobHeaderProxy()));

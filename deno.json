@@ -29,7 +29,7 @@
     "hono": "npm:hono@^4.13.5",
     "@hono/swagger-ui": "npm:@hono/swagger-ui@^0.6.1",
     "zod": "npm:zod@^4.5.4",
-    "@hono/zod-openapi": "npm:@hono/zod-openapi@^1.6.2",
+    "@hono/zod-openapi": "npm:@hono/zod-openapi@1.6.2",
     "@std/assert": "jsr:@std/assert@^1.0.19",
     "@std/encoding": "jsr:@std/encoding@^1.0.11"
   },
