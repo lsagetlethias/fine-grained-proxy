@@ -139,16 +139,20 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/generate with no JSON body returns 400",
+  name: "POST /api/generate sans Content-Type JSON renvoie 415 unsupported_media_type",
   fn: async () => {
     setup();
 
+    // Sans Content-Type, le controle de type de media refuse avant toute lecture du corps.
+    // Le code distingue « je ne sais pas lire ce format » de « ce JSON ne convient pas »,
+    // que 400 invalid_body continue de porter.
     const res = await app.request("/api/generate", {
       method: "POST",
       body: "not json",
     });
 
-    assertEquals(res.status, 400);
+    assertEquals(res.status, 415);
+    assertEquals((await res.json()).error, "unsupported_media_type");
 
     teardown();
   },
@@ -234,16 +238,20 @@ Deno.test({
 });
 
 Deno.test({
-  name: "POST /api/list-apps with no body returns 400",
+  name: "POST /api/list-apps sans Content-Type JSON renvoie 415 unsupported_media_type",
   fn: async () => {
     setup();
 
+    // Sans Content-Type, le controle de type de media refuse avant toute lecture du corps.
+    // Le code distingue « je ne sais pas lire ce format » de « ce JSON ne convient pas »,
+    // que 400 invalid_body continue de porter.
     const res = await app.request("/api/list-apps", {
       method: "POST",
       body: "not json",
     });
 
-    assertEquals(res.status, 400);
+    assertEquals(res.status, 415);
+    assertEquals((await res.json()).error, "unsupported_media_type");
 
     teardown();
   },

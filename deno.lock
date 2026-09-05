@@ -5,11 +5,11 @@
     "jsr:@std/encoding@^1.0.11": "1.0.11",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.6": "1.0.9",
-    "npm:@hono/swagger-ui@~0.6.1": "0.6.1_hono@4.13.5",
-    "npm:@hono/zod-openapi@1.6.2": "1.6.2_hono@4.13.5_zod@4.5.4",
+    "npm:@hono/swagger-ui@~0.6.1": "0.6.1_hono@4.13.7",
+    "npm:@hono/zod-openapi@1.6.3": "1.6.3_hono@4.13.7_zod@4.5.4",
     "npm:concurrently@*": "9.2.1",
     "npm:esbuild@*": "0.28.0",
-    "npm:hono@^4.13.5": "4.13.5",
+    "npm:hono@^4.13.5": "4.13.7",
     "npm:tailwindcss@3": "3.4.17_postcss@8.5.3",
     "npm:zod@^4.5.4": "4.5.4"
   },
@@ -180,14 +180,14 @@
       "os": ["win32"],
       "cpu": ["x64"]
     },
-    "@hono/swagger-ui@0.6.1_hono@4.13.5": {
+    "@hono/swagger-ui@0.6.1_hono@4.13.7": {
       "integrity": "sha512-sJTvldu1GPeEPfyeLG7gRj+W4vEuD+JDi+JjJ3TJs/DvMUtBLs0KJO5yokGegWWdy5qrbdnQGekbhgNRmPmYKQ==",
       "dependencies": [
         "hono"
       ]
     },
-    "@hono/zod-openapi@1.6.2_hono@4.13.5_zod@4.5.4": {
-      "integrity": "sha512-ktnBqVgvIlopiiB9ab6hqoYefhcb0DUZU5QJ1F5UtDu8w6+cIORENz93sTZT6G0mQNes0/TbbadfrOpdehioPA==",
+    "@hono/zod-openapi@1.6.3_hono@4.13.7_zod@4.5.4": {
+      "integrity": "sha512-VYR82Y60plu8g3pN60OUXMVKpmxh3R04Qs++3DY9vtwZ9/sA/BRY0PcRIR+Z37/3itWtM7pYwT9bKiH9JhqV6Q==",
       "dependencies": [
         "@asteasolutions/zod-to-openapi",
         "@hono/zod-validator",
@@ -196,7 +196,7 @@
         "zod"
       ]
     },
-    "@hono/zod-validator@0.9.1_hono@4.13.5_zod@4.5.4": {
+    "@hono/zod-validator@0.9.1_hono@4.13.7_zod@4.5.4": {
       "integrity": "sha512-iiv6w0qrIc0arfvCtUqBWsvl4fXjzaTcQcCJTTtCnkawF9HHGE+KjEl0ox3gQJ6rKZEgE3mLExlQCF72M+mNuw==",
       "dependencies": [
         "hono",
@@ -498,8 +498,8 @@
         "function-bind"
       ]
     },
-    "hono@4.13.5": {
-      "integrity": "sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw=="
+    "hono@4.13.7": {
+      "integrity": "sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ=="
     },
     "is-binary-path@2.1.0": {
       "integrity": "sha512-ZMERYes6pDydyuGidse7OsHxtbI7WVeUEozgR/g7rd0xUimYNlvZRE/K2MgZTjWy725IfelLeVcEM97mmtRGXw==",
@@ -908,7 +908,7 @@
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/encoding@^1.0.11",
       "npm:@hono/swagger-ui@~0.6.1",
-      "npm:@hono/zod-openapi@1.6.2",
+      "npm:@hono/zod-openapi@1.6.3",
       "npm:hono@^4.13.5",
       "npm:zod@^4.5.4"
     ]

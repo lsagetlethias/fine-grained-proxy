@@ -142,6 +142,11 @@ once and never stored: losing it makes the blob unusable. An optional \`key\` fi
 in the request lets a caller supply its own client key, 24 to 256 printable ASCII
 characters without spaces.
 
+Every \`/api/*\` request that carries a body must set \`Content-Type: application/json\`.
+Anything else is rejected with 415 \`unsupported_media_type\` before the body is even
+read, a different signal from 400 \`invalid_body\`: 415 means the format itself could
+not be read, 400 means the JSON was read and rejected.
+
 Calling through the proxy, blob in the URL then blob in a header (recommended):
 
 \`\`\`
