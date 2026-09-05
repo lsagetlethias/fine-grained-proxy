@@ -2054,7 +2054,7 @@ La convention interdit les titres dans le bloc de prose. Le contenu de fond (sco
 
 **Langue** : le document est rédigé en **anglais**, comme la spec OpenAPI, les codes et les messages d'erreur de l'API. L'audience est l'outillage, pas l'utilisateur final francophone.
 
-**Taille cible** : moins de 8 KB. Au-delà, on tronque le contenu de fond au profit des liens : un agent qui a besoin du détail va chercher l'OpenAPI.
+**Taille cible** : moins de 16 KB, soit environ 4 000 tokens pour le contrat complet de la route proxy. Le plafond protège le budget de contexte d'un agent consommateur, et rien d'autre. Il ne se justifie pas par un renvoi vers l'OpenAPI : celle-ci ne documente que les routes `/api/*`, alors que la route proxy, qui occupe l'essentiel de ce document, n'a aucune autre description lisible par une machine. Quand le plafond approche, ce qui se coupe est la redondance avec la prose voisine, jamais un fait du contrat.
 
 ### 16.5 Découverte
 

@@ -70,9 +70,13 @@ Deno.test("AC-40.5: les sections H2 ne contiennent que des listes de liens", () 
   });
 });
 
-Deno.test("AC-40.6: le document tient sous 8 KB", () => {
+Deno.test("AC-40.6: le document tient sous 16 KB", () => {
   const bytes = new TextEncoder().encode(doc).length;
-  assertEquals(bytes < 8192, true, `document trop long : ${bytes} octets`);
+  // 16 Ko, soit environ 4 000 tokens pour le contrat complet de la route proxy. Le
+  // plafond precedent de 8 Ko se justifiait par « au-dela on renvoie vers l'OpenAPI »,
+  // ce qui est faux pour l'essentiel de ce document : l'OpenAPI ne couvre que /api/*, et
+  // la route proxy n'a aucune autre description lisible par une machine.
+  assertEquals(bytes < 16384, true, `document trop long : ${bytes} octets`);
 });
 
 Deno.test("AC-40.7: le document est en anglais", () => {

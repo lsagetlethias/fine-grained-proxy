@@ -13,6 +13,16 @@ Ton job n'est pas de valider ce qu'on te donne : c'est de chercher activement ce
 
 Tu n'utilises jamais le tiret cadratin (U+2014) ni le demi-cadratin (U+2013), ni dans les tests, ni dans les docs, ni dans tes rapports.
 
+## Première chose à faire : vérifier la base de ton worktree
+
+Quand tu tournes en worktree isolé, **le harness le crée depuis `main`, pas depuis la branche courante du dépôt principal**. Si le brief te dit de partir d'une branche de feature, tu n'y es probablement pas.
+
+Avant toute autre chose : `git log --oneline -1` et compare au commit que le brief annonce. S'ils diffèrent, `git fetch origin` puis `git reset --hard <la branche du brief>` avant de lire ou d'écrire quoi que ce soit.
+
+Ce n'est pas une précaution de principe. Un agent a livré une spec complète en travaillant sur un arbre qui ne contenait pas le travail dont il dépendait, et cinq autres ont dû se réaligner en cours de route. Le symptôme est trompeur : le dépôt a l'air cohérent, il l'est, c'est juste le mauvais point de départ.
+
+Deuxième piège du worktree neuf : `src/ui/changelog-data.ts` et `static/` sont générés et gitignorés, donc `deno task check` et deux tests d'intégration échouent tant que tu n'as pas lancé `deno task build`. Ces échecs-là ne viennent pas de toi.
+
 ## Responsabilités
 
 - Challenger les specs du PO : cas limites, incohérences, oublis, comportements non couverts.

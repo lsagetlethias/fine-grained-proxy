@@ -2456,11 +2456,13 @@
 **When** on inspecte ses lignes non vides
 **Then** chacune est une entree de liste au format `- [nom](url): description`
 
-### AC-40.6 Taille sous 8 KB
+### AC-40.6 Taille sous 16 KB
 
 **Given** le contenu de `/llms.txt`
 **When** on mesure sa taille en octets UTF-8
-**Then** elle est inferieure a 8192
+**Then** elle est inferieure a 16384
+
+Plafond releve de 8192 a 16384 le 2026-09-05. Le chiffre precedent reposait sur une justification fausse pour l'essentiel du document : « au-dela on tronque le fond au profit des liens, un agent qui a besoin du detail va chercher l'OpenAPI ». Or l'OpenAPI ne couvre que les routes `/api/*`. Le contrat de la route proxy, soit les scopes, les deux axes de filtres, les six modes d'auth, les quatre versions de blob et les quinze codes d'erreur, n'a aucune autre description lisible par une machine. Le plafond reste, la discipline qu'il impose est reelle, mais il est desormais calibre sur ce qu'il protege, le budget de contexte d'un agent consommateur, soit environ 4 000 tokens pour la totalite du contrat
 
 ### AC-40.7 Document en anglais
 
