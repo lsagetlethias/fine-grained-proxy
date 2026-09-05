@@ -1,6 +1,7 @@
 import { assertEquals, assertNotEquals } from "@std/assert";
 
 import { app } from "../../src/main.ts";
+import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../../src/constants.ts";
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete"];
 
@@ -149,6 +150,46 @@ Deno.test({
         true,
         `plafond de corps monte hors /api/ sur ${mount.path}`,
       );
+    }
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// --- AC-47.10 : la provenance est uniforme sur /api/*, pas seulement sur les codes
+// que les handlers estampillaient un par un ---
+
+Deno.test({
+  name: "AC-47.10: toute reponse d'une route /api/* porte X-FGP-Source: proxy",
+  fn: async () => {
+    const json = { "Content-Type": "application/json" };
+    const cases: [string, RequestInit][] = [
+      ["/api/salt", {}],
+      ["/api/openapi.json", {}],
+      ["/api/generate", { method: "POST", headers: json, body: "{}" }],
+      ["/api/decode", { method: "POST", headers: json, body: "{}" }],
+      ["/api/share/decode", {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ encoded: "x".repeat(9000) }),
+      }],
+      ["/api/list-apps", { method: "POST", headers: json, body: "{}" }],
+      ["/api/test-proxy", { method: "POST", headers: json, body: "{}" }],
+      ["/api/generate", {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ p: "x".repeat(70000) }),
+      }],
+    ];
+
+    for (const [path, init] of cases) {
+      const res = await app.request(path, init);
+      assertEquals(
+        res.headers.get(FGP_SOURCE_HEADER),
+        FGP_SOURCE_PROXY,
+        `${path} (${res.status}) ne porte pas la provenance`,
+      );
+      await res.body?.cancel();
     }
   },
   sanitizeOps: false,

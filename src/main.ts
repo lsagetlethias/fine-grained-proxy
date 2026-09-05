@@ -156,6 +156,18 @@ for (const path of FGP_OWNED_PATHS) {
   app.use(path, securityHeaders);
 }
 
+// Tout ce que servent les routes /api/* est produit par FGP, y compris l'enveloppe que
+// /api/test-proxy met autour d'une reponse upstream : la provenance y vaut donc toujours
+// proxy. Les 401, 413 et 502 la posaient deja, aucun 400 de validation ne le faisait, et
+// un consommateur ne pouvait pas se fier a l'en-tete pour savoir qui a repondu. Pose ici
+// plutot que dans chaque handler, sinon la prochaine route naitra avec le meme trou.
+app.use("/api/*", async (c, next) => {
+  await next();
+  if (!c.res.headers.has(FGP_SOURCE_HEADER)) {
+    c.res.headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
+  }
+});
+
 app.get("/healthz", (c) => c.json({ status: "ok" }));
 
 app.get(
