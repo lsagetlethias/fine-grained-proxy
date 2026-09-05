@@ -222,3 +222,19 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
 });
+
+Deno.test({
+  name: "AC-45.10 (registre v5): l'ordre des passes preserve l'Authorization issue du blob",
+  fn: async () => {
+    setup();
+    // Authorization est dans la denylist appliquee a l'appelant. Si cette passe tournait
+    // apres la pose des en-tetes d'auth, elle supprimerait celle du blob et le mode bearer
+    // partirait nu vers la cible : la requete serait refusee en amont sans que rien ici
+    // ne le voie, puisque le proxy est transparent. C'est la moitie observable du critere.
+    const h = await call({ "Authorization": "Bearer de-l-appelant" }, "bearer");
+    assertEquals(h.get("authorization"), "Bearer secret-du-blob");
+    teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});

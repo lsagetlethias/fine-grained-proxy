@@ -156,3 +156,35 @@ Deno.test("AC-43.8 buildUpstreamUrl : le chemin proxy ne peut pas etre avale", (
     "https://api.example.com/projects/groupe%2Fprojet",
   );
 });
+
+Deno.test("AC-44.12: l'URL sortante est construite par l'API URL, jamais par concatenation", () => {
+  const t = (raw: string) => {
+    const r = parseTargetUrl(raw);
+    if ("error" in r) throw new Error("target refuse : " + raw);
+    return r.url;
+  };
+
+  // Le point de ce critere n'est pas la forme nominale, deja couverte, mais le sort d'un
+  // chemin proxy qui porte les deux caracteres capables de scinder une URL. Par
+  // concatenation, target + "/v1/items?x=1#f" ferait de "x=1" une query et perdrait "f" :
+  // le chemin controle ne serait plus celui emis. Pose dans pathname, l'API URL les encode.
+  const url = buildUpstreamUrl(t("https://api.example.com/base"), "/v1/items?x=1#f", "?a=1");
+  assertEquals(url.pathname, "/base/v1/items%3Fx=1%23f");
+  assertEquals(url.search, "?a=1");
+  assertEquals(url.hash, "");
+  assertEquals(url.origin, "https://api.example.com");
+
+  // La query vient du parametre et de lui seul : celle du target est deja refusee a
+  // l'etape 1 (AC-43.3), et une query vide ne doit pas laisser trainer un « ? » nu.
+  assertEquals(
+    buildUpstreamUrl(t("https://api.example.com/base"), "/v1/items", "").toString(),
+    "https://api.example.com/base/v1/items",
+  );
+
+  // Chemin de base a slashes multiples : la normalisation porte sur le target, jamais sur
+  // le chemin proxy, qui reste octet pour octet celui qui a ete controle.
+  assertEquals(
+    buildUpstreamUrl(t("https://api.example.com/base///"), "/v1//items", "").pathname,
+    "/base/v1//items",
+  );
+});

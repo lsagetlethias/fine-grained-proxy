@@ -1,153 +1,148 @@
 # Matrice de couverture AC vers tests : lot de securite (AC-43 a AC-50) et v5 (AC-51 a AC-57)
 
-**Date** : 2026-09-04
+**Date** : 2026-09-05 (mise a jour ; releve initial du 2026-09-04)
 **Ref AC** : `docs/acceptance-criteria.md` v5.0, series AC-43 a AC-57
 **Ref sources** : `docs/adr/0009-politique-de-sortie-du-proxy.md`, `docs/adr/0010-politique-limites-ressources.md`, `docs/specs.md` §18
 **Ref challenge v5** : `docs/review/challenge-query-filters-v5.md`
-**Suite** : `deno task verify` vert, **654 tests passes, 0 echec**
+**Suite** : `deno task verify` vert, **827 tests passes, 0 echec**
 
 La matrice du lot v4 (`ac-coverage-v4.md`, series AC-34 a AC-42) garde sa valeur pour son propre perimetre et n'est pas reecrite : c'est le releve date d'un lot livre.
+
+## Etat au 2026-09-05
+
+Le releve du 2026-09-04 comptait **20 trous sur 102** pour un lot de securite livre et declare vert. Quatre ont ete combles dans les livraisons suivantes (AC-43.18, AC-44.9, AC-45.4, AC-47.8), les seize autres dans la passe du 2026-09-05, plus deux criteres qui n'etaient nommes que par le decompte des series (AC-45.10 et AC-46.6) et le critere de non-propriete AC-50.9, jusqu'ici classe non testable.
+
+**Il reste un ecart, et un seul : AC-47.10, en PARTIEL.** Il n'est pas un trou de couverture mais un ecart entre le critere ecrit et l'implementation, detaille plus bas. Il appelle un arbitrage, pas un test.
+
+| Serie | Criteres | OK | PARTIEL | TROU |
+|-------|----------|----|---------|------|
+| AC-43, destination (G1) | 24 | 24 | 0 | 0 |
+| AC-44, chemin (G2) | 13 | 13 | 0 | 0 |
+| AC-45, en-tetes (G3) | 14 | 14 | 0 | 0 |
+| AC-46, query non contrainte (G4) | 6 | 6 | 0 | 0 |
+| AC-47, corps et decompression | 10 | 9 | 1 | 0 |
+| AC-48, regex et denombrement | 20 | 20 | 0 | 0 |
+| AC-49, surface d'API | 4 | 4 | 0 | 0 |
+| AC-50, derivation et cache | 11 | 11 | 0 | 0 |
+| **Total lot securite** | **102** | **101** | **1** | **0** |
+
+**La serie v5 (AC-51 a AC-57, 86 criteres) n'a pas ete reauditee dans cette passe.** Le releve du 2026-09-04 la donnait a 4 OK et 82 TROU, mais ce chiffre decrivait un contrat non encore implemente : `queryFilters` et le blob v5 ont depuis ete livres et merges, avec leurs tests. Reporter ce chiffre ici serait faux. Il demande son propre releve, sur le meme protocole que celui du lot de securite.
 
 ## Methode, et pourquoi elle compte ici
 
 Les series AC-43 a AC-50 ont ete **backfillees apres coup**, le lot de securite ayant ete livre sans criteres ecrits. Elles sont reconstituees **depuis les ADR et `docs/specs.md` §18, jamais depuis les tests**. C'est la contrainte qui donne sa valeur a ce document : rediger les criteres d'apres l'implementation aurait produit une matrice tautologiquement complete, ou chaque test trouve son critere parce que le critere a ete ecrit pour lui.
 
-En partant des decisions, deux categories d'ecart apparaissent, et ce sont les seules interessantes :
+**Chaque test ecrit pour combler un trou a ete verifie en deux etats** : vert sur le code livre, rouge apres retrait ou inversion de la garde qu'il protege. Ce protocole n'est pas de la ceinture et bretelles, il a change trois conclusions dans cette seule passe :
 
-- **Sens A**, un critere tire d'un ADR que rien ne couvre. C'est un trou de couverture reel sur une decision prise.
-- **Sens B**, un test qui ne correspond a aucun critere de sa serie. Soit une exigence non ecrite, soit un test mal range.
+- **AC-46.6** devait s'appuyer sur la presence du marqueur `path_encoded` dans le bundle navigateur. Sous mutation, le marqueur **reste present** : il vit dans une table de rangs partagee avec `checkAccess`. Le test aurait ete vert sur exactement le code qu'il pretend interdire. Le marqueur retenu est `decodeURIComponent`, qui disparait bien du bundle des que `checkRequestAccess` n'est plus atteignable depuis l'entree.
+- **AC-50.7 et AC-50.8** portent sur un refus qui **reste un 401 `invalid_credentials` avec ou sans la garde** : sans pre-validation, le dechiffrement echoue et produit le meme code. Seul le compteur de derivations distingue les deux etats. Un test qui aurait asserte le statut aurait ete vert sur une instance payant 11,60 ms par sonde malformee.
+- **AC-45.10** et **AC-48.15** sont chacun le seul test de leur famille a tomber sous leur mutation : les neuf autres tests AC-45 restent verts quand on inverse l'ordre des passes d'en-tetes, et AC-48.11 reste vert quand on rend le budget de regex local a chaque filtre.
 
 ## Legende
 
-- **OK** : critere couvert par au moins un test vert
+- **OK** : critere couvert par au moins un test vert, dont la morsure a ete verifiee
 - **PARTIEL** : couvert sur une partie de son enonce seulement
 - **TROU** : aucun test, la decision est implementee mais rien ne la protege
-- **NON IMPLEMENTE** : aucun test et aucun code
-- **N/A** : non testable automatiquement
 
 ---
 
-## Vue d'ensemble
+## Le seul ecart restant
 
-| Serie | Criteres | OK | PARTIEL | TROU | N/A |
-|-------|----------|----|---------|------|-----|
-| AC-43, destination (G1) | 24 | 20 | 1 | 3 | 0 |
-| AC-44, chemin (G2) | 13 | 9 | 1 | 3 | 0 |
-| AC-45, en-tetes (G3) | 14 | 12 | 0 | 2 | 0 |
-| AC-46, query non contrainte (G4) | 6 | 3 | 0 | 3 | 0 |
-| AC-47, corps et decompression | 10 | 5 | 2 | 3 | 0 |
-| AC-48, regex et denombrement | 20 | 19 | 1 | 0 | 0 |
-| AC-49, surface d'API | 4 | 3 | 0 | 1 | 0 |
-| AC-50, derivation et cache | 11 | 4 | 1 | 5 | 1 |
-| **Sous-total lot securite** | **102** | **75** | **6** | **20** | **1** |
-| AC-51 a AC-57, v5 | 86 | 4 | 0 | 82 | 0 |
+**AC-47.10, les refus de taille sont des reponses FGP, pas des reponses upstream.** PARTIEL, et ce n'est pas un trou de couverture.
 
-Les 82 de la v5 ne sont pas un constat de negligence : `queryFilters` n'existe pas dans `src/`, ces criteres sont le contrat de ce que le dev doit livrer. Detail dans `challenge-query-filters-v5.md`.
+Le critere demande que « un `413` et un `400` produits par ces plafonds » portent `X-FGP-Source: proxy` et la shape `{error, message}`. Mesure sur le code livre :
 
-**Le chiffre a retenir est 20 trous sur 102 pour un lot de securite livre et declare vert.** Aucun n'est une regression : chaque decision concernee est implementee dans le code, verifiee a la main. Ce sont des decisions qu'aucun test ne protege contre un futur refactor.
+| Reponse | Statut | `X-FGP-Source` |
+|---------|--------|----------------|
+| `/api/generate`, corps au-dela de 64 Ko | 413 | `proxy` |
+| `/api/decode`, corps au-dela de 8 Ko | 413 | `proxy` |
+| `/api/share/decode`, `encoded` de plus de 8 192 caracteres | 400 | **absent** |
+
+Les 413 le portent parce qu'`apiBodyLimit` le pose explicitement dans son `onError`. Le 400 sort du handler par `c.json({ error, message }, 400)` de `src/routes/ui.tsx`, qui ne pose pas l'en-tete, et il n'est pas seul dans ce cas : aucun 400 de validation des routes `/api/*` ne le porte.
+
+**Ce n'est pas tranchable par le testeur.** Deux lectures se defendent. Soit `X-FGP-Source` est le discriminant du proxy transparent et n'a rien a faire sur les routes `/api/*`, auquel cas c'est mon critere qui sur-promet et il faut le restreindre aux 413. Soit c'est la marque de provenance de toute reponse FGP, auquel cas c'est l'implementation qui est incomplete, sur une surface bien plus large que ce seul 400. Le test livre couvre les 413 et nomme explicitement la moitie qu'il ne couvre pas ; aucun test rouge n'a ete laisse et `src/` n'a pas ete touche.
 
 ---
 
-## Sens A : criteres tires des ADR que rien ne couvre
+## Deux criteres corriges, l'implementation avait raison
 
-Classes par gravite. Chacun a ete verifie dans le code avant d'etre declare trou : je distingue « implemente mais non teste » de « non implemente », et il n'y a **aucun** cas de la seconde categorie.
+Deux trous se sont reveles etre des erreurs de redaction de ma part au moment du backfill, pas des defauts du code. Les criteres ont ete corriges dans `docs/acceptance-criteria.md` et testes dans leur forme corrigee.
 
-### Grave
+**AC-43.22** disait « les valeurs d'origine operateur ne sont pas soumises au classement d'adresse », et donnait pour attendu qu'un `SCALINGO_AUTH_URL` pointant un mock local aboutisse. Mesure : il est refuse en `Target host is not public`. L'exemption portee par `isOperatorScalingoUrl` couvre **la contrainte de domaine Scalingo**, jamais la classification d'adresse, et c'est le bon choix : une exemption par provenance dans `egressFetch` cesserait d'en faire un point de sortie unique, ce qui est precisement la forme de trou que l'ADR-0009 §6 ferme. C'est aussi pourquoi `tests/testu/auth/client.test.ts` pose `FGP_EGRESS_ALLOW_PRIVATE=1` pour viser ses mocks, detail qui aurait du me mettre la puce a l'oreille a la redaction.
 
-**AC-43.18, la contrainte d'hote sur `apiUrl` du mode `scalingo-addon`.**
-Implemente (`src/auth/client.ts:64`, garde dans `fetchAddonToken`), **zero test**. C'est le trou le plus serieux de la liste. L'ADR-0009 nomme ce champ comme le point de sortie non controle qui a motive la regle d'unicite du point de sortie : un blob v4 portant `apiUrl: "https://collecteur.example"` fait livrer a un tiers le **bearer Scalingo fraichement echange**. La SSRF n'y est pas seulement un acces au reseau interne, c'est une exfiltration de credential upstream. Les deux tests voisins (AC-43.15 et AC-43.15 bis) couvrent la meme garde sur `/api/list-apps` et `/api/list-addons`, c'est-a-dire les deux surfaces les moins dangereuses des trois : celle du chemin chaud du proxy, la seule qui manipule un bearer, n'est pas couverte.
-
-**AC-47.8, la borne de decompression.**
-`src/crypto/bounded.ts` est implemente et appele par `blob.ts` et `share.ts`. **Il n'existe aucun fichier de test pour ce module.** C'est la decision D5 de l'ADR-0010, celle qui fait passer `/api/share/decode` de 320 Mo de RSS a 128 Ko, soit une amplification de 1 200:1 ramenee a 16:1, contre un ratio gzip maximal mesure a 1 029:1. La bombe gzip que l'ADR demande explicitement en test (3 Ko produisant 3 Mo) n'a jamais ete ecrite. Un refactor qui remplacerait `readBounded` par un `arrayBuffer()` ne ferait echouer aucun test.
-
-**AC-45.4, les en-tetes nommes par `Connection`.**
-Implemente (`stripCallerHeaders` lit l'en-tete `Connection` et supprime ceux qu'il designe), non teste. AC-45.3 couvre `TE`, `Upgrade`, `Proxy-Authorization` et `Keep-Alive`, mais ni `Connection` lui-meme ni le mecanisme d'indirection qu'il porte. C'est la matiere premiere du request smuggling, et c'est le seul comportement hop-by-hop non couvert.
-
-**AC-50.7 et AC-50.8, la pre-validation avant derivation.**
-Implementees (`src/middleware/proxy.ts:208`, `checkClientKey` plus un plancher structurel de taille de blob), non testees. L'ADR-0010 demande explicitement le test avec un espion de comptage sur `deriveKey`. Sans lui, rien n'empeche qu'un refactor replace la derivation avant la validation, ce qui redonne gratuitement 11,60 ms de CPU par sonde malformee.
-
-### Notable
-
-**AC-44.9, l'emission de la forme brute octet pour octet.**
-C'est la **moitie emission de la garantie G2**, et elle n'a pas de test. Les huit tests d'AC-44 couvrent tous la moitie controle. Or c'est l'emission brute qui preserve l'ADR-0006 et fait passer le cas GitLab : un refactor qui emettrait la forme canonique passerait AC-44.1 a AC-44.8 au vert tout en cassant silencieusement toutes les APIs qui traitent `%2F` comme une donnee. C'est exactement l'option B que l'ADR-0009 a rejetee, et rien ne l'empeche de revenir.
-
-**AC-44.11, le durcissement des scopes en correspondance exacte.**
-Changement cassant explicitement documente dans l'ADR et dans §18.3, non teste. Le jour ou un utilisateur le signale, personne ne saura si c'est le comportement voulu ou une regression.
-
-**AC-46.4, un `?` dans un pattern reste accepte au dechiffrement.**
-Seule la moitie « refus a la generation » est testee (AC-46.4 dans `egress-policy.test.ts`, qui porte ce numero pour un autre enonce). L'autre moitie, « les blobs en circulation ne sont pas casses », est la partie qui protege des acces vivants, et c'est celle qui n'a pas de test.
-
-**AC-46.2, la parite entre le testeur de scopes et le proxy.**
-Le mensonge du testeur est le defaut fondateur de l'ADR-0009 sur cet axe, celui qualifie de « pire que pas d'outil ». Sa correction est structurelle (une seule fonction d'autorisation, AC-46.6) mais aucun test ne compare les deux verdicts. La structure est la bonne, rien ne verifie qu'elle le reste.
-
-**AC-47.6, le `bodyLimit` jamais monte sur `*`.**
-Un commentaire le dit dans `api-edge-cases.test.ts`, aucun test ne le verifie. Le projet dispose pourtant du modele exact : AC-41.9 recense les routes depuis l'app Hono elle-meme pour les en-tetes de securite, precisement pour que « qui oublie la liste oublierait aussi le test » ne puisse pas arriver. Le meme recensement appliquerait ici sans invention.
-
-**AC-47.2, les paliers par route.**
-PARTIEL. Le defaut a 64 Ko et le palier de `/api/share/decode` a 16 Ko sont testes. Les paliers de `/api/decode` (8 Ko) et des deux helpers Scalingo (4 Ko) ne le sont pas.
-
-### Mineur
-
-- **AC-43.21**, l'avertissement au demarrage quand `FGP_EGRESS_ALLOW_PRIVATE` est actif. Implemente dans `egress.ts`, non teste.
-- **AC-43.22**, l'exemption des valeurs d'origine operateur. Implicitement exercee par toute la suite qui pointe des mocks locaux, jamais asserte comme regle.
-- **AC-43.17**, le point de sortie unique. PARTIEL : deux des cinq appelants sont couverts en tant que tels. La forme utile de ce critere est un recensement, comme AC-41.9, pas cinq tests separes.
-- **AC-44.10**, la monotonie de la regle des deux formes. Propriete structurelle, testable par corpus, non couverte.
-- **AC-44.12**, la construction de l'URL par l'API `URL`. PARTIEL via le test du chemin non avale.
-- **AC-47.7**, la lecture raccourcie quand seule la capture detailed a besoin du corps.
-- **AC-47.10**, `X-FGP-Source: proxy` sur les 413. PARTIEL : le code d'erreur est asserte, l'en-tete non.
-- **AC-48.15**, les budgets globaux au blob. PARTIEL : le plafond de 5 regex est teste, jamais leur repartition sur plusieurs filtres et plusieurs scopes, qui est precisement ce que « global » veut dire.
-- **AC-49.3**, l'absence d'appel reseau du testeur cote navigateur.
-- **AC-50.5**, le cache n'est jamais une dependance de correction.
-- **AC-50.10**, le timer de purge non conditionne a la feature logs.
-- **AC-50.11**, les 100 000 iterations PBKDF2 inchangees. Test trivial a ecrire, et c'est le genre de constante qu'un jour quelqu'un baissera « pour la performance », ce que l'ADR-0010 anticipe nommement.
-- **AC-50.9**, non testable : c'est un critere de **non-propriete**, ecrit pour que la pre-validation ne soit pas vendue comme une defense.
+**AC-43.21** disait « signale bruyamment au demarrage ». L'avertissement est ecrit au premier controle de destination, choix delibere et deja documente dans `CLAUDE.md` : une instance qui n'a encore rien proxyfie n'a encore rien expose.
 
 ---
 
-## Sens B : tests qui ne correspondent pas a leur serie
+## Correspondance test vers critere du registre
 
-**Aucun test du lot n'est du test pour du test.** Les 73 tests examines couvrent tous une decision reelle des deux ADR. C'est un bon resultat et il merite d'etre dit avant les remarques qui suivent.
+La numerotation des tests existants ne correspond pas a celle du registre, contradiction creee par le backfill et arbitree le 2026-09-04 : je ne renomme pas les tests preexistants, et cette table est la specification du renommage, a traiter en tache mecanique separee. Les tests ecrits depuis suivent la convention `AC-XX.Y (registre v5)` **quand le numero nu est deja porte par un test couvrant autre chose**, et le numero nu sinon.
 
-Deux tests sont ranges dans la mauvaise serie :
+### Tests ecrits pour combler les trous
 
-| Test | Serie ou il est | Critere qu'il couvre reellement |
+| Test | Fichier | Critere |
+|------|---------|---------|
+| `AC-43.17: RECENSEMENT...` et `AC-43.17 bis: TEMOIN...` | `tests/testi/egress-census.test.ts` | AC-43.17 |
+| `AC-43.21 (registre v5)` et son `bis` | `tests/testu/net/egress-warning.test.ts` | AC-43.21 |
+| `AC-43.22 (registre v5)` | `tests/testi/egress-census.test.ts` | AC-43.22 |
+| `AC-44.10` | `tests/testu/middleware/scopes-path-encoding.test.ts` | AC-44.10 |
+| `AC-44.11` | `tests/testu/middleware/scopes-path-encoding.test.ts` | AC-44.11 |
+| `AC-44.12` | `tests/testu/net/egress.test.ts` | AC-44.12 |
+| `AC-45.10 (registre v5)` | `tests/testi/proxy-headers-policy.test.ts` | AC-45.10 |
+| `AC-46.2: PARITE...` | `tests/testi/scope-verdict-parity.test.ts` | AC-46.2 |
+| `AC-46.4 (registre v5)` | `tests/testi/scope-verdict-parity.test.ts` | AC-46.4 |
+| `AC-46.6: STRUCTUREL...` | `tests/testu/ui/scope-verdict-bundle.test.ts` | AC-46.6 |
+| `AC-47.2 (registre v5)` | `tests/testi/api-edge-cases.test.ts` | AC-47.2 |
+| `AC-47.7` | `tests/testi/proxy-body-read.test.ts` | AC-47.7 |
+| `AC-47.10` | `tests/testi/api-edge-cases.test.ts` | AC-47.10, moitie 413 |
+| `AC-48.15 (registre v5)` | `tests/testu/crypto/blob-validation.test.ts` | AC-48.15 |
+| `AC-49.3 (registre v5)` | `tests/testi/scope-verdict-parity.test.ts` | AC-49.3 |
+| `AC-49.3 (registre v5) bis` | `tests/testu/ui/scope-verdict-bundle.test.ts` | AC-49.3 |
+| `AC-50.5 (registre v5)` | `tests/testu/crypto/key-cache.test.ts` | AC-50.5 |
+| `AC-50.6` | `tests/testu/crypto/key-cache.test.ts` | AC-50.6 |
+| `AC-50.7`, `AC-50.8`, `AC-50.9` | `tests/testi/proxy-prevalidation.test.ts` | AC-50.7, AC-50.8, AC-50.9 |
+| `AC-50.10` | `tests/testi/purge-timer.test.ts` | AC-50.10 |
+| `AC-50.11` | `tests/testu/crypto/key-cache.test.ts` | AC-50.11 |
+
+### Tests preexistants dont le numero designe un autre critere
+
+| Test | Serie ou il vit | Critere qu'il couvre reellement |
 |------|-----------------|----------------------------------|
-| `AC-43.8 buildUpstreamUrl : le chemin proxy ne peut pas etre avale` | AC-43, destination | AC-44.13, construction de l'URL sortante, donc l'axe chemin |
-| `AC-49.3 /api/test-proxy refuse un motif catastrophique sans l'evaluer` | AC-49, surface d'API | AC-48.19, validation avant evaluation, donc l'axe regex |
+| `AC-43.8 buildUpstreamUrl : le chemin proxy ne peut pas etre avale` | AC-43 | AC-44.13 |
+| `AC-43.21: le refus de scope precede le refus de destination` | AC-43 | AC-43.24 |
+| `AC-43.22: une redirection amont remonte telle quelle` | AC-43 | AC-43.16 |
+| `AC-45.4: les en-tetes de provenance ne sont pas transmis` | AC-45 | AC-45.5 |
+| `AC-45.10: a 1 saut avec une liste d'un seul element forge` | AC-45 | AC-45.13 |
+| `AC-46.4: POST /api/generate refuse un scope portant une query` | AC-46 | AC-46.3 |
+| `AC-47.5: INVARIANT structurel, le plafond de corps n'est monte que sous /api/` | AC-47 | **AC-47.6** |
+| `AC-48.15: une regex hors dialecte est refusee avec un code dedie` | AC-48 | AC-48.17 |
+| `AC-49.3: /api/test-proxy refuse un motif catastrophique sans l'evaluer` | AC-49 | AC-48.19 |
+| `AC-50.5: une requete proxy avec logs detailed ne derive la cle qu'une fois` | AC-50 | AC-50.1 |
+| `AC-5.17 bis` et `AC-5.17 ter` | AC-5 | AC-48.10 et AC-48.11 |
+| `AC-9.2: Host header is stripped before forwarding` | AC-9 | AC-45.7 |
+| `AC-9.3: query string is forwarded to target` | AC-9 | AC-46.5 |
+| `AC-19.4` et `AC-19.5`, troncature de l'IP | AC-19 | AC-45.14 |
 
-Quatre exigences du lot de securite vivent sous des series anterieures a la decision qui les a creees :
-
-| Test | Serie ou il vit | Decision qu'il couvre |
-|------|-----------------|------------------------|
-| `AC-5.17 bis: l'ancrage ferme le contournement de scope par sous-chaine` | AC-5, body filters (v3) | ADR-0010 D3, ancrage, mon AC-48.10 |
-| `AC-5.17 ter: une valeur de plus de 128 caracteres n'est plus testee` | AC-5, body filters (v3) | ADR-0010 D2 couche 1, mon AC-48.11 |
-| `AC-9.2: Host header is stripped before forwarding` | AC-9, forward | ADR-0009 §5 classe 5, mon AC-45.7 |
-| `AC-9.3: query string is forwarded to target` | AC-9, forward | ADR-0009 G4, mon AC-46.5 |
-| `AC-19.4` et `AC-19.5`, troncature de l'IP | AC-19, capture network | ADR-0009 §5, mon AC-45.14 |
-
-Ce n'est pas une faute : ces tests preexistaient et le lot de securite les a durcis sur place plutot que d'en creer de nouveaux, ce qui est le bon geste. Mais la consequence est qu'une lecture par serie de la couverture du lot de securite **sous-estime** ce qui est reellement couvert, et qu'un lecteur cherchant l'ancrage dans AC-48 ne trouve que la moitie unitaire.
-
-**La serie AC-46 a des trous de numerotation** dans les tests : ils vont de `AC-46.1` a `AC-46.4` sans `AC-46.2` ni `AC-46.3`. La numerotation a ete posee en prevision de criteres qui n'ont jamais ete ecrits, ce qui est le symptome direct de l'absence de registre au moment du lot.
+**AC-47.6 etait declare trou a tort dans le releve du 2026-09-04.** Le test de recensement des routes ajoute avec la declaration du 413 dans l'OpenAPI le couvre exactement : il enumere les montages reels de `bodyLimit` depuis `app.routes` et exige que chacun soit sous `/api/`. Aucun doublon n'a ete ecrit.
 
 ---
 
-## La question de la renumerotation, et ce que j'en fais
+## Ce qui a resiste, et pourquoi
 
-Les numeros des tests existants ne correspondent plus a ceux du registre. Exemple : le test `AC-43.3` porte sur les plages IP non publiques, le critere AC-43.3 du registre porte sur le refus d'un `target` avec query. C'est une contradiction que le backfill vient de creer, et il faut la trancher.
+Trois criteres ne se testent pas par la voie qu'on prendrait naturellement. Le contournement retenu est note ici pour que personne ne le redecouvre.
 
-**Je ne renomme pas les 73 tests, et c'est un arbitrage que je rends plutot qu'une omission.** Trois raisons.
+**Le timer de purge (AC-50.10).** Il est enregistre au chargement de `src/main.ts`, deja evalue par les autres fichiers de test du meme processus. Un `import()` dynamique donnerait bien une instance neuve, mais il se resout a l'execution et exige une permission de lecture sur `src/` que les taches de test n'accordent pas, a dessein. Le montage retenu est un import **statique** suffixe (`src/main.ts?purge-timer`), precede d'un module qui pose un espion sur `setInterval` : cle de module distincte donc reevaluation, resolution statique donc aucune permission supplementaire.
 
-1. Le contenu des criteres a ete derive des ADR, et **aligner ma numerotation sur celle des tests aurait revenu a laisser les tests dicter la structure du registre**, par la porte de derriere. L'ordre retenu suit les trois temps de l'ADR-0009 §2 (forme, adresse, redirections), qui est la structure de la decision.
-2. Plusieurs renommages demandent un jugement, pas une substitution : deux tests changent de serie, un test couvre quatre criteres a lui seul (`AC-43.2 forme`), quatre exigences vivent sous des series anterieures. Un `sed` produirait des correspondances fausses, qui sont pires que des correspondances absentes.
-3. Le renommage touche dix fichiers de `tests/`, ou le dev travaillera pour la v5. Le faire maintenant cree une surface de conflit pour un gain purement cosmetique a court terme.
+**Le testeur de scopes du navigateur (AC-46.6, AC-49.3).** `src/ui/client/test-scope.ts` touche au DOM et ne peut pas etre importe sous la config serveur qui type-checke les tests. La verification passe par `static/client.js`, comme la parite de copy d'AC-56, ce qui suppose un `deno task build:client` prealable. Le tree-shaking d'esbuild est ce qui rend l'observation concluante : un symbole absent du bundle est un symbole que l'entree n'atteint pas.
 
-**La table ci-dessus est la specification de ce renommage.** Il se traite en tache mecanique separee, sur un arbre ou personne d'autre n'ecrit, avec pour critere de sortie qu'aucun identifiant AC ne soit porte par deux tests couvrant des criteres differents. Tant qu'il n'est pas fait, ce document est l'index qui permet de repondre a « quel test couvre AC-43.18 » sans greper la suite.
+**Le compte d'octets lus du corps (AC-47.7).** Mesurer directement le tirage avec un corps en flux fait pendre la requete : `c.req.raw.clone()` tee le flux et la branche non lue ne se resout pas. Le critere est mesure par ses deux plafonds observables, sur une taille intermediaire ou seuls eux les distinguent : refusee quand seule la capture detailed reclame le corps, acceptee quand un body filter le reclame.
 
 ---
 
 ## Ce que je n'ai pas couvert
 
-- **Je n'ai ecrit aucun test dans cette passe.** Les 20 trous sont documentes, pas combles : les combler est un lot de test a part entiere, a dispatcher au dev ou a me redonner, et il vaut d'etre priorise par la liste ci-dessus plutot que traite en bloc.
-- **Je n'ai pas verifie le comportement reel des plages IP contre une pile reseau**, seulement contre la fonction de classification. Le rebinding DNS, explicitement laisse ouvert par l'ADR-0009, n'est pas testable en l'etat et ne figure dans aucun critere : c'est une non-garantie, elle vit en §13.
-- **Deux variables d'environnement du lot de securite ne sont documentees nulle part hors de l'ADR-0009** : `FGP_EGRESS_ALLOW_PRIVATE` et `FGP_TRUSTED_PROXY_HOPS`. Elles ne figurent ni dans `docs/specs.md`, ni dans `docs/limits.md`, ni dans la liste des variables d'environnement de `CLAUDE.md`. La premiere desactive la garantie G1 a elle seule. Ce n'est pas mon perimetre de les y ajouter, c'est signale au PO et au lead.
-- **La priorisation des trous n'est pas la mienne a rendre.** Je les ai classes par gravite technique. Le choix de ce qui part maintenant et de ce qui attend appartient a l'architecte.
+- **La serie v5, AC-51 a AC-57.** Elle demande son propre releve, sur le meme protocole. Le chiffre du 2026-09-04 est perime et n'a pas ete reconduit ici.
+- **La moitie 400 d'AC-47.10**, decrite plus haut : arbitrage, pas test.
+- **La passe finale de `stripTransportHeaders` sur les en-tetes hop-by-hop.** Elle ne retire que `Host` et `X-FGP-*`. Un `AuthSpec` qui tenterait de poser `TE` ou `Connection` n'atteint jamais cette passe : `validateHeaderName` refuse ces noms, et `isValidAuthSpec` est appele au dechiffrement, donc le blob forge est refuse en entier. La defense tient, mais par la validation et non par le strip, et aucun chemin public ne permet d'exercer le strip lui-meme. AC-45.10 est donc couvert sur sa moitie observable, l'ordre des passes, verifiee par inversion.
+- **Le rebinding DNS**, explicitement laisse ouvert par l'ADR-0009. Non testable en l'etat, ne figure dans aucun critere, vit en §13 comme non-garantie.
+- **La renumerotation des tests existants.** Arbitrage inchange : la table ci-dessus en est la specification, elle se traite en tache mecanique separee sur un arbre ou personne d'autre n'ecrit.

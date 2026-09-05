@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertNotEquals } from "@std/assert";
 
 import { app } from "../../src/main.ts";
 
@@ -426,6 +426,95 @@ Deno.test({
     assertEquals(res.status, 400);
     assertEquals((await res.json()).error, "invalid_body");
     teardown();
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+async function statutSurCorpsDe(path: string, octets: number): Promise<number> {
+  // Le remplissage est pose dans un champ inconnu de la route : le corps est du JSON valide
+  // et sa taille est la seule chose qui puisse le faire echouer en 413.
+  const body = JSON.stringify({ padding: "a".repeat(octets) });
+  const res = await app.request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  await res.body?.cancel();
+  return res.status;
+}
+
+Deno.test({
+  name: "AC-47.2 (registre v5): les paliers resserres par route sont ceux annonces",
+  fn: async () => {
+    setup();
+    try {
+      // Chaque palier est dimensionne sur ce que la route transporte reellement. Les deux
+      // bornes comptent : sans la valeur qui passe, un plafond global plus bas rendrait le
+      // test vert tout en cassant les routes que le palier de 64 Ko doit laisser vivre.
+      const paliers: [string, number][] = [
+        ["/api/decode", 8 * 1024],
+        ["/api/list-apps", 4 * 1024],
+        ["/api/list-addons", 4 * 1024],
+      ];
+
+      for (const [path, palier] of paliers) {
+        assertEquals(
+          await statutSurCorpsDe(path, palier + 512),
+          413,
+          `${path} accepte un corps au-dela de son palier de ${palier} octets`,
+        );
+        assertNotEquals(
+          await statutSurCorpsDe(path, Math.floor(palier / 2)),
+          413,
+          `${path} refuse un corps sous son palier de ${palier} octets`,
+        );
+      }
+
+      // Le palier par defaut reste plus haut que les trois precedents : une valeur qui
+      // depasse leur plafond doit passer le sien.
+      assertNotEquals(await statutSurCorpsDe("/api/generate", 16 * 1024), 413);
+    } finally {
+      teardown();
+    }
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-47.10: les 413 de plafond sont des reponses FGP, pas des reponses upstream",
+  fn: async () => {
+    setup();
+    try {
+      // Le proxy transparent n'est pas entame par ces plafonds : ils sont produits par FGP
+      // et se declarent comme tels, en-tete de provenance compris. Le code d'erreur seul ne
+      // le dit pas, et c'est lui que les tests voisins asserent.
+      //
+      // Ce test ne couvre que les 413. Le 400 « encoded trop long » du meme critere ne
+      // porte pas X-FGP-Source aujourd'hui : c'est un ecart entre le critere ecrit et
+      // l'implementation, remonte au lead plutot que ferme ici par un test rouge ou par une
+      // retouche de src/.
+      const cas: [string, string, string][] = [
+        ["/api/generate", JSON.stringify({ padding: "a".repeat(70 * 1024) }), "palier par defaut"],
+        ["/api/decode", JSON.stringify({ padding: "a".repeat(9 * 1024) }), "palier resserre"],
+      ];
+
+      for (const [path, body, titre] of cas) {
+        const res = await app.request(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        const payload = await res.json() as { error?: unknown; message?: unknown };
+        assertEquals(res.status, 413, titre);
+        assertEquals(res.headers.get("X-FGP-Source"), "proxy", `${titre} : provenance`);
+        assertEquals(payload.error, "payload_too_large", `${titre} : code`);
+        assertEquals(typeof payload.message, "string", `${titre} : champ message`);
+      }
+    } finally {
+      teardown();
+    }
   },
   sanitizeOps: false,
   sanitizeResources: false,

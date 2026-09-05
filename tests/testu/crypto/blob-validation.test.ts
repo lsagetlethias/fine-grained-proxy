@@ -742,3 +742,75 @@ Deno.test("AC-48.15: une regex hors dialecte est refusee avec un code dedie", as
   assertEquals(err instanceof BlobPolicyError, true);
   assertEquals((err as BlobPolicyError).code, "unsupported_regex");
 });
+
+function regex(value = "^a$") {
+  return { type: "regex", value };
+}
+
+async function refuseAuDechiffrement(v: number, scopes: unknown[], titre: string): Promise<void> {
+  const blob = await encryptRaw(makeConfig({ v, scopes: scopes as never }));
+  await assertRejects(
+    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
+    Error,
+    "malformed BlobConfig",
+    titre,
+  );
+}
+
+Deno.test("AC-48.15 (registre v5): les budgets sont globaux au blob, pas par filtre ni par portee", async () => {
+  // Cinq regex reparties sur deux filtres d'un meme scope. Un plafond par filtre les
+  // verrait comme trois puis deux et laisserait passer, ce qui laisserait la structure
+  // multiplicative intacte : c'est le comptage global qui borne le cout d'une requete.
+  const deuxFiltres = [{
+    methods: ["POST"],
+    pattern: "/v1/x",
+    bodyFilters: [
+      { objectPath: "a", objectValue: [regex(), regex(), regex()] },
+      { objectPath: "b", objectValue: [regex(), regex()] },
+    ],
+  }];
+  await refuseAuDechiffrement(3, deuxFiltres, "cinq regex sur deux filtres");
+
+  // Cinq regex reparties sur deux scopes distincts. Un plafond par portee compterait deux
+  // fois trois et deux, jamais cinq.
+  const deuxScopes = [
+    {
+      methods: ["POST"],
+      pattern: "/v1/x",
+      bodyFilters: [{ objectPath: "a", objectValue: [regex(), regex(), regex()] }],
+    },
+    {
+      methods: ["POST"],
+      pattern: "/v1/y",
+      bodyFilters: [{ objectPath: "b", objectValue: [regex(), regex()] }],
+    },
+  ];
+  await refuseAuDechiffrement(3, deuxScopes, "cinq regex sur deux scopes");
+
+  // Cinq regex reparties sur les deux axes que la v5 met en presence, un body filter et un
+  // query filter : le budget ne se remet pas a zero en changeant d'axe.
+  const deuxAxes = [{
+    methods: ["POST"],
+    pattern: "/v1/x",
+    bodyFilters: [{ objectPath: "a", objectValue: [regex(), regex(), regex()] }],
+    queryFilters: [{ param: "q", values: [regex(), regex()] }],
+  }];
+  await refuseAuDechiffrement(5, deuxAxes, "cinq regex sur deux axes");
+
+  // Temoin a quatre : le refus vient bien du total et pas de la repartition elle-meme,
+  // sans quoi les trois assertions ci-dessus passeraient pour de mauvaises raisons.
+  const quatreReparties = [
+    {
+      methods: ["POST"],
+      pattern: "/v1/x",
+      bodyFilters: [{ objectPath: "a", objectValue: [regex(), regex()] }],
+    },
+    {
+      methods: ["POST"],
+      pattern: "/v1/y",
+      bodyFilters: [{ objectPath: "b", objectValue: [regex(), regex()] }],
+    },
+  ];
+  const ok = await encryptRaw(makeConfig({ v: 3, scopes: quatreReparties as never }));
+  assertEquals((await decryptBlob(ok, CLIENT_KEY, SERVER_SALT)).v, 3);
+});

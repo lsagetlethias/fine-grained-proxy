@@ -2844,17 +2844,25 @@ Serie reconstituee a posteriori depuis les ADR, le lot de securite ayant ete liv
 **When** un `target` visant une adresse privee est presente, puis un `target` de schema `file:`, puis une cible qui redirige
 **Then** le premier passe, le second reste refuse, et la redirection reste non suivie. La derogation porte sur la classification d'adresse, jamais sur la forme ni sur la politique de redirection
 
-### AC-43.21 `FGP_EGRESS_ALLOW_PRIVATE` est signale bruyamment au demarrage
+### AC-43.21 `FGP_EGRESS_ALLOW_PRIVATE` est signale bruyamment au premier controle de destination
 
 **Given** la variable positionnee a `1`
-**When** le serveur demarre
-**Then** un avertissement est ecrit. C'est un interrupteur de developpement : actif en production, **G1 ne s'applique plus et l'instance redevient la SSRF non authentifiee que l'ADR-0009 corrige**, ouverte sur le reseau prive de l'hebergeur, service de metadonnees compris
+**When** une destination est classee pour la premiere fois
+**Then** un avertissement est ecrit, une seule fois, et il nomme la garantie qui tombe. C'est un interrupteur de developpement : actif en production, **G1 ne s'applique plus et l'instance redevient la SSRF non authentifiee que l'ADR-0009 corrige**, ouverte sur le reseau prive de l'hebergeur, service de metadonnees compris.
 
-### AC-43.22 Les valeurs d'origine operateur ne sont pas soumises au classement d'adresse
+Le signal est pose au premier controle et non au demarrage, a dessein : une instance qui n'a encore rien proxyfie n'a encore rien expose, et un avertissement repete a chaque requete finirait filtre. Ce critere disait « au demarrage » dans sa redaction initiale, ce que l'implementation n'a jamais fait
 
-**Given** `SCALINGO_API_URL` et `SCALINGO_AUTH_URL` pointant vers un mock local
-**When** un echange de token a lieu
-**Then** l'appel aboutit. Ces valeurs ne viennent pas d'un appelant, elles viennent de l'operateur qui a deja le controle du processus
+### AC-43.22 Les valeurs d'origine operateur echappent a la contrainte d'hote, jamais au classement d'adresse
+
+**Given** `SCALINGO_API_URL` pointant vers un hote qui n'est pas un hote Scalingo
+**When** un token d'addon est demande
+**Then** l'appel n'est pas refuse pour ce motif : ces valeurs ne viennent pas d'un appelant, elles viennent de l'operateur, qui a deja le controle du processus. La contrainte de domaine d'AC-43.18 protege contre un `apiUrl` porte par un blob, pas contre l'operateur lui-meme.
+
+**And Given** la meme variable pointant vers un hote qui resout en adresse privee
+**When** le meme appel a lieu
+**Then** il est refuse en `target_forbidden` et rien ne part.
+
+**La derogation porte sur la contrainte de domaine, jamais sur la classification d'adresse.** L'etendre au classement rouvrirait une sortie non publique par le seul fait d'avoir ecrit une variable d'environnement, et le point de sortie unique cesserait d'etre unique : il aurait une exemption par provenance, exactement la forme de trou que l'ADR-0009 §6 ferme. La redaction initiale de ce critere disait le contraire, elle etait fausse contre l'implementation
 
 ### AC-43.23 NON-REGRESSION : une cible publique legitime fonctionne toujours
 
