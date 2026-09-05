@@ -35,7 +35,11 @@ function proxied(fn: (ctx: { blob: string; blobId: string }) => Promise<void>, l
   return async () => {
     Deno.env.set("FGP_SALT", SALT);
     Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
+    // Pose explicitement les deux etats du kill switch. Se contenter de ne pas poser la
+    // variable laisserait AC-57.8 dependre de l'environnement : un FGP_LOGS_ENABLED=1
+    // herite du shell lui ferait capturer une entry et echouer alors que la garde est bonne.
     if (logsOn) Deno.env.set("FGP_LOGS_ENABLED", "1");
+    else Deno.env.delete("FGP_LOGS_ENABLED");
     _resetStoreForTests();
     globalThis.fetch = (() => Promise.resolve(new Response("{}", { status: 200 }))) as typeof fetch;
     try {

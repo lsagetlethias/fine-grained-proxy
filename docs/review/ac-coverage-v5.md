@@ -151,7 +151,7 @@ Cet audit ne parcourt pas les 86 criteres. Il vise les tests qui gardent une pro
 
 ## Protocole
 
-Chaque garde est retiree ou inversee dans `src/`, la suite est relancee, `src/` est restaure depuis git. Une mutation qui ne fait tomber aucun test designe une propriete non gardee. Dix-neuf mutations ont ete passees ; `src/` n'a jamais ete modifie de facon durable et le diff final ne touche que `tests/` et `docs/`.
+Chaque garde est retiree ou inversee dans `src/`, la suite est relancee, `src/` est restaure depuis git. Une mutation qui ne fait tomber aucun test designe une propriete non gardee. **Regle de comptage** : une mutation est une garde retiree ou inversee, et chaque ligne des deux tableaux ci-dessous en est une. Les suffixes (`M2a`, `M2b`) marquent des variantes d'une meme famille de garde, comptees separement puisque chacune a ete passee et observee. **26 mutations au total, 18 ont mordu, 8 sont passees en silence.** `src/` n'a jamais ete modifie de facon durable et le diff final ne touche que `tests/` et `docs/`.
 
 ### Les mutations qui ont mordu
 
@@ -184,7 +184,7 @@ Deux resultats meritent d'etre notes parce qu'ils repondent a une question expli
 
 ## Les huit prises
 
-Huit mutations n'ont fait tomber **aucun test** sur les 828. Dans les huit cas la propriete est correctement implementee dans `src/` : ce sont des tests manquants ou qui visent a cote, pas des defauts du code. `src/` n'a pas ete touche.
+Huit des 26 mutations n'ont fait tomber **aucun test** sur les 828. Dans les huit cas la propriete est correctement implementee dans `src/` : ce sont des tests manquants ou qui visent a cote, pas des defauts du code. `src/` n'a pas ete touche.
 
 **1. La query entiere peut entrer dans le champ `path` de l'entry `network` (AC-57.1, AC-57.2).** C'est la prise la plus lourde. `captureNetwork` recoit `proxyPath` sans query ; lui faire recevoir `proxyPath + search` fait entrer valeurs comprises dans le ring buffer, qui vit **en clair** contrairement au body `detailed` chiffre avec la cle client. 828 tests verts sur cette fuite. Toute la serie AC-57 tenait sur `tests/testu/logs-query-names.test.ts`, qui exerce `extractQueryParamNames` en isolation : une fuite qui entre par un autre champ de l'entry lui echappe entierement, par construction. Le test livre serialise l'entry **complete** et y cherche les secrets, ce qui est la seule forme qui ferme la porte.
 
@@ -204,7 +204,7 @@ Huit mutations n'ont fait tomber **aucun test** sur les 828. Dans les huit cas l
 
 ## Une garde qui tient, mais par un fil
 
-**Le deni par defaut de bout en bout tenait a un seul test, hors serie.** Faire recevoir a `checkRequestAccess` un chemin ampute de sa query, depuis `src/middleware/proxy.ts`, ne faisait tomber que `AC-46.2` de `tests/testi/scope-verdict-parity.test.ts`, ecrit pour le lot de securite. Aucun test de la serie v5 ne l'attrapait, et **AC-56.10 restait vert pour la mauvaise raison** : son unique filtre porte `required: true`, donc toute requete dont la query n'atteint pas le controle est refusee de toute facon, et le `403` attendu tombe sans rien prouver du deni par defaut. AC-56.10 fait correctement son travail sur ce qu'il enonce, la genericite du message, et il n'a pas ete modifie. `AC-51.5 bis` ajoute la garde manquante, avec un filtre **non requis** pour que la seule cause de refus possible soit le parametre non declare.
+**Le deni par defaut de bout en bout tenait a un seul test, hors serie.** Faire recevoir a `checkRequestAccess` un chemin ampute de sa query, depuis `src/middleware/proxy.ts`, ne faisait tomber que `AC-46.2` de `tests/testi/scope-verdict-parity.test.ts`, ecrit pour le lot de securite. Aucun test de la serie v5 ne l'attrapait, et **AC-56.10 restait vert pour la mauvaise raison** : son unique filtre porte `required: true`, donc toute requete dont la query n'atteint pas le controle est refusee de toute facon, et le `403` attendu tombe sans rien prouver du deni par defaut. AC-56.10 fait correctement son travail sur ce qu'il enonce, la genericite du message, et **son enonce comme sa fixture sont laisses intacts** : le corriger aurait fait disparaitre la trace du trou. La garde manquante est ajoutee a cote, en `AC-51.5 bis` dans le meme fichier, avec un filtre **non requis** pour que la seule cause de refus possible soit le parametre non declare. Les deux se lisent donc ensemble : l'ancien montre pourquoi un refus attendu ne prouve rien quand une autre cause suffit a le produire, le nouveau ferme le cas.
 
 ## Releve de couverture de la serie v5
 
@@ -221,7 +221,7 @@ Huit mutations n'ont fait tomber **aucun test** sur les 828. Dans les huit cas l
 
 **Ce tableau dit la couverture, pas la morsure de chaque ligne.** La legende du lot de securite plus haut associe les deux parce que chaque test y avait ete ecrit sous mutation. Ici la serie preexistait : l'audit a mute les gardes du cadrage, pas les 86 criteres un par un. Un « OK » de ce tableau signifie donc qu'un test vert nomme le critere ; la morsure est etablie pour les criteres cites dans les deux tableaux de mutations ci-dessus, et presumee pour les autres. Les series les moins exercees par cet audit sont AC-55, dont seuls 55.5, 55.6, 55.8 et 55.10 sont tombes sous une mutation, et la partie budget d'AC-52 (52.10 a 52.13), qui mesure des temps et n'a pas ete mutee.
 
-Deux criteres sont couverts par des tests portant un autre numero, sans doublon ecrit : **AC-54.1** par les assertions de version d'`AC-53.15`, qui le nomme en commentaire, et **AC-56.8** par `AC-46.2` de `tests/testi/scope-verdict-parity.test.ts`, dont la couverture de l'axe query est etablie par sa chute sous M1 et M14.
+Deux criteres sont couverts par des tests portant un autre numero, sans doublon ecrit : **AC-54.1** par les assertions de version d'`AC-53.15`, qui le nomme en commentaire, et **AC-56.8** par `AC-46.2` de `tests/testi/scope-verdict-parity.test.ts`, dont la table de cas porte un `ScopeEntry` a `queryFilters` : l'axe query y est donc bien compare entre le testeur et le proxy, et pas seulement le chemin.
 
 ## Tests ajoutes ou corriges dans cette passe
 
