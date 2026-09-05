@@ -3884,11 +3884,13 @@ Ref : `docs/specs.md` §12.5, §12.10 bloc 2 bis, §8.2. Le testeur tourne dans 
 **When** le highlight s'execute
 **Then** la note affichee est « La query n'est pas contrainte par les scopes : tous les parametres passent. »
 
-### AC-56.2 Note « query contrainte » quand au moins un scope en porte
+### AC-56.2 Note « query contrainte » quand le scope qui accorde porte les filtres
 
-**Given** un chemin de test contenant un `?` et au moins un scope a `queryFilters`
+**Given** un chemin de test contenant un `?`, une requete autorisee, et un scope accordant l'acces qui porte des `queryFilters`
 **When** le highlight s'execute
-**Then** la note affichee est « La query est contrainte par au moins un scope : voir le detail sous chaque scope concerne. »
+**Then** la note affichee est « La query est contrainte par le scope qui vous autorise : {method}:{pattern}. », nommant ce scope.
+
+Enonce corrige le 2026-09-04. La redaction initiale disait « contrainte par au moins un scope », formulation anterieure a l'arbitrage T2 : elle affirmait une contrainte des qu'un scope quelconque en portait, y compris quand l'acces avait ete accorde par un autre scope qui ne contraint rien. C'est exactement le mensonge permissif que l'etat 3 (AC-56.9) existe pour supprimer. `docs/specs.md` §12.5 fait foi
 
 ### AC-56.3 Detail : parametre non declare
 
@@ -3898,9 +3900,11 @@ Ref : `docs/specs.md` §12.5, §12.10 bloc 2 bis, §8.2. Le testeur tourne dans 
 
 ### AC-56.4 Detail : parametre requis absent
 
-**Given** un scope avec `{param:"status", required: true}` et un chemin de test `/v1/items?page=3`
+**Given** un scope declarant `{param:"status", required: true}` **et** `{param:"page"}`, et un chemin de test `/v1/items?page=3`
 **When** le highlight s'execute
 **Then** la ligne de detail est « Parametre requis "status" absent. »
+
+Fixture corrigee le 2026-09-04. La redaction initiale ne declarait que `status` tout en testant `?page=3` : `page` y etait un parametre **non declare**, donc l'ordre d'evaluation de §12.5 produit le message d'AC-56.3 et jamais celui-ci. Une fixture incoherente avec l'ordre qu'elle reference ne teste pas ce qu'elle annonce ; il faut que `page` soit declare pour que la seule cause restante soit l'absence du requis
 
 ### AC-56.5 Detail : valeur non autorisee
 

@@ -24,12 +24,25 @@ function measure(objectValue: ObjectValue, value: string, evaluations: number): 
 
 const REGEX_VALUE: ObjectValue = { type: "regex", value: WORST_CASE_PATTERN };
 
-// Le minimum de plusieurs echantillons, pas la moyenne : c'est la mesure la moins polluee
-// par un passage du GC ou par une preemption de l'ordonnanceur.
+const SAMPLES = 5;
+
+// Le minimum de plusieurs echantillons, jamais la moyenne ni une mesure unique. Une
+// preemption de l'ordonnanceur ou un passage du GC ne peut qu'AJOUTER du temps : le
+// minimum est donc le seul estimateur que la charge de la machine ne degrade pas. La
+// premiere version de ce test ne l'appliquait qu'a la calibration, et rougissait quand la
+// mesure comparee, elle, prenait une preemption. Un test de politique de securite qui
+// rougit au hasard finit ignore, ce qui est pire que son absence.
+function bestOf(objectValue: ObjectValue, value: string, evaluations: number): number {
+  measure(objectValue, value, evaluations);
+  let best = Infinity;
+  for (let i = 0; i < SAMPLES; i++) {
+    best = Math.min(best, measure(objectValue, value, evaluations));
+  }
+  return best;
+}
+
 function costOfOneRegexEvaluation(): number {
-  measure(REGEX_VALUE, WORST_CASE_VALUE, 4);
-  const samples = [8, 8, 8].map((n) => measure(REGEX_VALUE, WORST_CASE_VALUE, n) / n);
-  return Math.min(...samples);
+  return bestOf(REGEX_VALUE, WORST_CASE_VALUE, 8) / 8;
 }
 
 Deno.test("AC-52.10: le palier bas borne le cout du pire cas regex", () => {
@@ -38,7 +51,7 @@ Deno.test("AC-52.10: le palier bas borne le cout du pire cas regex", () => {
   // Pire cas atteignable : les 4 valeurs regex du budget global du blob (ADR-0010 D2)
   // concentrees sur un seul filtre, applique a un parametre repete jusqu'au palier bas.
   const lowTierEvaluations = 4 * 4;
-  const measured = measure(REGEX_VALUE, WORST_CASE_VALUE, lowTierEvaluations);
+  const measured = bestOf(REGEX_VALUE, WORST_CASE_VALUE, lowTierEvaluations);
 
   assertEquals(
     measured < unitCost * lowTierEvaluations * 3,
@@ -59,8 +72,8 @@ Deno.test("AC-52.10: le palier bas borne le cout du pire cas regex", () => {
 Deno.test("AC-52.11: garde-fou du 64, le palier haut reste hors de portee du cout regex", () => {
   const unitCost = costOfOneRegexEvaluation();
 
-  const at64 = measure(REGEX_VALUE, WORST_CASE_VALUE, 64);
-  const at256 = measure(REGEX_VALUE, WORST_CASE_VALUE, 256);
+  const at64 = bestOf(REGEX_VALUE, WORST_CASE_VALUE, 64);
+  const at256 = bestOf(REGEX_VALUE, WORST_CASE_VALUE, 256);
 
   // Croissance lineaire : quadrupler les evaluations quadruple le cout, pas davantage.
   assertEquals(
@@ -85,8 +98,8 @@ Deno.test("AC-52.12: les types non-regex ne portent pas le cout, ce qui justifie
   const plainValue = "x".repeat(120);
   const evaluations = 1024;
 
-  const anyCost = measure({ type: "any", value: "nomatch" }, plainValue, evaluations);
-  const globCost = measure({ type: "stringwildcard", value: "y*z" }, plainValue, evaluations);
+  const anyCost = bestOf({ type: "any", value: "nomatch" }, plainValue, evaluations);
+  const globCost = bestOf({ type: "stringwildcard", value: "y*z" }, plainValue, evaluations);
 
   for (const [label, total] of [["any", anyCost], ["stringwildcard", globCost]] as const) {
     const perEvaluation = total / evaluations;
@@ -113,12 +126,15 @@ Deno.test("AC-52.13: le parsing d'une query volumineuse n'est pas un vecteur", (
   const query = "?" +
     Array.from({ length: occurrences }, (_, i) => `tag=v${i}`).join("&");
 
-  const start = performance.now();
-  const parsed = new URLSearchParams(query);
-  const values = parsed.getAll("tag");
-  const parseCost = performance.now() - start;
+  let parseCost = Infinity;
+  let seen = 0;
+  for (let i = 0; i < SAMPLES; i++) {
+    const start = performance.now();
+    seen = new URLSearchParams(query).getAll("tag").length;
+    parseCost = Math.min(parseCost, performance.now() - start);
+  }
 
-  assertEquals(values.length, occurrences);
+  assertEquals(seen, occurrences);
 
   // Le vecteur est le nombre d'evaluations, jamais la taille de la query : analyser 48 Ko
   // doit couter moins que le budget d'evaluation du palier bas lui-meme.

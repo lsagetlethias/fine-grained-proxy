@@ -1461,14 +1461,18 @@ Un texte d'alerte qui ne se comprendrait comme une alerte qu'en voyant sa couleu
 
 Le formulaire de saisie reprend le **gabarit visuel des body filters** (§12.4) : accordéon par scope, panel repliable, un bloc par filtre avec un sélecteur de type et une liste de valeurs OR extensible. Cette section ne redécrit pas ce gabarit, elle donne le texte propre aux query filters et les trois écarts fonctionnels qui le distinguent des body filters.
 
-#### Où le panel apparaît
+#### Où le panel apparaît, et un seul panel pour les deux axes
 
-Le bouton d'ouverture apparaît **pour tout scope**, contrairement aux body filters qui ne s'affichent que pour les scopes POST/PUT/PATCH. Une query s'observe sur n'importe quelle méthode, GET compris, c'est même le cas d'usage principal (§19.1).
+**Correction sur le mécanisme : un seul bouton, un seul panel, pas un second doublant celui des body filters.** La version précédente de cette section décrivait un bouton et un panel propres à l'axe query, en miroir de ceux des body filters. Le designer a unifié les deux (`docs/design/query-filters-ui.md`, validé par le lead) : un même bouton ouvre un même panel pour un scope donné, qui contient deux sous-sections quand les deux axes sont utilisés, « Body Filters (avancé) » et « Query Filters (avancé) » (ces deux libellés restent les miens, réutilisés tels quels comme titres de sous-section plutôt que de panel). Le bouton d'ouverture et le titre du panel englobant, eux, sont une formulation du designer que je valide ici sans y toucher : elle est claire, cohérente avec le gabarit existant, et n'a pas besoin d'être réécrite.
+
+Le bouton d'ouverture apparaît **pour tout scope**, contrairement au comportement d'avant les query filters où il n'apparaissait que pour les scopes POST/PUT/PATCH. Une query s'observe sur n'importe quelle méthode, GET compris, c'est même le cas d'usage principal (§19.1).
 
 | Élément | Texte |
 |---------|-------|
-| Bouton d'ouverture | « + Ajouter des filtres query sur un scope... » |
-| Titre du panel | « Query Filters (avancé) » |
+| Bouton d'ouverture (unique, body et query) | « + Ajouter des filtres sur un scope... » |
+| Titre du panel englobant (unique) | « Filtres avancés » |
+| Titre de la sous-section body filters, à l'intérieur du panel | « Body Filters (avancé) » |
+| Titre de la sous-section query filters, à l'intérieur du panel | « Query Filters (avancé) » |
 
 #### L'avertissement de déni par défaut : au moment de la saisie, pas dans une doc
 
@@ -1674,7 +1678,8 @@ Le schéma des events est discriminé par le champ `type`.
   "status": 200,
   "durationMs": 142,
   "ipPrefix": "203.0.113.0/24",
-  "queryParamNames": ["per_page", "status"]
+  "queryParamNames": ["per_page", "status", "ids"],
+  "queryParamRepeats": [["ids", 5]]
 }
 ```
 
@@ -1686,13 +1691,19 @@ Le schéma des events est discriminé par le champ `type`.
 | `status` | Status HTTP renvoyé au client (peut être FGP ou upstream) |
 | `durationMs` | Durée totale du traitement proxy, depuis l'entrée jusqu'à l'envoi de la réponse |
 | `ipPrefix` | IP client tronquée au /24 (IPv4) ou /48 (IPv6). Respect vie privée + infos debug. |
-| `queryParamNames` | Depuis v5 (§19.8). Noms des paramètres de query présents dans la requête, dédupliqués, **jamais leurs valeurs**. Absent (pas un tableau vide) quand la requête n'a pas de query. |
+| `queryParamNames` | Depuis v5 (§19.8). Noms des paramètres de query présents dans la requête, dédupliqués, **jamais leurs valeurs**. Au plus 32 noms distincts, chacun tronqué à 64 caractères. Absent (pas un tableau vide) quand la requête n'a pas de query. |
+| `queryParamRepeats` | Depuis v5. Tableau de paires `[nom, nombre d'occurrences]`, **un seul par nom réellement répété**. Un nom présent dans `queryParamNames` mais absent d'ici est apparu exactement une fois. Absent quand aucun paramètre n'est répété. |
+| `queryParamNamesTruncated` | Depuis v5. `true` si `queryParamNames` a atteint son plafond de 32 noms distincts (des noms supplémentaires existaient mais ne sont plus retenus) ou si un nom a dû être tronqué à 64 caractères. Absent sinon. |
 
 Le `target` upstream n'est **pas** inclus dans les entries network.
 
-**Sur `queryParamNames` : pourquoi les noms et jamais les valeurs.** L'entry `network` vit **en clair** dans le ring buffer, contrairement au body `detailed` qui est chiffré côté client avant stockage (§14.8). Les noms de paramètres suffisent au diagnostic le plus courant (« `per_page` apparaît, mon SDK de pagination l'a ajouté ») et ne fuitent aucun secret. Les valeurs, elles, contiennent régulièrement des identifiants ou des secrets (`?api_key=`, `?token=`) : les stocker en clair dans le ring buffer network en ferait un vecteur de fuite à part entière, ce qu'aucune autre donnée de cette entry ne fait aujourd'hui. Un besoin futur de voir les valeurs a sa place dans l'entry `detailed`, chiffrée, jamais ici.
+**Sur `queryParamNames` : pourquoi les noms et jamais les valeurs.** L'entry `network` vit **en clair** dans le ring buffer, contrairement au body `detailed` qui est chiffré côté client avant stockage (§14.8). Les noms de paramètres suffisent au diagnostic le plus courant (« `per_page` apparaît, mon SDK de pagination l'a ajouté ») et ne fuitent aucun secret. Les valeurs, elles, contiennent régulièrement des identifiants ou des secrets (`?api_key=`, `?token=`) : les stocker en clair dans le ring buffer network en ferait un vecteur de fuite à part entière, ce qu'aucune autre donnée de cette entry ne fait aujourd'hui. Un besoin futur de voir les valeurs a sa place dans l'entry `detailed`, chiffrée, jamais ici. Un compteur d'occurrences n'est pas une valeur : `queryParamRepeats` respecte cette contrainte à l'identique, il ne fuite rien de plus que la liste de noms.
 
-**Champ additif, pas une rupture du flux.** Un client `/logs/stream` déjà écrit continue de fonctionner : `queryParamNames` est un champ de plus sur un JSON qu'aucun consommateur connu ne valide en mode strict. Un client qui veut afficher les noms de paramètres doit être mis à jour pour les lire, ce qui est une évolution, pas une migration forcée.
+**Pourquoi `queryParamRepeats` existe, et pourquoi il ne se contente pas de dédupliquer (arbitrage rendu contre la première version de cette section).** §19.4 distingue quatre causes de refus sur l'axe query. Trois se lisent dans la configuration de l'auteur : le paramètre non déclaré se lit dans le formulaire, la valeur non couverte se lit dans le filtre, le paramètre requis absent se lit dans `required`. **Le surnombre d'occurrences ne se lit nulle part** : ni dans le blob, ni dans le formulaire, ni dans un message de génération (§12.14). Une liste de noms simplement dédupliquée aurait affiché `ids` présent, une information que l'auteur avait déjà, et lui aurait caché la seule qui explique réellement son 403. `queryParamRepeats` ne liste que les paramètres réellement répétés, avec leur nombre d'occurrences : une requête sans répétition n'ajoute pas un octet au ring buffer, et un auteur bloqué par le plafond de §19.4 voit enfin le paramètre et le compte qui l'expliquent.
+
+**Pourquoi un tableau de paires plutôt qu'un objet indexé par nom.** Les noms de paramètres sont entièrement contrôlés par l'appelant. Une clé `__proto__` sur un objet littéral modifie le prototype de l'objet au lieu d'y créer une propriété : un attaquant qui nomme un paramètre `__proto__` pourrait ainsi affecter la valeur observée pour n'importe quel autre nom, ou celle d'objets créés ensuite avec le même prototype, selon la façon dont le champ est ensuite lu et fusionné côté client. Un tableau de paires `[string, number][]` n'a pas cette classe de risque : une clé de nom n'a aucun effet spécial sur la structure qui la contient.
+
+**Champ additif, pas une rupture du flux.** `queryParamNames` garde son type et son nom d'origine : un client `/logs/stream` déjà écrit continue de fonctionner sans rien changer, il ignore simplement `queryParamRepeats` et `queryParamNamesTruncated` s'il ne les lit pas. Un client qui veut afficher le nombre d'occurrences ou signaler une troncature doit être mis à jour pour les lire, ce qui est une évolution, pas une migration forcée.
 
 **Event `detailed`**, capturé en plus du network, uniquement si `logs.detailed` et content-type JSON non-multipart :
 
@@ -1880,6 +1891,7 @@ data: {}
 | Info detailed non activé | « Les bodies détaillés ne sont pas activés pour ce blob. Activez-les dans l'onglet Logs de votre configuration. » |
 | Indicateur truncated | « Body trop volumineux, non stocké » |
 | Erreur déchiffrement body | « Déchiffrement impossible : vérifiez votre clé » |
+| Label de la ligne de query (v5), affiché sous une entry network dès que `queryParamNames` est non vide | « query : » suivi de la liste des noms, séparés par des virgules ; un nom répété s'affiche `{nom} x{n}` (`queryParamRepeats`, §14.6) ; `, ...` en fin de liste si `queryParamNamesTruncated` |
 
 **Onglet « Logs » dans la page de configuration** :
 
@@ -2342,9 +2354,9 @@ Détail complet du comportement d'un proxy antérieur face à un blob v5, et d'u
 2. Dans `/logs`, rien : la query n'était jusqu'ici pas capturée du tout. Une feature construite pour observer ce qui traverse un blob ne montrait pas l'axe sur lequel une requête a été refusée.
 3. Dans le testeur de scopes, un diagnostic exact et nommé (§12.5), à la seule condition de connaître déjà la query exacte envoyée par son propre client, précisément l'information qui manque quand le paramètre en trop vient d'une couche que l'auteur ne contrôle pas.
 
-**Décision, tranchée par l'architecte : la capture `/logs` enregistre les noms des paramètres de query, jamais leurs valeurs (§14.6, champ `queryParamNames`).** Les noms suffisent au diagnostic : voir `per_page` dans la liste des paramètres d'une requête refusée explique immédiatement la cause, sans qu'aucune valeur ne soit nécessaire. Les valeurs, en revanche, contiennent régulièrement des secrets (`api_key`, `token`, `session`), et l'entrée network vit **en clair** dans le ring buffer, contrairement au body `detailed` qui est chiffré côté client (§14.8) : y écrire des valeurs de query en ferait un vecteur de fuite à part entière, sur une surface que rien ne protège aujourd'hui. Un besoin futur de voir les valeurs a sa place dans l'entrée `detailed`, chiffrée, jamais dans l'entrée network.
+**Décision, tranchée par l'architecte : la capture `/logs` enregistre les noms des paramètres de query et le nombre d'occurrences des seuls paramètres répétés, jamais aucune valeur (§14.6, champs `queryParamNames` et `queryParamRepeats`).** Les noms seuls suffisent au diagnostic pour trois des quatre causes de refus de §19.4 : voir `per_page` dans la liste d'une requête refusée explique un paramètre non déclaré, une valeur non couverte ou un requis absent, parce que ces trois-là se lisent déjà dans la configuration de l'auteur. Ils ne suffisent pas pour la quatrième : le surnombre d'occurrences ne se lit nulle part ailleurs, et une liste dédupliquée aurait montré `ids` présent sans jamais révéler qu'il l'était cinq fois, la seule information qui explique ce refus précis (arbitrage rendu contre la première version de cette section, qui dédupliquait sans exception). Les valeurs, elles, contiennent régulièrement des secrets (`api_key`, `token`, `session`), et l'entrée network vit **en clair** dans le ring buffer, contrairement au body `detailed` qui est chiffré côté client (§14.8) : y écrire des valeurs de query en ferait un vecteur de fuite à part entière, sur une surface que rien ne protège aujourd'hui. Un compteur d'occurrences n'est pas une valeur, cette contrainte reste intacte. Un besoin futur de voir les valeurs a sa place dans l'entrée `detailed`, chiffrée, jamais dans l'entrée network.
 
-**Conséquence, assumée : un champ de plus dans le schéma d'events de §14.6.** Additif, pas une rupture au sens de l'ADR-0009 (aucun champ existant ne change de sens ni ne disparaît) : un client `/logs/stream` déjà connecté continue de fonctionner sans le lire, un client qui veut afficher les noms de paramètres doit être mis à jour pour le faire.
+**Conséquence, assumée : deux champs de plus dans le schéma d'events de §14.6.** Additifs, pas une rupture au sens de l'ADR-0009 (aucun champ existant ne change de sens ni ne disparaît, `queryParamNames` garde son type) : un client `/logs/stream` déjà connecté continue de fonctionner sans les lire, un client qui veut afficher le nombre d'occurrences doit être mis à jour pour le faire.
 
 **Ce que ça ne remplace pas.** L'alerte de déni par défaut de §12.14 doit continuer à dire, au moment de la saisie, que des paramètres ajoutés par le client de l'auteur comptent aussi, pas seulement ceux que l'auteur écrit lui-même dans son formulaire : c'est ce qui permet d'anticiper le problème avant qu'il ne se manifeste. La capture dans `/logs` est ce qui permet de le diagnostiquer une fois qu'il s'est manifesté malgré tout. Les deux sont nécessaires, aucune ne suffit seule.
 

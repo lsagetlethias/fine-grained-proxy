@@ -13,8 +13,14 @@
 - **Breaking** : les redirections de l'API cible ne sont plus suivies. Un 3xx vous est transmis tel quel, avec son `Location`
 - **Breaking** : les corps de requête trop volumineux renvoient `payload_too_large` (413). Le streaming à travers le proxy reste sans plafond
 - **Breaking** : un corps upstream décompressé par FGP gardait `Content-Encoding`/`Content-Length` d'origine, cassant les clients qui les respectent. Retirés, comme `Transfer-Encoding`
-- **Les paramètres de query ne sont pas contraints par les scopes** : un blob autorisé sur `/v1/items` accepte `/v1/items?action=delete`, en attendant la feature
+- **Breaking** : un `queryFilter` de type `any` n'accepte plus qu'une valeur texte, à toute profondeur, y compris dans un `Exclure` qui serait sinon devenu totalement permissif
+- **Breaking** : un blob v5 n'est lisible que par un proxy à jour. Un proxy antérieur le refuse proprement plutôt que d'ignorer silencieusement la contrainte de query
+- Nouveau : les scopes peuvent contraindre les paramètres de query (`queryFilters`), y compris ceux que votre client ajoute à votre insu, pas seulement ceux que vous écrivez
+- Blob v5 : un scope qui porte des `queryFilters` porte le blob en v5. Vos blobs v2 à v4 restent valides, aucune régénération n'est nécessaire
+- Un paramètre de query répété est vérifié occurrence par occurrence, plafonné à 64 par requête, ou 4 si le filtre utilise une regex : passez en glob pour lever la limite
 - Le testeur de scopes de l'interface ne ment plus : il refusait des requêtes que le proxy acceptait. Une seule fonction d'autorisation, partagée avec le proxy
+- Le testeur de scopes nomme le scope qui vous autorise, indique s'il contraint réellement la query, et précise quel paramètre bloque une requête refusée
+- Les logs d'un blob affichent les noms des paramètres de query et le nombre d'occurrences des paramètres répétés, jamais leurs valeurs, pour diagnostiquer un refus
 - Nouvelle variable `FGP_TRUSTED_PROXY_HOPS` pour lire `X-Forwarded-For` derrière un proxy de confiance. Sans elle, les logs utilisent l'adresse du pair
 - Nouvelle variable `FGP_EGRESS_ALLOW_PRIVATE`, réservée au développement : l'activer en production rouvre l'accès au réseau privé de votre hébergeur
 - La limitation de débit est documentée côté opérateur, dans les guides Deno Deploy et Scalingo. FGP n'en implémente pas, un limiteur en mémoire serait inopérant sur Deploy
