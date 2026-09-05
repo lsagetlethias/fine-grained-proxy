@@ -195,3 +195,94 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
 });
+
+// --- Le 415 du controle de type de media suit la meme regle de parite que le 413 ---
+
+async function servesUnsupportedMediaType(path: string, method: string): Promise<boolean> {
+  // Aucun Content-Type : c'est la condition exacte que le controle refuse, et elle est
+  // independante du corps envoye.
+  const res = await app.request(path, { method: method.toUpperCase(), body: "not json" });
+  const raw = await res.text();
+  if (res.status !== 415) return false;
+  try {
+    return (JSON.parse(raw) as { error?: string }).error === "unsupported_media_type";
+  } catch {
+    return false;
+  }
+}
+
+Deno.test({
+  name:
+    "AC-47.11: PARITE, une operation OpenAPI declare 415 unsupported_media_type si et seulement si elle le sert",
+  fn: async () => {
+    setup();
+    try {
+      const spec = await loadSpec();
+      const operations = operationsOf(spec);
+      assertNotEquals(operations.length, 0, "aucune operation enumeree, le test ne verifie rien");
+
+      const undeclared: string[] = [];
+      const overdeclared: string[] = [];
+      let probed = 0;
+
+      for (const { path, method, operation } of operations) {
+        const declares = declaredErrorCodes(spec, operation, "415").includes(
+          "unsupported_media_type",
+        );
+
+        // Sans corps documente, il n'y a aucun type de media a contrarier : le controle ne
+        // se declenche pas et declarer le code documenterait une reponse inatteignable.
+        if (!operation.requestBody) {
+          if (declares) overdeclared.push(`${method.toUpperCase()} ${path} (sans corps)`);
+          continue;
+        }
+
+        probed++;
+        const serves = await servesUnsupportedMediaType(path, method);
+        if (serves && !declares) undeclared.push(`${method.toUpperCase()} ${path}`);
+        if (!serves && declares) overdeclared.push(`${method.toUpperCase()} ${path}`);
+      }
+
+      assertNotEquals(probed, 0, "aucune operation sondee, le test ne verifie rien");
+
+      assertEquals(
+        undeclared,
+        [],
+        `415 unsupported_media_type servi mais absent de l'enum OpenAPI : ${undeclared.join(", ")}`,
+      );
+      assertEquals(
+        overdeclared,
+        [],
+        `415 unsupported_media_type declare mais jamais servi : ${overdeclared.join(", ")}`,
+      );
+    } finally {
+      teardown();
+    }
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-47.12: un Content-Type JSON valide ne declenche pas le 415, le corps est juge",
+  fn: async () => {
+    setup();
+    try {
+      // La frontiere entre les deux codes est le seul point que le changement de contrat
+      // rend delicat : 415 dit « je ne sais pas lire ce format », 400 dit « ce JSON ne
+      // convient pas ». Les confondre reviendrait a rendre le diagnostic inutile.
+      const res = await app.request("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+
+      assertEquals(res.status, 400);
+      assertEquals((await res.json()).error, "invalid_body");
+    } finally {
+      teardown();
+    }
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});

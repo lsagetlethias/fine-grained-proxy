@@ -650,13 +650,16 @@ Les endpoints internes du proxy qui tapent eux-mêmes des APIs externes (ex : `P
 - Échec réseau (fetch throw) → 502 `upstream_unreachable` + `X-FGP-Source: proxy`.
 - Échec d'exchange token (pour `list-apps` et `list-addons`) → 401 `token_exchange_failed` + `X-FGP-Source: proxy`.
 
-Trois codes supplémentaires apparaissent sur ces endpoints. Les deux premiers leur sont propres, ils n'existent pas sur la route proxy. Le troisième vit sur les deux surfaces, avec un plafond différent de chaque côté (§18.5) :
+Quatre codes supplémentaires apparaissent sur ces endpoints. Trois leur sont propres, ils n'existent pas sur la route proxy. `payload_too_large` vit sur les deux surfaces, avec un plafond différent de chaque côté (§18.5) :
 
 | Status | Code | Endpoint | Condition |
 |--------|------|----------|-----------|
 | 400 | `invalid_target` | `/api/generate`, `/api/list-apps`, `/api/list-addons` | La cible ne respecte pas la forme exigée, ou son hôte n'est pas public (ADR-0009) |
 | 400 | `invalid_scope` | `/api/generate` | Un pattern de scope porte un `?` : le pattern ne porte jamais la query, qui se contraint via `queryFilters` (cf. §19) |
+| 415 | `unsupported_media_type` | Les sept routes `/api/*` qui acceptent un corps (`generate`, `decode`, `share/encode`, `share/decode`, `list-apps`, `list-addons`, `test-proxy`) | Le `Content-Type` de la requête n'est pas `application/json`, ou est absent : posez cet en-tête, la requête est refusée avant même la lecture du corps. `GET /api/salt` n'a pas de corps et n'est jamais concernée |
 | 413 | `payload_too_large` | tout `/api/*` | Corps de requête au-delà du plafond de la route |
+
+`unsupported_media_type` est volontairement distinct de `invalid_body`, qui reste inchangé. Le premier dit que FGP n'a pas su lire le format du corps, avant même d'y regarder. Le second dit que le corps a été lu et que son contenu ne convient pas. Avant, les deux tombaient dans le même 400 et un appelant ne pouvait pas savoir s'il devait corriger son en-tête ou son contenu ; il le sait désormais. **C'est un changement cassant** : un appelant qui envoyait du JSON sans poser `Content-Type: application/json` recevait 400 et reçoit désormais 415. La remédiation tient en une ligne, poser l'en-tête.
 
 Ne pas confondre `token_exchange_failed` (401, endpoints internes `/api/list-apps` et `/api/list-addons`) avec `auth_exchange_failed` (502, proxy principal en mode `scalingo-exchange`). Les deux décrivent un échange de token Scalingo qui a échoué, mais ils ne s'adressent pas au même public : le premier dit à l'utilisateur de l'UI que **son** token est mauvais, au moment où il le saisit, et il peut le corriger. Le second dit au consommateur d'une URL FGP que le proxy n'a pas pu s'authentifier pour lui, ce qui n'est pas de son ressort et ne se corrige pas côté client. Deux publics, deux statuts, deux codes.
 

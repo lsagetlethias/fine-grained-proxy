@@ -1,5 +1,9 @@
 # Changelog
 
+## 6 septembre 2026
+
+- **Breaking** : un appel `/api/*` sans `Content-Type: application/json` renvoie désormais `415 unsupported_media_type` au lieu de `400`. Posez l'en-tête pour corriger
+
 ## 4 septembre 2026
 
 - **Breaking** : `POST /api/test-scope` est supprimé. L'interface testait déjà les scopes dans le navigateur, la route serveur n'avait aucun appelant

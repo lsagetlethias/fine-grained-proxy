@@ -123,6 +123,19 @@ const payloadTooLargeResponse = {
   content: { "application/json": { schema: PayloadTooLargeErrorSchema } },
 };
 
+// Meme situation que le 413 : produit par le controle de type de media de
+// @hono/zod-openapi et non par un handler, donc invisible de createRoute. Distinct de
+// invalid_body, qui reste le code du corps mal forme une fois le type accepte.
+const UnsupportedMediaTypeErrorSchema = errorSchema(
+  ["unsupported_media_type"],
+  "UnsupportedMediaTypeError",
+);
+
+const unsupportedMediaTypeResponse = {
+  description: "Content-Type is absent or is not application/json",
+  content: { "application/json": { schema: UnsupportedMediaTypeErrorSchema } },
+};
+
 const ObjectValueSchema = z.union([
   z.object({ type: z.literal("any"), value: z.unknown() }),
   z.object({ type: z.literal("wildcard") }),
@@ -417,6 +430,7 @@ const decodeRoute = createRoute({
       content: { "application/json": { schema: DecodeError401Schema } },
     },
     413: payloadTooLargeResponse,
+    415: unsupportedMediaTypeResponse,
     500: {
       description: "Server misconfigured (FGP_SALT missing)",
       content: { "application/json": { schema: DecodeError500Schema } },
@@ -447,6 +461,7 @@ const shareEncodeRoute = createRoute({
       content: { "application/json": { schema: ShareEncodeError400Schema } },
     },
     413: payloadTooLargeResponse,
+    415: unsupportedMediaTypeResponse,
   },
 });
 
@@ -472,6 +487,7 @@ const shareDecodeRoute = createRoute({
       content: { "application/json": { schema: ShareDecodeError400Schema } },
     },
     413: payloadTooLargeResponse,
+    415: unsupportedMediaTypeResponse,
   },
 });
 
@@ -513,6 +529,7 @@ const generateRoute = createRoute({
       content: { "application/json": { schema: GenerateError400Schema } },
     },
     413: payloadTooLargeResponse,
+    415: unsupportedMediaTypeResponse,
     500: {
       description: "Server misconfigured (FGP_SALT missing)",
       content: { "application/json": { schema: GenerateError500Schema } },
@@ -546,6 +563,7 @@ const listAppsRoute = createRoute({
       content: { "application/json": { schema: ListAppsError401Schema } },
     },
     413: payloadTooLargeResponse,
+    415: unsupportedMediaTypeResponse,
     502: {
       description:
         "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing apps",
@@ -585,6 +603,7 @@ const listAddonsRoute = createRoute({
       content: { "application/json": { schema: ListAddonsError404Schema } },
     },
     413: payloadTooLargeResponse,
+    415: unsupportedMediaTypeResponse,
     502: {
       description:
         "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing addons",
@@ -616,6 +635,7 @@ const testProxyRoute = createRoute({
       content: { "application/json": { schema: TestProxyError400Schema } },
     },
     413: payloadTooLargeResponse,
+    415: unsupportedMediaTypeResponse,
   },
 });
 

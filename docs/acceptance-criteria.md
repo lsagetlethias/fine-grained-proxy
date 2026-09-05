@@ -3188,6 +3188,18 @@ Le ciphertext d'un blob vaut au plus 3 044 octets, donc 128 Ko autorise un ratio
 **When** on inspecte la reponse
 **Then** elle porte `X-FGP-Source: proxy` et la shape `{error, message}`. Le proxy transparent n'est pas entame : ces codes sont produits par FGP et se declarent comme tels
 
+### AC-47.11 Parite OpenAPI/comportement reel pour le 415 unsupported_media_type
+
+**Given** les sept routes `/api/*` qui acceptent un corps (`generate`, `decode`, `share/encode`, `share/decode`, `list-apps`, `list-addons`, `test-proxy`)
+**When** on compare, pour chaque operation, le `415 unsupported_media_type` declare dans l'OpenAPI genere au comportement reel obtenu en appelant la route sans Content-Type JSON
+**Then** les deux coincident exactement : aucune operation ne declare le code sans le servir, aucune ne le sert sans le declarer. `GET /api/salt` n'a pas de corps, elle ne declare et ne sert jamais ce code
+
+### AC-47.12 Un Content-Type JSON valide laisse juger le corps, pas le format
+
+**Given** une requete `POST /api/generate` avec `Content-Type: application/json` et un corps JSON syntaxiquement valide mais qui ne satisfait pas le schema attendu (champs requis manquants)
+**When** la requete est traitee
+**Then** la reponse est `400 invalid_body`, jamais `415`. Le controle de type de media ne regarde que l'en-tete `Content-Type`, jamais le contenu : une fois le format accepte, tout refus qui suit porte sur le contenu, pas sur le format. C'est la frontiere que ce changement introduit, `415` dit qu'on ne sait pas lire ce format, `400 invalid_body` dit que le JSON a ete lu et qu'il ne convient pas
+
 ---
 
 ## AC-48 : Dialecte regex, ancrage et budgets de denombrement
