@@ -34,7 +34,19 @@ export function extractQueryParamNames(search: string): QueryParamNames | null {
   let truncated = false;
 
   for (const [rawName] of new URLSearchParams(search)) {
-    let name = rawName;
+    // URLSearchParams decoupe sur le PREMIER « = » litteral, puis decode chaque moitie.
+    // Un appelant qui encode le separateur (« ?api_key%3Dsecret ») n'en a donc aucun a
+    // decouper : sa valeur ressort entiere dans le nom, en clair dans le ring buffer, sur
+    // la seule surface que rien ne chiffre. Le nom s'arrete au premier « = » de la forme
+    // decodee, ce qui garde le diagnostic (« api_key est arrive ») et laisse le secret
+    // dehors. Un nom vide apres la coupe ne nomme rien : il n'entre pas.
+    const separator = rawName.indexOf("=");
+    let name = separator === -1 ? rawName : rawName.slice(0, separator);
+    if (separator !== -1) truncated = true;
+    if (name.length === 0) {
+      truncated = true;
+      continue;
+    }
     if (name.length > MAX_QUERY_PARAM_NAME_LENGTH) {
       name = name.slice(0, MAX_QUERY_PARAM_NAME_LENGTH);
       truncated = true;

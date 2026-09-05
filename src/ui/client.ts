@@ -45,7 +45,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
     els.errorBanner.classList.add("hidden");
   }
 
-  function doUpdateVisibility(): void {
+  function doUpdateVisibility(prune: boolean = true): void {
     updateBodyFiltersVisibility(
       els.scopesTextarea,
       els.btnAddBodyFilters,
@@ -53,10 +53,18 @@ import type { AppsPermissionsState } from "./client/types.ts";
       els.bodyFiltersList,
       els.scopeChips,
       state,
+      prune,
     );
   }
 
-  els.scopesTextarea.addEventListener("input", doUpdateVisibility);
+  // Pendant la frappe on rafraichit l'affichage sans purger, sinon renommer un scope
+  // detruirait ses filtres des la premiere touche. La purge attend que la saisie soit posee.
+  els.scopesTextarea.addEventListener("input", function () {
+    doUpdateVisibility(false);
+  });
+  els.scopesTextarea.addEventListener("change", function () {
+    doUpdateVisibility(true);
+  });
 
   els.btnAddBodyFilters.addEventListener("click", function () {
     els.bodyFiltersPanel.classList.remove("hidden");
@@ -78,7 +86,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
   };
   const byok = setupByok();
 
-  setupShareConfig(state, authDeps);
+  setupShareConfig(state, authDeps, showError);
 
   els.authSelect.addEventListener("change", function () {
     syncAuthModeVisibility();
@@ -95,7 +103,7 @@ import type { AppsPermissionsState } from "./client/types.ts";
   setupGenerate(els, state, showError, hideError, getLogsConfig, authDeps, byok);
   setupClipboard();
   setupTestScope(state, authDeps);
-  setupImportConfig(authDeps);
+  setupImportConfig(authDeps, state);
   setupTabs();
   setupDocLinks();
 

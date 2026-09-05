@@ -3,190 +3,11 @@ import {
   encodePublicConfig,
   type PublicConfig,
 } from "../../crypto/share.ts";
-import { buildScopes } from "./generate.ts";
-import type {
-  AndCondition,
-  FilterData,
-  QueryFilterData,
-  ScopeFiltersData,
-  SerializedFilterValue,
-  SerializedQueryFilter,
-} from "./types.ts";
+import { buildScopes } from "./build-scopes.ts";
+import { restoreScopeFilters } from "./restore-filters.ts";
+import type { ScopeFiltersData } from "./types.ts";
 import { applyAuthToForm, buildShareAuth } from "./auth-mode.ts";
 import type { AuthModeDeps } from "./auth-mode.ts";
-
-let nextRestoreId = 9000;
-
-function deserializeFilterValue(ov: SerializedFilterValue): Partial<FilterData> {
-  if (ov.type === "wildcard") {
-    return { filterType: "wildcard", values: [], valueSubTypes: [] };
-  }
-  if (ov.type === "not") {
-    const inner = ov.value as SerializedFilterValue;
-    return {
-      filterType: "not",
-      values: [],
-      valueSubTypes: [],
-      notInnerType: inner.type,
-      notInnerSubType: typeof inner.value === "string" ? "text" : "text",
-      notInnerValue: inner.value != null ? String(inner.value) : "",
-    };
-  }
-  if (ov.type === "and") {
-    const subs = ov.value as SerializedFilterValue[];
-    const andConditions: AndCondition[] = subs.map((sub) => ({
-      id: nextRestoreId++,
-      conditionType: sub.type,
-      value: sub.value != null ? String(sub.value) : "",
-      valueSubType: "text",
-      notInnerType: null,
-      notInnerSubType: null,
-      notInnerValue: null,
-    }));
-    return { filterType: "and", values: [], valueSubTypes: [], andConditions };
-  }
-  if (ov.type === "any") {
-    const val = ov.value;
-    let subType = "text";
-    if (val === null) subType = "null";
-    else if (typeof val === "boolean") subType = "boolean";
-    else if (typeof val === "number") subType = "number";
-    return {
-      filterType: "any",
-      values: [val != null ? String(val) : ""],
-      valueSubTypes: [subType],
-    };
-  }
-  return {
-    filterType: ov.type === "regex" ? "regex" : "stringwildcard",
-    values: [ov.value != null ? String(ov.value) : ""],
-    valueSubTypes: ["text"],
-  };
-}
-
-// Une valeur de query est toujours une chaine, y compris sous « not » et dans un « and » :
-// la restauration n'a donc aucun sous-type a deduire (§19.3).
-function deserializeQueryValue(ov: SerializedFilterValue): { type: string; value: string } {
-  if (ov.type === "wildcard") return { type: "wildcard", value: "" };
-  return { type: ov.type, value: ov.value != null ? String(ov.value) : "" };
-}
-
-function restoreQueryFilter(sqf: SerializedQueryFilter): QueryFilterData | null {
-  if (!sqf.param || !Array.isArray(sqf.values) || sqf.values.length === 0) return null;
-  const filter: QueryFilterData = {
-    id: nextRestoreId++,
-    param: sqf.param,
-    required: sqf.required === true,
-    filterType: "any",
-    values: [],
-  };
-
-  const first = sqf.values[0];
-  if (first.type === "not") {
-    const inner = deserializeQueryValue(first.value as SerializedFilterValue);
-    filter.filterType = "not";
-    filter.notInnerType = inner.type;
-    filter.notInnerValue = inner.value;
-    return filter;
-  }
-  if (first.type === "and") {
-    filter.filterType = "and";
-    filter.andConditions = (first.value as SerializedFilterValue[]).map((sub) => {
-      if (sub.type === "not") {
-        const inner = deserializeQueryValue(sub.value as SerializedFilterValue);
-        return {
-          id: nextRestoreId++,
-          conditionType: "not",
-          value: "",
-          notInnerType: inner.type,
-          notInnerValue: inner.value,
-        };
-      }
-      const plain = deserializeQueryValue(sub);
-      return {
-        id: nextRestoreId++,
-        conditionType: plain.type,
-        value: plain.value,
-        notInnerType: null,
-        notInnerValue: null,
-      };
-    });
-    return filter;
-  }
-  if (first.type === "wildcard") {
-    filter.filterType = "wildcard";
-    return filter;
-  }
-
-  filter.filterType = first.type;
-  for (const value of sqf.values) {
-    filter.values.push(value.value != null ? String(value.value) : "");
-  }
-  return filter;
-}
-
-function restoreScopeFilters(
-  scopes: unknown[],
-  data: ScopeFiltersData,
-): void {
-  const bodyFiltersData = data.bodyFiltersData;
-  for (const scope of scopes) {
-    if (typeof scope === "string") continue;
-    const entry = scope as {
-      methods?: string[];
-      pattern?: string;
-      bodyFilters?: { objectPath: string; objectValue: SerializedFilterValue[] }[];
-      queryFilters?: SerializedQueryFilter[];
-    };
-    if (!entry.methods || !entry.pattern) continue;
-    const scopeKeyBase = `${entry.methods.join("|")}:${entry.pattern}`;
-
-    if (entry.queryFilters?.length) {
-      const restored: QueryFilterData[] = [];
-      for (const sqf of entry.queryFilters) {
-        const filter = restoreQueryFilter(sqf);
-        if (filter) restored.push(filter);
-      }
-      if (restored.length > 0) data.queryFiltersData[scopeKeyBase] = restored;
-    }
-
-    if (!entry.bodyFilters?.length) continue;
-
-    const scopeKey = scopeKeyBase;
-    const filters: FilterData[] = [];
-
-    for (const bf of entry.bodyFilters) {
-      if (bf.objectValue.length === 0) continue;
-      const first = bf.objectValue[0];
-      const partial = deserializeFilterValue(first);
-      const filter: FilterData = {
-        id: nextRestoreId++,
-        objectPath: bf.objectPath,
-        filterType: partial.filterType ?? "any",
-        values: partial.values ?? [],
-        valueSubTypes: partial.valueSubTypes ?? [],
-        notInnerType: partial.notInnerType,
-        notInnerSubType: partial.notInnerSubType,
-        notInnerValue: partial.notInnerValue,
-        andConditions: partial.andConditions,
-      };
-
-      if (bf.objectValue.length > 1 && filter.filterType === "any") {
-        for (let i = 1; i < bf.objectValue.length; i++) {
-          const extra = deserializeFilterValue(bf.objectValue[i]);
-          if (extra.values) filter.values.push(...extra.values);
-          if (extra.valueSubTypes) filter.valueSubTypes.push(...extra.valueSubTypes);
-        }
-      }
-
-      filters.push(filter);
-    }
-
-    if (filters.length > 0) {
-      bodyFiltersData[scopeKey] = filters;
-    }
-  }
-}
 
 function readCurrentConfig(
   filtersData: ScopeFiltersData,
@@ -197,7 +18,7 @@ function readCurrentConfig(
 
   const scopesTextarea = document.getElementById("scopes") as HTMLTextAreaElement | null;
   const rawLines = scopesTextarea?.value.split("\n").filter((l) => l.trim() !== "") ?? [];
-  const scopes = scopesTextarea ? buildScopes(scopesTextarea, filtersData) : [];
+  const scopes = scopesTextarea ? buildScopes(scopesTextarea.value, filtersData).scopes : [];
 
   const ttlRadio = document.querySelector<HTMLInputElement>("input[name=ttl]:checked");
   let ttl = 86400;
@@ -306,6 +127,7 @@ async function updateShareUrl(
 export function setupShareConfig(
   filtersData: ScopeFiltersData,
   authDeps: AuthModeDeps,
+  showError: (msg: string) => void,
 ): void {
   let initializing = false;
 
@@ -315,7 +137,17 @@ export function setupShareConfig(
     initializing = true;
     decodePublicConfig(encoded).then((config) => {
       applyConfig(config, authDeps);
-      restoreScopeFilters(config.scopes, filtersData);
+      const report = restoreScopeFilters(config.scopes, filtersData);
+      // Un filtre que le formulaire ne sait pas reafficher ne doit pas disparaitre en
+      // silence : regenerer depuis cet ecran produirait un token plus large que celui qui
+      // a ete partage, sans que rien ne l'ait signale.
+      if (report.unsupported.length > 0) {
+        showError(
+          "Configuration partagée : filtre non restaurable dans le formulaire, " +
+            report.unsupported[0] +
+            ". Regénérer depuis cet écran produirait un token plus large.",
+        );
+      }
       const scopesTa = document.getElementById("scopes");
       if (scopesTa) scopesTa.dispatchEvent(new Event("input"));
       const testMethod = document.getElementById("test-method");

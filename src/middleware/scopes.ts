@@ -115,38 +115,62 @@ function resolveObjectPath(body: unknown, dotPath: string): { found: boolean; va
   return { found: true, value: current };
 }
 
-function matchObjectValue(ov: ObjectValue, bodyValue: unknown): boolean {
+// « Trop long pour etre teste » n'est pas « ne matche pas », c'est indecidable. Encode en
+// faux, l'indecidable s'inverse en vrai sous un « not » : une exclusion cesse d'exclure des
+// que l'appelant allonge gratuitement la valeur, ce qui est exactement l'inverse de ce que
+// son auteur a ecrit. L'indecidable remonte donc jusqu'aux deux points de decision, qui le
+// traduisent tous les deux en echec du filtre.
+type ValueMatch = "match" | "no_match" | "undecidable";
+
+function matchObjectValue(ov: ObjectValue, bodyValue: unknown): ValueMatch {
   switch (ov.type) {
     case "any":
-      return JSON.stringify(ov.value) === JSON.stringify(bodyValue);
+      return JSON.stringify(ov.value) === JSON.stringify(bodyValue) ? "match" : "no_match";
     case "wildcard":
-      return true;
+      return "match";
     case "stringwildcard":
-      return typeof bodyValue === "string" && matchPath(ov.value, bodyValue);
-    case "regex":
-      if (typeof bodyValue !== "string") return false;
+      return typeof bodyValue === "string" && matchPath(ov.value, bodyValue) ? "match" : "no_match";
+    case "regex": {
+      // Une valeur non-string ne matche aucun motif de chaine : c'est une decision, pas une
+      // abstention, et sa negation reste legitime.
+      if (typeof bodyValue !== "string") return "no_match";
       // Plafond de la valeur testee : le backtracking est exponentiel ou polynomial en la
       // longueur de l'entree. Le meme motif coute 181,9 ms sur 1000 caracteres et 2,54 ms
       // sur 128. C'est la couche porteuse, elle ne depend d'aucune analyse du motif.
-      if (bodyValue.length > MAX_REGEX_INPUT) return false;
+      if (bodyValue.length > MAX_REGEX_INPUT) return "undecidable";
       try {
-        return compileAnchored(ov.value).test(bodyValue);
+        return compileAnchored(ov.value).test(bodyValue) ? "match" : "no_match";
       } catch {
-        return false;
+        return "undecidable";
       }
-    case "and":
-      return ov.value.every((sub) => matchObjectValue(sub, bodyValue));
-    case "not":
-      return !matchObjectValue(ov.value, bodyValue);
+    }
+    case "and": {
+      // Une sous-condition definitivement fausse suffit a trancher la conjonction, meme si
+      // une autre est indecidable : le resultat vaut faux dans les deux mondes possibles.
+      let undecided = false;
+      for (const sub of ov.value) {
+        const result = matchObjectValue(sub, bodyValue);
+        if (result === "no_match") return "no_match";
+        if (result === "undecidable") undecided = true;
+      }
+      return undecided ? "undecidable" : "match";
+    }
+    case "not": {
+      const result = matchObjectValue(ov.value, bodyValue);
+      if (result === "undecidable") return "undecidable";
+      return result === "match" ? "no_match" : "match";
+    }
     default:
-      return false;
+      // Discriminant hors de l'union fermee : le blob est refuse au dechiffrement, mais on
+      // ne sait pas ce que ce filtre voulait dire, donc on ne le nie pas non plus.
+      return "undecidable";
   }
 }
 
 export function matchBodyFilter(filter: BodyFilter, body: unknown): boolean {
   const { found, value } = resolveObjectPath(body, filter.objectPath);
   if (!found) return false;
-  return filter.objectValue.some((ov) => matchObjectValue(ov, value));
+  return filter.objectValue.some((ov) => matchObjectValue(ov, value) === "match");
 }
 
 type BodyDecision = "allow" | "skip" | "deny";
@@ -258,7 +282,9 @@ function decideParsedQuery(filters: QueryFilter[], parsed: ParsedQuery): QueryDe
   for (const filter of filters) {
     const values = occurrences.get(filter.param);
     if (!values) continue;
-    const allMatch = values.every((v) => filter.values.some((ov) => matchObjectValue(ov, v)));
+    const allMatch = values.every((v) =>
+      filter.values.some((ov) => matchObjectValue(ov, v) === "match")
+    );
     if (!allMatch) return { reason: "value", param: filter.param };
   }
 
@@ -384,8 +410,15 @@ export function checkAccess(
 ): boolean {
   // Le chemin est compare tel quel, query comprise : c'est checkRequestAccess qui separe les
   // deux axes. Un appelant de bas niveau qui passe « /v1/items?page=1 » demande bien ce
-  // chemin-la, il ne demande pas une evaluation de sa query.
-  return createPathMatcher(scopes, body, "")(method, path).grantedBy >= 0;
+  // chemin-la, il ne demande pas une evaluation de sa query. L'axe query est donc retire des
+  // scopes avant l'appel : le laisser en place avec une recherche vide ferait echouer en
+  // « required_missing » un scope dont l'appelant n'a jamais demande l'evaluation.
+  const withoutQuery = scopes.map((scope) =>
+    typeof scope === "string" || scope.queryFilters === undefined
+      ? scope
+      : { methods: scope.methods, pattern: scope.pattern, bodyFilters: scope.bodyFilters }
+  );
+  return createPathMatcher(withoutQuery, body, "")(method, path).grantedBy >= 0;
 }
 
 // --- ADR-0009 §3 et §4 : forme unique d'autorisation ---

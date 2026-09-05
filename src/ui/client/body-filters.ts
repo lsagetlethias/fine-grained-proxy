@@ -5,6 +5,7 @@ import {
   getEligibleScopes,
   getScopesWithFilters,
   getScopesWithQueryFilters,
+  pruneOrphanScopeFilters,
   querySummary,
   truncatePath,
 } from "./scopes.ts";
@@ -828,8 +829,8 @@ export function renderBodyFiltersPanel(
   updateVisibility: () => void,
   renderChips: () => void,
 ): void {
-  const declared = getAllScopes(scopesTextarea);
-  const bodyEligible = getEligibleScopes(scopesTextarea);
+  const declared = getAllScopes(scopesTextarea.value);
+  const bodyEligible = getEligibleScopes(scopesTextarea.value);
   const withFilters = scopesWithAnyFilter(state);
   const allScopes: string[] = [];
   for (let i = 0; i < declared.length; i++) {
@@ -1139,8 +1140,15 @@ export function updateBodyFiltersVisibility(
   bodyFiltersList: HTMLElement,
   scopeChips: HTMLElement,
   state: BodyFiltersState,
+  prune: boolean = true,
 ): void {
-  const declared = getAllScopes(scopesTextarea);
+  const declared = getAllScopes(scopesTextarea.value);
+  // Point de passage unique de tous les chemins d'edition, assistant Scalingo compris : la
+  // purge y vaut donc pour la ligne supprimee a la main comme pour l'app decochee. Elle est
+  // sautee pendant la frappe : renommer un scope detruirait sinon ses filtres des la premiere
+  // touche, avant meme que la nouvelle ligne soit ecrite. La propriete de securite ne repose
+  // pas sur elle mais sur buildScopes, qui n'emet jamais une cle absente du textarea.
+  if (prune) pruneOrphanScopeFilters(declared, state);
   const withFilters = scopesWithAnyFilter(state);
 
   let hasScopeWithoutFilters = false;

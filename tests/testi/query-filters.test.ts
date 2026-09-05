@@ -21,6 +21,20 @@ function teardown() {
   Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
 }
 
+// Appele en derniere instruction, teardown ne s'executait pas quand une assertion levait :
+// le stub de fetch et les deux variables d'environnement survivaient au test, et un seul
+// echec reel en fabriquait plusieurs autres dans le reste du processus.
+function isolated(fn: () => Promise<void>): () => Promise<void> {
+  return async () => {
+    setup();
+    try {
+      await fn();
+    } finally {
+      teardown();
+    }
+  };
+}
+
 const QUERY_SCOPE = {
   methods: ["GET"],
   pattern: "/v1/items",
@@ -49,8 +63,7 @@ async function post(path: string, body: unknown): Promise<Response> {
 
 Deno.test({
   name: "AC-53.3: any non-string sur un query filter est refuse a la generation",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     const res = await post(
       "/api/generate",
       generateBody([{
@@ -65,16 +78,14 @@ Deno.test({
       body.message,
       `Type "any" on a query filter only accepts a string value (param: 'page')`,
     );
-    teardown();
-  },
+  }),
   sanitizeOps: false,
   sanitizeResources: false,
 });
 
 Deno.test({
   name: "AC-53.14: la validation de generation n'ignore pas un scope sans bodyFilters",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     // Le scope ne porte AUCUN bodyFilters : c'est le cas majoritaire de la v5, et celui
     // que l'ancienne boucle de validation sautait avant d'avoir rien verifie.
     const res = await post(
@@ -90,16 +101,14 @@ Deno.test({
     );
     assertEquals(res.status, 400);
     assertEquals((await res.json()).message, "Duplicate query filter for param 'a'");
-    teardown();
-  },
+  }),
   sanitizeOps: false,
   sanitizeResources: false,
 });
 
 Deno.test({
   name: "AC-53.15: POST /api/generate ne supprime pas silencieusement les queryFilters",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     const gen = await post("/api/generate", generateBody([QUERY_SCOPE]));
     assertEquals(gen.status, 200);
     const { blob, key } = await gen.json();
@@ -114,16 +123,14 @@ Deno.test({
     assertEquals(entry.queryFilters.length, 1);
     assertEquals(entry.queryFilters[0].param, "status");
     assertEquals(entry.queryFilters[0].values[0].value, "open");
-    teardown();
-  },
+  }),
   sanitizeOps: false,
   sanitizeResources: false,
 });
 
 Deno.test({
   name: "AC-53.15 bis: une cle inconnue dans un ScopeEntry est refusee, jamais strippee",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     // Une cle mal orthographiee doit produire une erreur. Strippee en silence, elle
     // produirait un blob ampute de sa contrainte, que rien ne signalerait a son auteur.
     const res = await post(
@@ -135,16 +142,14 @@ Deno.test({
       }]),
     );
     assertEquals(res.status, 400);
-    teardown();
-  },
+  }),
   sanitizeOps: false,
   sanitizeResources: false,
 });
 
 Deno.test({
   name: "AC-53.16: POST /api/share/encode ne supprime pas silencieusement les queryFilters",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     const enc = await post("/api/share/encode", {
       target: "https://api.mock.local",
       auth: "bearer",
@@ -160,16 +165,14 @@ Deno.test({
     const entry = decoded.scopes[0];
     assertEquals(entry.queryFilters.length, 1);
     assertEquals(entry.queryFilters[0].param, "status");
-    teardown();
-  },
+  }),
   sanitizeOps: false,
   sanitizeResources: false,
 });
 
 Deno.test({
   name: "AC-53.16 bis: /api/share/encode refuse aussi une cle inconnue",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     const res = await post("/api/share/encode", {
       target: "https://api.mock.local",
       auth: "bearer",
@@ -177,8 +180,81 @@ Deno.test({
       ttl: 3600,
     });
     assertEquals(res.status, 400);
-    teardown();
-  },
+  }),
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+// Le schema Zod type not.value et les elements de and.value en unknown : un discriminant
+// inconnu imbrique traversait la generation, etait chiffre, et n'echouait qu'au
+// dechiffrement. L'auteur repartait avec un blob mort et un bandeau vert.
+const NESTED_UNKNOWN: [string, unknown][] = [
+  ["not", { type: "not", value: { type: "unknown", value: "x" } }],
+  ["and", {
+    type: "and",
+    value: [{ type: "any", value: "open" }, { type: "unknown", value: "x" }],
+  }],
+  ["not(and)", {
+    type: "not",
+    value: {
+      type: "and",
+      value: [{ type: "any", value: "open" }, { type: "unknown", value: "x" }],
+    },
+  }],
+  ["regex a valeur non-string", { type: "not", value: { type: "regex", value: 42 } }],
+];
+
+for (const [label, value] of NESTED_UNKNOWN) {
+  Deno.test({
+    name: `parite generation : un type invalide sous « ${label} » est refuse avant chiffrement`,
+    fn: isolated(async () => {
+      const query = await post(
+        "/api/generate",
+        generateBody([{
+          methods: ["GET"],
+          pattern: "/v1/items",
+          queryFilters: [{ param: "status", values: [value] }],
+        }]),
+      );
+      assertEquals(query.status, 400, label);
+
+      const body = await post(
+        "/api/generate",
+        generateBody([{
+          methods: ["POST"],
+          pattern: "/v1/items",
+          bodyFilters: [{ objectPath: "a", objectValue: [value] }],
+        }]),
+      );
+      assertEquals(body.status, 400, label);
+    }),
+    sanitizeOps: false,
+    sanitizeResources: false,
+  });
+}
+
+Deno.test({
+  name: "un scope valide portant les memes structures imbriquees passe toujours",
+  fn: isolated(async () => {
+    const res = await post(
+      "/api/generate",
+      generateBody([{
+        methods: ["GET"],
+        pattern: "/v1/items",
+        queryFilters: [{
+          param: "status",
+          values: [{
+            type: "and",
+            value: [
+              { type: "stringwildcard", value: "op*" },
+              { type: "not", value: { type: "any", value: "opaque" } },
+            ],
+          }],
+        }],
+      }]),
+    );
+    assertEquals(res.status, 200, await res.clone().text());
+  }),
   sanitizeOps: false,
   sanitizeResources: false,
 });
@@ -223,8 +299,7 @@ function makeBlob(scopes: Scope[]): Promise<string> {
 
 Deno.test({
   name: "AC-55.8: la query controlee est exactement la query emise",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     const captured = captureFetch();
     const app = createProxyApp();
     const blob = await makeBlob([{
@@ -239,16 +314,14 @@ Deno.test({
     assertEquals(res.status, 200);
     // Le controle porte sur la forme decodee, l'emission sur la forme brute.
     assertEquals(new URL(captured.url()).search, "?q=a%20b%2Fc");
-    teardown();
-  },
+  }),
   sanitizeOps: false,
   sanitizeResources: false,
 });
 
 Deno.test({
   name: "AC-56.10: en production le refus sur l'axe query reste generique",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     captureFetch();
     const app = createProxyApp();
     const blob = await makeBlob([{
@@ -290,16 +363,14 @@ Deno.test({
         );
       }
     }
-    teardown();
-  },
+  }),
   sanitizeOps: false,
   sanitizeResources: false,
 });
 
 Deno.test({
   name: "AC-51.3 bis: integration, une requete conforme traverse le proxy",
-  fn: async () => {
-    setup();
+  fn: isolated(async () => {
     const captured = captureFetch();
     const app = createProxyApp();
     const blob = await makeBlob([{
@@ -314,7 +385,29 @@ Deno.test({
     assertEquals(res.status, 200);
     assertEquals(res.headers.get("X-FGP-Source"), "upstream");
     assertEquals(new URL(captured.url()).search, "?status=open");
-    teardown();
+  }),
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "l'etat de test ne fuit pas quand une assertion leve",
+  fn: async () => {
+    let raised = false;
+    try {
+      await isolated(() => {
+        globalThis.fetch = (() => {
+          throw new Error("stub qui ne doit pas survivre");
+        }) as typeof globalThis.fetch;
+        throw new Error("echec simule");
+      })();
+    } catch {
+      raised = true;
+    }
+    assertEquals(raised, true);
+    assertEquals(globalThis.fetch, originalFetch);
+    assertEquals(Deno.env.get("FGP_SALT"), undefined);
+    assertEquals(Deno.env.get("FGP_EGRESS_ALLOW_PRIVATE"), undefined);
   },
   sanitizeOps: false,
   sanitizeResources: false,

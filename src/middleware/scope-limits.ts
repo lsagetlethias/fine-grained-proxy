@@ -19,30 +19,51 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 // Le schema Zod de /api/generate type not.value et les elements de and.value en unknown :
-// sans ces gardes, une valeur scalaire ou nulle fait throw ici et remonte en 500.
+// sans ces gardes, une valeur scalaire ou nulle fait throw ici et remonte en 500. Il ne
+// contraint pas non plus le discriminant en profondeur, alors que crypto/blob.ts le refuse
+// au dechiffrement : sans la meme fermeture ici, un « type » inconnu imbrique traverse la
+// generation, est chiffre, et n'echoue qu'a l'usage. L'auteur repart avec un blob mort sans
+// que rien ne le lui ait dit. La fermeture appartient a la generation, jamais au
+// dechiffrement, qui est le seul rempart contre un blob forge (le salt est public).
 function validateObjectValue(ov: unknown, depth: number): string | null {
   if (!isRecord(ov)) return "Object value must be an object";
   if (depth > 4) return "Object value nesting exceeds maximum depth of 4";
-  if (ov.type === "not") {
-    if (!isRecord(ov.value)) return "not(...) requires an object condition";
-    const inner = ov.value;
-    if (inner.type === "wildcard") return "not(wildcard) is forbidden";
-    if (inner.type === "not") return "not(not(...)) is forbidden";
-    return validateObjectValue(inner, depth + 1);
-  }
-  if (ov.type === "and") {
-    if (!Array.isArray(ov.value)) return "and(...) requires an array of conditions";
-    const subs = ov.value;
-    if (subs.length === 0) return "and() with empty conditions is forbidden";
-    if (subs.length === 1) {
-      return "and() with a single condition is forbidden, use the condition directly";
+  switch (ov.type) {
+    case "any":
+      if (!("value" in ov)) return "An 'any' filter requires a value";
+      return null;
+    case "wildcard":
+      return null;
+    case "stringwildcard":
+    case "regex":
+      if (typeof ov.value !== "string") {
+        return `A '${ov.type}' filter requires a string value`;
+      }
+      return null;
+    case "not": {
+      if (!isRecord(ov.value)) return "not(...) requires an object condition";
+      const inner = ov.value;
+      if (inner.type === "wildcard") return "not(wildcard) is forbidden";
+      if (inner.type === "not") return "not(not(...)) is forbidden";
+      return validateObjectValue(inner, depth + 1);
     }
-    for (const sub of subs) {
-      const err = validateObjectValue(sub, depth + 1);
-      if (err) return err;
+    case "and": {
+      if (!Array.isArray(ov.value)) return "and(...) requires an array of conditions";
+      const subs = ov.value;
+      if (subs.length === 0) return "and() with empty conditions is forbidden";
+      if (subs.length === 1) {
+        return "and() with a single condition is forbidden, use the condition directly";
+      }
+      for (const sub of subs) {
+        const err = validateObjectValue(sub, depth + 1);
+        if (err) return err;
+      }
+      return null;
     }
+    default:
+      return "Unknown object value type, expected one of: any, wildcard, stringwildcard, " +
+        "regex, and, not";
   }
-  return null;
 }
 
 interface Budget {

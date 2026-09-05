@@ -1,5 +1,5 @@
 import { assertElement } from "./elements.ts";
-import { buildScopes } from "./generate.ts";
+import { buildScopes } from "./build-scopes.ts";
 import { buildAuthPayload } from "./auth-mode.ts";
 import type { AuthModeDeps } from "./auth-mode.ts";
 import {
@@ -232,7 +232,17 @@ export function setupTestScope(
       return;
     }
 
-    const scopes = buildScopes(scopesTextarea, filtersData);
+    const built = buildScopes(scopesTextarea.value, filtersData);
+    // Tester un jeu de scopes ampute d'un filtre incomplet ferait afficher un verdict qui
+    // ne correspond a aucun token generable : on nomme la saisie fautive et on s'arrete.
+    if (built.errors.length > 0) {
+      clearElement(resultsContainer);
+      btnTest.disabled = true;
+      verdictSpan.textContent = built.errors[0];
+      verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
+      return;
+    }
+    const scopes = built.scopes;
     const body = parseTestBody(bodyTextarea, method);
 
     clearElement(resultsContainer);
@@ -275,7 +285,13 @@ export function setupTestScope(
   bodyTextarea.addEventListener("input", debouncedHighlight);
 
   btnTest.addEventListener("click", async () => {
-    const scopes = buildScopes(scopesTextarea, filtersData);
+    const built = buildScopes(scopesTextarea.value, filtersData);
+    if (built.errors.length > 0) {
+      verdictSpan.textContent = built.errors[0];
+      verdictSpan.className = "text-sm font-medium text-red-600 dark:text-red-400";
+      return;
+    }
+    const scopes = built.scopes;
     const method = methodSelect.value;
     const path = pathInput.value;
     const tokenInput = document.getElementById("token") as HTMLInputElement | null;

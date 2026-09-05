@@ -1,4 +1,4 @@
-import type { FilterData, ParsedScope, QueryFilterData } from "./types.ts";
+import type { FilterData, ParsedScope, QueryFilterData, ScopeFiltersData } from "./types.ts";
 
 const ELIGIBLE_METHODS = ["POST", "PUT", "PATCH", "*"];
 
@@ -23,8 +23,8 @@ export function isEligible(parsed: ParsedScope | null): boolean {
   return false;
 }
 
-export function getEligibleScopes(scopesTextarea: HTMLTextAreaElement): string[] {
-  const lines = scopesTextarea.value.split("\n");
+export function getEligibleScopes(scopesText: string): string[] {
+  const lines = scopesText.split("\n");
   const result: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const p = parseScope(lines[i]);
@@ -35,14 +35,27 @@ export function getEligibleScopes(scopesTextarea: HTMLTextAreaElement): string[]
 
 // Toute methode porte une query, GET compris, et c'est meme le cas d'usage principal de la
 // v5 : le panneau liste donc tous les scopes, pas seulement ceux qui peuvent porter un corps.
-export function getAllScopes(scopesTextarea: HTMLTextAreaElement): string[] {
-  const lines = scopesTextarea.value.split("\n");
+export function getAllScopes(scopesText: string): string[] {
+  const lines = scopesText.split("\n");
   const result: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const p = parseScope(lines[i]);
     if (p) result.push(p.raw);
   }
   return result;
+}
+
+// buildScopes emet un scope pour toute cle des deux maps de filtres, sans jamais consulter le
+// textarea : une cle laissee derriere par une ligne supprimee ou par une app decochee accorde
+// donc encore l'acces dans le blob, alors que son auteur ne la voit plus nulle part. La purge
+// vaut pour les DEUX maps et pour tous les chemins d'edition, c'est la declaration qui fait foi.
+export function pruneOrphanScopeFilters(declared: string[], data: ScopeFiltersData): void {
+  for (const key of Object.keys(data.bodyFiltersData)) {
+    if (declared.indexOf(key) === -1) delete data.bodyFiltersData[key];
+  }
+  for (const key of Object.keys(data.queryFiltersData)) {
+    if (declared.indexOf(key) === -1) delete data.queryFiltersData[key];
+  }
 }
 
 export function getScopesWithFilters(bodyFiltersData: Record<string, FilterData[]>): string[] {

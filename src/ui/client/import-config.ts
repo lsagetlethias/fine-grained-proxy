@@ -2,6 +2,8 @@ import type { Auth } from "../../auth/spec.ts";
 import { assertElement } from "./elements.ts";
 import { applyAuthToForm } from "./auth-mode.ts";
 import type { AuthModeDeps } from "./auth-mode.ts";
+import { restoreScopeFilters } from "./restore-filters.ts";
+import type { ScopeFiltersData } from "./types.ts";
 
 interface RedactedHeaderEntry {
   name: string;
@@ -58,7 +60,11 @@ function toFormAuth(auth: DecodedAuth): Auth {
   return auth;
 }
 
-function applyDecodedConfig(data: DecodeResponse, authDeps: AuthModeDeps): void {
+function applyDecodedConfig(
+  data: DecodeResponse,
+  authDeps: AuthModeDeps,
+  filtersData: ScopeFiltersData,
+): void {
   const targetInput = document.getElementById("target") as HTMLInputElement | null;
   if (targetInput) targetInput.value = data.target;
 
@@ -67,6 +73,10 @@ function applyDecodedConfig(data: DecodeResponse, authDeps: AuthModeDeps): void 
   const scopesTextarea = document.getElementById("scopes") as HTMLTextAreaElement | null;
   if (scopesTextarea) {
     scopesTextarea.value = data.scopes.map(scopeToString).join("\n");
+    // Les filtres sont restaures AVANT l'evenement : le rendu du panneau et la purge des
+    // cles orphelines se font sur l'etat complet, pas sur un etat intermediaire ou le
+    // scope existe deja mais ses filtres pas encore.
+    restoreScopeFilters(data.scopes, filtersData);
     scopesTextarea.dispatchEvent(new Event("input"));
   }
 
@@ -94,7 +104,7 @@ function applyDecodedConfig(data: DecodeResponse, authDeps: AuthModeDeps): void 
   }
 }
 
-export function setupImportConfig(authDeps: AuthModeDeps): void {
+export function setupImportConfig(authDeps: AuthModeDeps, filtersData: ScopeFiltersData): void {
   const importBlobInput = assertElement("import-blob", HTMLInputElement);
   const importKeyInput = assertElement("import-key", HTMLInputElement);
   const btnDecode = assertElement("btn-import-decode", HTMLButtonElement);
@@ -131,7 +141,21 @@ export function setupImportConfig(authDeps: AuthModeDeps): void {
       }
 
       const data = await res.json() as DecodeResponse;
-      applyDecodedConfig(data, authDeps);
+
+      // Repetition a blanc avant d'ecrire quoi que ce soit dans le formulaire : un filtre que
+      // l'ecran ne sait pas reafficher fidelement ne doit pas produire un import a moitie
+      // applique sous un bandeau vert. L'auteur croirait reconduire son token et en
+      // regenererait un strictement plus large.
+      const probe: ScopeFiltersData = { bodyFiltersData: {}, queryFiltersData: {} };
+      const report = restoreScopeFilters(data.scopes, probe);
+      if (report.unsupported.length > 0) {
+        importStatus.textContent = "Import refusé, filtre non représentable dans le " +
+          "formulaire : " + report.unsupported[0];
+        importStatus.className = "text-sm font-medium text-red-600 dark:text-red-400";
+        return;
+      }
+
+      applyDecodedConfig(data, authDeps, filtersData);
 
       const usesHeaders = typeof data.auth !== "string" && data.auth.type === "headers";
       importStatus.textContent = usesHeaders

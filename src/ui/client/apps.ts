@@ -341,6 +341,10 @@ export function updateScopesFromApps(
       }
       const branches = parseBranches(perms.deployBranches);
       const deployScope = "POST:/v1/apps/" + appName + "/deployments";
+      // Declare dans les deux branches, filtre ou non : le textarea est la liste des scopes
+      // qui fait foi, et un scope qui n'existerait que dans la map de filtres serait purge
+      // comme orphelin. buildScopes le sort une seule fois, en entree structuree.
+      scopeLines.push(deployScope);
       if (branches.length > 0) {
         const objectValues: SerializedFilterValue[] = branches.map(function (b) {
           if (b.indexOf("*") !== -1) {
@@ -363,8 +367,6 @@ export function updateScopesFromApps(
         };
         newBodyFilters[deployScope] = [filterData];
         state.bodyFiltersData[deployScope] = [filterData];
-      } else {
-        scopeLines.push(deployScope);
       }
     }
 
