@@ -143,16 +143,21 @@ Deno.test({
   fn: async () => {
     setup();
 
-    // Sans Content-Type, le controle de type de media refuse avant toute lecture du corps.
-    // Le code distingue « je ne sais pas lire ce format » de « ce JSON ne convient pas »,
-    // que 400 invalid_body continue de porter.
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      body: "not json",
-    });
-
-    assertEquals(res.status, 415);
-    assertEquals((await res.json()).error, "unsupported_media_type");
+    // Deux facons de ne pas etre du JSON, et il faut les deux : un corps en chaine fait
+    // poser text/plain par le constructeur de Request, donc il n'exerce que l'en-tete
+    // ERRONE. Seul un corps en octets laisse l'en-tete reellement ABSENT.
+    // Le controle refuse avant toute lecture du corps, et le code distingue « je ne sais
+    // pas lire ce format » de « ce JSON ne convient pas », que 400 invalid_body porte.
+    for (
+      const [label, init] of [
+        ["en-tete absent", { method: "POST", body: new Uint8Array([1, 2, 3]) }],
+        ["en-tete errone", { method: "POST", body: "not json" }],
+      ] as [string, RequestInit][]
+    ) {
+      const res = await app.request("/api/generate", init);
+      assertEquals(res.status, 415, label);
+      assertEquals((await res.json()).error, "unsupported_media_type", label);
+    }
 
     teardown();
   },
@@ -242,16 +247,18 @@ Deno.test({
   fn: async () => {
     setup();
 
-    // Sans Content-Type, le controle de type de media refuse avant toute lecture du corps.
-    // Le code distingue « je ne sais pas lire ce format » de « ce JSON ne convient pas »,
-    // que 400 invalid_body continue de porter.
-    const res = await app.request("/api/list-apps", {
-      method: "POST",
-      body: "not json",
-    });
-
-    assertEquals(res.status, 415);
-    assertEquals((await res.json()).error, "unsupported_media_type");
+    // Meme couple de cas que sur /api/generate : un corps en chaine fait poser text/plain,
+    // seul un corps en octets laisse l'en-tete absent.
+    for (
+      const [label, init] of [
+        ["en-tete absent", { method: "POST", body: new Uint8Array([1, 2, 3]) }],
+        ["en-tete errone", { method: "POST", body: "not json" }],
+      ] as [string, RequestInit][]
+    ) {
+      const res = await app.request("/api/list-apps", init);
+      assertEquals(res.status, 415, label);
+      assertEquals((await res.json()).error, "unsupported_media_type", label);
+    }
 
     teardown();
   },

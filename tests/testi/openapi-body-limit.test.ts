@@ -199,9 +199,13 @@ Deno.test({
 // --- Le 415 du controle de type de media suit la meme regle de parite que le 413 ---
 
 async function servesUnsupportedMediaType(path: string, method: string): Promise<boolean> {
-  // Aucun Content-Type : c'est la condition exacte que le controle refuse, et elle est
-  // independante du corps envoye.
-  const res = await app.request(path, { method: method.toUpperCase(), body: "not json" });
+  // Corps en octets et non en chaine : une chaine fait poser text/plain par le constructeur
+  // de Request, ce qui exercerait l'en-tete errone au lieu de l'en-tete absent. Les deux
+  // sont refuses, mais la parite doit se mesurer sur la condition qu'elle annonce.
+  const res = await app.request(path, {
+    method: method.toUpperCase(),
+    body: new Uint8Array([1, 2, 3]),
+  });
   const raw = await res.text();
   if (res.status !== 415) return false;
   try {
