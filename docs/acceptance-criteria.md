@@ -3952,7 +3952,9 @@ Afficher « autorise » a cote de « la query est contrainte par au moins un sco
 
 **Given** un blob dont le seul scope couvrant le chemin de test porte des `queryFilters`, et une requete de test conforme
 **When** le highlight s'execute
-**Then** la note affichee est celle d'AC-56.2, « la query est contrainte », et non celle du troisieme etat. Une note qui apparaitrait des qu'un scope non contraignant existe **ailleurs** dans le blob, sur un autre chemin, alarmerait sans raison et serait ignoree en deux jours
+**Then** la note affichee est celle d'AC-56.2, « la query est contrainte », et non celle du troisieme etat. Une note qui apparaitrait des qu'un scope **contraignant** existe ailleurs dans le blob, sur un autre chemin ou une autre methode, alarmerait sans raison et serait ignoree en deux jours
+
+Enonce corrige le 2026-09-05. La redaction initiale disait « des qu'un scope non contraignant existe ailleurs », ce qui rendait le critere auto-contradictoire : le troisieme etat se declenche quand le scope qui accorde ne contraint pas ET qu'un scope contraignant couvre la meme requete. C'est donc le second qui peut apparaitre a tort, jamais le premier. Le drapeau concerne est `queryConstrainedElsewhere`, et il doit rester faux quand le scope contraignant ne couvre ni ce chemin ni cette methode
 
 ### AC-56.10 En production, le refus reste generique
 

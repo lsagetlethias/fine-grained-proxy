@@ -1,6 +1,10 @@
 import { assertEquals } from "@std/assert";
 
-import { extractQueryParamNames, MAX_QUERY_PARAM_NAME_LENGTH } from "../../src/logs/capture.ts";
+import {
+  extractQueryParamNames,
+  MAX_QUERY_PARAM_NAME_LENGTH,
+  MAX_QUERY_PARAM_NAMES,
+} from "../../src/logs/capture.ts";
 
 const SECRET = "sk-live-51H9xQ2eZvKYlo8";
 
@@ -49,6 +53,28 @@ Deno.test("§19.10 : un parametre sans « = » reste un nom, comme le meme avec 
   // ici ferait disparaitre du diagnostic la forme la plus courante des drapeaux (?force).
   assertEquals(names("?flag"), ["flag"]);
   assertEquals(names("?flag="), ["flag"]);
+});
+
+Deno.test("AC-57.4: le nombre de noms retenus est plafonne et la troncature est signalee", () => {
+  const search = "?" +
+    Array.from({ length: MAX_QUERY_PARAM_NAMES + 20 }, (_, i) => `p${i}=v`).join("&");
+  const extracted = extractQueryParamNames(search);
+  // Le ring buffer est dimensionne par FGP_LOGS_BUFFER_NETWORK : sans plafond, une requete
+  // unique en consomme la totalite et evince tout l'historique de diagnostic.
+  assertEquals(extracted?.names.length, MAX_QUERY_PARAM_NAMES);
+  assertEquals(extracted?.truncated, true);
+  assertEquals(extracted?.names[0], "p0");
+});
+
+Deno.test("AC-57.4 bis: le plafond n'interrompt pas le comptage d'un nom deja retenu", () => {
+  // Sortir de la boucle sur le plafond sous-compterait « ids » : ses occurrences tardives
+  // sont precisement ce qui explique un refus par plafond d'occurrences (AC-52.2).
+  const filler = Array.from({ length: MAX_QUERY_PARAM_NAMES + 5 }, (_, i) => `p${i}=v`);
+  const search = "?ids=a&" + filler.join("&") + "&ids=b&ids=c";
+  const extracted = extractQueryParamNames(search);
+  assertEquals(extracted?.names.length, MAX_QUERY_PARAM_NAMES);
+  assertEquals(extracted?.repeats, [["ids", 3]]);
+  assertEquals(extracted?.truncated, true);
 });
 
 Deno.test("le plafond de longueur s'applique apres la coupe, jamais avant", () => {

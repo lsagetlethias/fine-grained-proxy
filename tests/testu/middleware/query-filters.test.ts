@@ -179,6 +179,89 @@ Deno.test("AC-51.15: additivite, un scope non contraignant autorise malgre le sc
   assertEquals(v.queryConstrained, false);
 });
 
+Deno.test("AC-51.15 bis: additivite entre deux scopes contraints, dans les deux ordres", () => {
+  // AC-51.15 met un scope string en premier, et un scope string sort de la boucle avant que
+  // l'axe query soit atteint : cette forme ne peut pas exercer le partage des decisions de
+  // query entre scopes. Deux ScopeEntry contraints, si. Le refus du premier ne doit jamais
+  // etre resservi au second, sans quoi l'additivite tombe des que l'auteur declare deux
+  // scopes contraints sur le meme chemin, ce qui est le cas d'usage normal de la feature.
+  const byStatus = entry([{ param: "status", values: [{ type: "any", value: "open" }] }]);
+  const bySort = entry([{ param: "sort", values: [{ type: "any", value: "asc" }] }]);
+
+  for (
+    const [label, scopes] of [
+      ["contraignant d'abord", [byStatus, bySort]],
+      ["contraignant ensuite", [bySort, byStatus]],
+    ] as [string, Scope[]][]
+  ) {
+    const onSort = verdict(scopes, "/v1/items?sort=asc");
+    assertEquals(onSort.allowed, true, `${label} : ?sort=asc doit etre autorise`);
+    const onStatus = verdict(scopes, "/v1/items?status=open");
+    assertEquals(onStatus.allowed, true, `${label} : ?status=open doit etre autorise`);
+    // Et l'additivite n'ouvre rien : un parametre qu'aucun des deux ne declare reste refuse.
+    assertEquals(allowed(scopes, "/v1/items?force=true"), false, label);
+  }
+});
+
+Deno.test("AC-51.15 ter: additivite quand le scope contraignant precede le scope string", () => {
+  const scopes: Scope[] = [
+    entry([{ param: "status", values: [{ type: "any", value: "open" }] }]),
+    "GET:/v1/items",
+  ];
+  const v = verdict(scopes, "/v1/items?force=true");
+  assertEquals(v.allowed, true);
+  assertEquals(v.grantedBy, 1);
+  assertEquals(v.queryConstrained, false);
+});
+
+Deno.test("AC-56.9 bis: le troisieme etat ne se declenche pas a tort", () => {
+  const constrained = entry([{ param: "status", values: [{ type: "any", value: "open" }] }]);
+
+  // Cas de l'enonce : le seul scope couvrant le chemin de test porte les filtres. La note
+  // due est celle de l'etat 2, et le troisieme etat n'a pas lieu d'etre.
+  const only = verdict([constrained], "/v1/items?status=open");
+  assertEquals(only.allowed, true);
+  assertEquals(only.queryConstrained, true);
+
+  // Cas que le troisieme etat ne doit PAS revendiquer : le scope contraignant vit ailleurs
+  // dans le blob, sur un autre chemin. Une note qui apparaitrait ici alarmerait sur un
+  // chemin que rien ne contraint, et serait ignoree en deux jours.
+  const elsewherePath: Scope[] = [
+    "GET:/v1/other",
+    { ...constrained, pattern: "/v1/items" } as ScopeEntry,
+  ];
+  const other = verdict(elsewherePath, "/v1/other?force=true");
+  assertEquals(other.allowed, true);
+  assertEquals(other.queryConstrained, false);
+  assertEquals(other.queryConstrainedElsewhere, false);
+
+  // Meme chemin, autre methode : le scope contraignant ne couvre pas cette requete non plus.
+  const elsewhereMethod: Scope[] = [
+    "POST:/v1/items",
+    { ...constrained, methods: ["GET"] } as ScopeEntry,
+  ];
+  const post = verdict(elsewhereMethod, "/v1/items?force=true", "POST");
+  assertEquals(post.allowed, true);
+  assertEquals(post.queryConstrainedElsewhere, false);
+
+  // Temoin : sur le chemin et la methode reellement couverts, le drapeau se leve bien.
+  assertEquals(
+    verdict(["GET:/v1/items", constrained], "/v1/items?force=true").queryConstrainedElsewhere,
+    true,
+  );
+});
+
+Deno.test("AC-54.6 bis: un queryFilters vide ne contraint rien a l'evaluation", () => {
+  // Le pendant matching d'AC-54.6, qui ne verifie que l'absence de bump de version. Un
+  // tableau vide traite comme un axe present declencherait le deni par defaut sur tous les
+  // parametres, alors qu'il est semantiquement identique a l'absence de l'axe.
+  const empty: ScopeEntry = { methods: ["GET"], pattern: "/v1/items", queryFilters: [] };
+  assertEquals(allowed([empty], "/v1/items?force=true&sort=asc"), true);
+  assertEquals(allowed([empty], "/v1/items"), true);
+  const v = verdict([empty], "/v1/items?force=true");
+  assertEquals(v.queryConstrained, false);
+});
+
 Deno.test("AC-51.16: les autres types d'ObjectValue fonctionnent sur une valeur de query", () => {
   const cases: [string, ObjectValue, string, string][] = [
     ["wildcard", { type: "wildcard" }, "n-importe-quoi", ""],

@@ -4,7 +4,7 @@
 **Ref AC** : `docs/acceptance-criteria.md` v5.0, series AC-43 a AC-57
 **Ref sources** : `docs/adr/0009-politique-de-sortie-du-proxy.md`, `docs/adr/0010-politique-limites-ressources.md`, `docs/specs.md` §18
 **Ref challenge v5** : `docs/review/challenge-query-filters-v5.md`
-**Suite** : `deno task verify` vert, **827 tests passes, 0 echec**
+**Suite** : `deno task verify` vert, **844 tests passes, 0 echec** (827 au releve du lot de securite, 828 avant l'audit v5 du 2026-09-05)
 
 La matrice du lot v4 (`ac-coverage-v4.md`, series AC-34 a AC-42) garde sa valeur pour son propre perimetre et n'est pas reecrite : c'est le releve date d'un lot livre.
 
@@ -26,7 +26,7 @@ Le releve du 2026-09-04 comptait **20 trous sur 102** pour un lot de securite li
 | AC-50, derivation et cache | 11 | 11 | 0 | 0 |
 | **Total lot securite** | **102** | **101** | **1** | **0** |
 
-**La serie v5 (AC-51 a AC-57, 86 criteres) n'a pas ete reauditee dans cette passe.** Le releve du 2026-09-04 la donnait a 4 OK et 82 TROU, mais ce chiffre decrivait un contrat non encore implemente : `queryFilters` et le blob v5 ont depuis ete livres et merges, avec leurs tests. Reporter ce chiffre ici serait faux. Il demande son propre releve, sur le meme protocole que celui du lot de securite.
+**La serie v5 a ete auditee le 2026-09-05**, sur le meme protocole, et son releve est plus bas. Le chiffre du 2026-09-04 (4 OK, 82 TROU) decrivait un contrat non encore implemente et n'a pas ete reconduit.
 
 ## Methode, et pourquoi elle compte ici
 
@@ -139,10 +139,117 @@ Trois criteres ne se testent pas par la voie qu'on prendrait naturellement. Le c
 
 ---
 
+# Audit de morsure de la serie v5 (AC-51 a AC-57)
+
+**Date** : 2026-09-05. **Base** : `main`, commit `1e4d83f`, suite verte a 828 tests avant la passe, **844 apres**.
+
+## Ce qui a ete audite, et ce qui ne l'a pas ete
+
+Cet audit ne parcourt pas les 86 criteres. Il vise les tests qui gardent une propriete **dont la perte serait invisible autrement** : si la garde saute et que quelqu'un s'en apercoit par un autre chemin que ce test, la mutation n'apprend rien. Ont donc ete mutees, par ordre d'importance : le deni par defaut, la restriction de `any` aux chaines a toute profondeur, les deux paliers d'occurrences, le plancher de version par axe, les schemas stricts de generation, et l'absence de valeur de query dans l'entry `network`.
+
+**Les tests de copy sont hors perimetre** : `tests/testu/ui/query-filters-copy.test.ts` verifie la parite entre `docs/specs.md` §12.5 et le bundle. Une rupture s'y voit a l'oeil nu sur la page, la muter serait du travail pour du travail. La logique que ces messages decrivent, elle, a ete auditee (voir AC-56.9 bis plus bas).
+
+## Protocole
+
+Chaque garde est retiree ou inversee dans `src/`, la suite est relancee, `src/` est restaure depuis git. Une mutation qui ne fait tomber aucun test designe une propriete non gardee. Dix-neuf mutations ont ete passees ; `src/` n'a jamais ete modifie de facon durable et le diff final ne touche que `tests/` et `docs/`.
+
+### Les mutations qui ont mordu
+
+| Mutation | Garde retiree ou inversee | Tests tombes |
+|----------|---------------------------|--------------|
+| M1 | la phase `undeclared` de `decideParsedQuery` | 9, dont AC-51.5, AC-51.6, AC-52.14, AC-55.5/6/10 |
+| M2a | la restriction `any`-chaine au dechiffrement | AC-53.2, 53.4, 53.5, 53.6 bis |
+| M2b | la propagation de `queryScoped` sous `and` et `not` | AC-53.4, 53.5, 53.6 bis |
+| M2c | la meme restriction a la generation | AC-53.3 |
+| M2d | la restriction **inversee** (`!== "string"`) | 14, dont AC-53.1 |
+| M3a | le palier bas `regex` (tout plafonne a 64) | AC-52.3, 52.4, 52.5 |
+| M3b | le palier rendu **global au `ScopeEntry`** | AC-52.7, et lui seul |
+| M3c | le refus au-dela du plafond remplace par un troncage | AC-52.2, 52.3, 52.4, 52.6, 56.10 |
+| M3d | off-by-one, `>` devient `>=` | AC-52.1, 52.3, 52.7, 52.8 |
+| M4a | le refus d'un `v` sous-declare | AC-54.7 |
+| M4b | le plancher d'auth structuree redevient `v === 4` | AC-54.3, 54.8 |
+| M4c | `queryFilters: []` compte comme un axe present | AC-54.6 |
+| M5b | `.strict()` sur `ScopeEntrySchema` | AC-53.15 bis, 53.16 bis |
+| M5c | `queryFilters` accepte puis **efface** de la valeur parsee | 8, dont AC-53.15 et 53.16 |
+| M6a | la coupe au premier `=` dans `extractQueryParamNames` | 5 tests du fichier unit |
+| M10 | la memoisation de l'axe query entre les deux passes de chemin | AC-52.9 |
+| M11 | `required` devient vrai par defaut | AC-51.8, 51.14 |
+| M12 | `queryConstrained` cesse de regarder le scope qui accorde | AC-51.15 |
+
+Deux resultats meritent d'etre notes parce qu'ils repondent a une question explicite du cadrage.
+
+**La restriction de `any` attrape bien l'inversion, pas seulement l'absence de message.** M2d, qui rend la garde strictement inverse, fait tomber quatorze tests dont AC-53.1, le critere positif. Un test qui se serait contente d'asserter la presence du message de validation serait reste vert. M2b confirme separement que la propagation en profondeur est gardee pour elle-meme : elle fait tomber AC-53.4, 53.5 et 53.6 bis sans toucher AC-53.2.
+
+**Les schemas stricts gardent deux proprietes distinctes, et chacune a son test.** M5b (perte du `.strict()`) ne fait tomber que les deux `bis`, qui gardent le rejet d'une cle inconnue. M5c (la cle reste connue mais l'axe disparait de la valeur parsee) fait tomber AC-53.15 et AC-53.16, qui gardent la survie de `queryFilters` jusqu'au blob. Aucun des deux ne couvre l'autre, ce qui est la bonne configuration.
+
+## Les huit prises
+
+Huit mutations n'ont fait tomber **aucun test** sur les 828. Dans les huit cas la propriete est correctement implementee dans `src/` : ce sont des tests manquants ou qui visent a cote, pas des defauts du code. `src/` n'a pas ete touche.
+
+**1. La query entiere peut entrer dans le champ `path` de l'entry `network` (AC-57.1, AC-57.2).** C'est la prise la plus lourde. `captureNetwork` recoit `proxyPath` sans query ; lui faire recevoir `proxyPath + search` fait entrer valeurs comprises dans le ring buffer, qui vit **en clair** contrairement au body `detailed` chiffre avec la cle client. 828 tests verts sur cette fuite. Toute la serie AC-57 tenait sur `tests/testu/logs-query-names.test.ts`, qui exerce `extractQueryParamNames` en isolation : une fuite qui entre par un autre champ de l'entry lui echappe entierement, par construction. Le test livre serialise l'entry **complete** et y cherche les secrets, ce qui est la seule forme qui ferme la porte.
+
+**2. La memoisation de l'axe query peut fuir d'un `ScopeEntry` a l'autre (AC-51.15).** Remplacer `queryDecisions[i]` par `queryDecisions[0]` fait resservir le refus du premier scope contraint a tous les suivants : l'additivite tombe des que l'auteur declare deux scopes contraints sur le meme chemin, ce qui est l'usage normal de la feature. AC-51.15 ne l'attrape pas parce que sa fixture met un scope **string** en premier, et un scope string sort de la boucle avant que l'axe query soit atteint. Le test visait juste pour ce qu'il enonce, mais sa forme ne peut structurellement pas exercer le partage. `AC-51.15 bis` couvre les deux ordres entre deux `ScopeEntry`, `AC-51.15 ter` couvre l'ordre inverse de l'original.
+
+**3. Un `queryFilters: []` peut activer le deni par defaut (AC-54.6).** L'enonce dit « n'induit pas de bump **et ne contraint rien** ». Le test ne verifiait que la premiere moitie, la version. Retirer `filters.length === 0` de `scopeQueryFilters` transforme un tableau vide en axe present qui refuse tout parametre, et personne ne tombe. `AC-54.6 bis` couvre la moitie matching.
+
+**4. Le plancher de version n'est pas garde a la generation (AC-54.8).** AC-54.8 verifie le plancher au **dechiffrement**, sur des blobs forges par `encryptBlob`. Le `Math.max` de `POST /api/generate` n'etait couvert par rien sur le seul cas ou une echelle et un maximum divergent : deux axes a la fois. Remplacer le `Math.max` par une cascade emet un `v: 4` pour un blob a auth structuree **et** `queryFilters`, que `decryptBlob` refuse aussitot par la regle d'AC-54.7. Symptome mesure sous mutation : `{"error":"invalid_credentials","message":"Unable to decrypt blob"}`, c'est-a-dire un blob mort livre avec un bandeau vert et un 401 qui envoie son porteur verifier une cle qui est bonne. `AC-54.8 bis` ferme le cas.
+
+**5. Le plafond de noms captures n'existait pour personne (AC-57.4).** `MAX_QUERY_PARAM_NAMES` vaut 32 ; le retirer laisse une requete unique remplir le ring buffer dimensionne par `FGP_LOGS_BUFFER_NETWORK`. Une seconde mutation, `continue` remplace par `break`, sous-compte les occurrences d'un nom deja retenu qui reapparait au-dela du plafond, ce que le commentaire du code prend soin d'eviter et que rien ne verifiait. `AC-57.4` et `AC-57.4 bis` couvrent les deux.
+
+**6. Une requete sans query pouvait produire un nom vide (AC-57.7).** Le garde-fou `search.length === 0` n'etait teste par rien. Le remplacer par un retour `{ names: [""] }` fait apparaitre dans l'entry ce qui se lit comme un parametre au nom vide reellement envoye, cas que AC-55.10 traite par ailleurs comme un parametre a part entiere. Le diagnostic devient trompeur sur toutes les requetes sans query. `AC-57.7` ferme le cas.
+
+**7. Le rendu des noms de parametres dans `/logs` n'etait garde par rien (AC-57.6).** Aucun test ne lisait `static/logs-client.js`. Remplacer le `textContent` du rendu des noms par un `innerHTML` passe sans qu'un test bouge, alors que c'est le seul chemin d'injection ouvert par la decision de §14.6 : un nom de parametre est une chaine d'appelant qui traverse le serveur jusqu'au navigateur de l'auteur du blob. `AC-57.6` recense le bundle, `AC-57.6 bis` est son temoin, sans lequel le recensement resterait vert sur un bundle d'ou l'affichage aurait disparu.
+
+**8. Le troisieme etat pouvait se declencher a tort (AC-56.9 bis).** `queryConstrainedElsewhere` ne doit se lever que si un scope contraignant couvre reellement cette methode et ce chemin. Le forcer a `true` des qu'un scope contraignant existe ailleurs dans le blob ne fait tomber aucun test : la note alarmerait sur un chemin que rien ne contraint. AC-56.9 et AC-56.9 bis n'etaient couverts que du cote copy, qui verifie la presence des chaines et pas la condition qui les declenche. `AC-56.9 bis` couvre les trois formes de non-couverture (autre chemin, autre methode) plus un temoin positif.
+
+## Une garde qui tient, mais par un fil
+
+**Le deni par defaut de bout en bout tenait a un seul test, hors serie.** Faire recevoir a `checkRequestAccess` un chemin ampute de sa query, depuis `src/middleware/proxy.ts`, ne faisait tomber que `AC-46.2` de `tests/testi/scope-verdict-parity.test.ts`, ecrit pour le lot de securite. Aucun test de la serie v5 ne l'attrapait, et **AC-56.10 restait vert pour la mauvaise raison** : son unique filtre porte `required: true`, donc toute requete dont la query n'atteint pas le controle est refusee de toute facon, et le `403` attendu tombe sans rien prouver du deni par defaut. AC-56.10 fait correctement son travail sur ce qu'il enonce, la genericite du message, et il n'a pas ete modifie. `AC-51.5 bis` ajoute la garde manquante, avec un filtre **non requis** pour que la seule cause de refus possible soit le parametre non declare.
+
+## Releve de couverture de la serie v5
+
+| Serie | Criteres | OK | PARTIEL | TROU |
+|-------|----------|----|---------|------|
+| AC-51, semantique de l'axe query | 16 | 16 | 0 | 0 |
+| AC-52, paliers d'occurrences et budget | 14 | 14 | 0 | 0 |
+| AC-53, validation blob et generation | 18 | 18 | 0 | 0 |
+| AC-54, version et retro-compatibilite | 9 | 9 | 0 | 0 |
+| AC-55, analyse de la query | 10 | 10 | 0 | 0 |
+| AC-56, testeur et diagnostic | 11 | 11 | 0 | 0 |
+| AC-57, capture des noms de parametres | 8 | 8 | 0 | 0 |
+| **Total v5** | **86** | **86** | **0** | **0** |
+
+**Ce tableau dit la couverture, pas la morsure de chaque ligne.** La legende du lot de securite plus haut associe les deux parce que chaque test y avait ete ecrit sous mutation. Ici la serie preexistait : l'audit a mute les gardes du cadrage, pas les 86 criteres un par un. Un « OK » de ce tableau signifie donc qu'un test vert nomme le critere ; la morsure est etablie pour les criteres cites dans les deux tableaux de mutations ci-dessus, et presumee pour les autres. Les series les moins exercees par cet audit sont AC-55, dont seuls 55.5, 55.6, 55.8 et 55.10 sont tombes sous une mutation, et la partie budget d'AC-52 (52.10 a 52.13), qui mesure des temps et n'a pas ete mutee.
+
+Deux criteres sont couverts par des tests portant un autre numero, sans doublon ecrit : **AC-54.1** par les assertions de version d'`AC-53.15`, qui le nomme en commentaire, et **AC-56.8** par `AC-46.2` de `tests/testi/scope-verdict-parity.test.ts`, dont la couverture de l'axe query est etablie par sa chute sous M1 et M14.
+
+## Tests ajoutes ou corriges dans cette passe
+
+| Test | Fichier | Critere | Mutation qu'il ferme |
+|------|---------|---------|----------------------|
+| `AC-51.5 bis` | `tests/testi/query-filters.test.ts` | AC-51.5 | query hors controle de scopes |
+| `AC-51.15 bis` et `ter` | `tests/testu/middleware/query-filters.test.ts` | AC-51.15 | memoisation partagee entre scopes |
+| `AC-54.6 bis` | `tests/testu/middleware/query-filters.test.ts` | AC-54.6 | `queryFilters: []` traite comme un axe |
+| `AC-54.8 bis` | `tests/testi/query-filters.test.ts` | AC-54.8 | plancher de version a la generation |
+| `AC-56.9 bis` | `tests/testu/middleware/query-filters.test.ts` | AC-56.9 bis | troisieme etat declenche a tort |
+| `AC-57.1`, `57.2`, `57.3`, `57.7`, `57.8`, `57.8 bis` | `tests/testi/logs-query-capture.test.ts` | AC-57.1 a 57.3, 57.7, 57.8 | query dans le champ `path` |
+| `AC-57.4` et `AC-57.4 bis` | `tests/testu/logs-query-names.test.ts` | AC-57.4 | plafond de noms, et `break` au lieu de `continue` |
+| `AC-57.6` et `AC-57.6 bis` | `tests/testu/ui/logs-bundle.test.ts` | AC-57.6 | `innerHTML` dans le rendu des noms |
+
+`tests/testu/ui/logs-bundle.test.ts` lit `static/logs-client.js` et exige donc un `deno task build:client` prealable, comme `scope-verdict-bundle.test.ts` et la parite de copy.
+
+## Un critere corrige, il etait auto-contradictoire
+
+**AC-56.9 bis** disait que la note ne doit pas apparaitre « des qu'un scope **non** contraignant existe ailleurs dans le blob ». C'est l'inverse du mecanisme : le troisieme etat se declenche quand le scope qui accorde ne contraint pas **et** qu'un scope contraignant couvre la meme requete. Le drapeau qui peut se lever a tort est donc `queryConstrainedElsewhere`, qui compte les scopes **contraignants**. L'enonce est corrige dans `docs/acceptance-criteria.md` avec la trace de la correction, et le test livre porte la forme corrigee.
+
+---
+
 ## Ce que je n'ai pas couvert
 
-- **La serie v5, AC-51 a AC-57.** Elle demande son propre releve, sur le meme protocole. Le chiffre du 2026-09-04 est perime et n'a pas ete reconduit ici.
 - **La moitie 400 d'AC-47.10**, decrite plus haut : arbitrage, pas test.
+- **Les tests de copy de la serie v5**, hors perimetre de cet audit par decision explicite : `tests/testu/ui/query-filters-copy.test.ts` n'a pas ete mute. Sa logique sous-jacente l'a ete, et AC-56.9 bis en est sorti.
+- **La nomenclature de `tests/testu/logs-query-names.test.ts`.** Neuf des onze tests de ce fichier ne portent aucun numero d'AC, ce qui viole la convention de nommage. Ils couvrent AC-57.2 et AC-57.5 sous des libelles descriptifs. Je ne les ai pas renommes : c'est la meme tache mecanique que la renumerotation deja arbitree, et la faire au milieu d'un audit melangerait deux diffs. Les deux tests ajoutes portent leur numero.
+- **Le cout reel de la double passe de chemin sous mutation M10.** AC-52.9 mesure le nombre de lectures de `values`, ce qui suffit a detecter la perte de memoisation, mais ne mesure pas le temps. Le budget lui-meme reste couvert par AC-52.10 a AC-52.13.
 - **La passe finale de `stripTransportHeaders` sur les en-tetes hop-by-hop.** Elle ne retire que `Host` et `X-FGP-*`. Un `AuthSpec` qui tenterait de poser `TE` ou `Connection` n'atteint jamais cette passe : `validateHeaderName` refuse ces noms, et `isValidAuthSpec` est appele au dechiffrement, donc le blob forge est refuse en entier. La defense tient, mais par la validation et non par le strip, et aucun chemin public ne permet d'exercer le strip lui-meme. AC-45.10 est donc couvert sur sa moitie observable, l'ordre des passes, verifiee par inversion.
 - **Le rebinding DNS**, explicitement laisse ouvert par l'ADR-0009. Non testable en l'etat, ne figure dans aucun critere, vit en §13 comme non-garantie.
 - **La renumerotation des tests existants.** Arbitrage inchange : la table ci-dessus en est la specification, elle se traite en tache mecanique separee sur un arbre ou personne d'autre n'ecrit.

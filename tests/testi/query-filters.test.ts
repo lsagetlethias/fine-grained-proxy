@@ -129,6 +129,39 @@ Deno.test({
 });
 
 Deno.test({
+  name: "AC-54.8 bis: le plancher de version s'applique aussi a la generation",
+  fn: isolated(async () => {
+    // AC-54.8 verifie le plancher au DECHIFFREMENT, sur des blobs forges par encryptBlob.
+    // La generation calcule « v » de son cote, et rien ne la couvrait sur le seul cas ou
+    // une echelle et un maximum divergent : deux axes a la fois. Un « v: 4 » emis ici
+    // produit un blob que decryptBlob refuse (AC-54.7), c'est-a-dire un blob mort livre
+    // a son auteur avec un bandeau vert.
+    const gen = await post("/api/generate", {
+      target: "https://api.mock.local",
+      auth: {
+        type: "headers",
+        headers: [
+          { name: "X-API-Key", value: "sk-live-000000" },
+          { name: "X-Client-Id", value: "acme" },
+        ],
+      },
+      scopes: [QUERY_SCOPE],
+      ttl: 3600,
+    });
+    assertEquals(gen.status, 200, await gen.clone().text());
+    const { blob, key } = await gen.json();
+
+    const dec = await post("/api/decode", { blob, key });
+    assertEquals(dec.status, 200, await dec.clone().text());
+    const decoded = await dec.json();
+    assertEquals(decoded.version, 5);
+    assertEquals(decoded.scopes[0].queryFilters.length, 1);
+  }),
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
   name: "AC-53.15 bis: une cle inconnue dans un ScopeEntry est refusee, jamais strippee",
   fn: isolated(async () => {
     // Une cle mal orthographiee doit produire une erreur. Strippee en silence, elle
@@ -384,6 +417,40 @@ Deno.test({
     });
     assertEquals(res.status, 200);
     assertEquals(res.headers.get("X-FGP-Source"), "upstream");
+    assertEquals(new URL(captured.url()).search, "?status=open");
+  }),
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-51.5 bis: integration, le deni par defaut refuse un parametre non declare",
+  fn: isolated(async () => {
+    const captured = captureFetch();
+    const app = createProxyApp();
+    // Le filtre n'est PAS « required » : c'est ce qui rend ce test discriminant. Avec un
+    // filtre requis, une requete est refusee des que la query n'atteint pas le controle de
+    // scopes, et le 403 ne prouve alors rien du deni par defaut. Ici, la seule cause de
+    // refus possible est « sort n'est pas declare ».
+    const blob = await makeBlob([{
+      methods: ["GET"],
+      pattern: "/v1/items",
+      queryFilters: [{ param: "status", values: [{ type: "any", value: "open" }] }],
+    } as unknown as Scope]);
+
+    const denied = await app.request(`/${blob}/v1/items?status=open&sort=asc`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+    assertEquals(denied.status, 403);
+    assertEquals((await denied.json()).error, "scope_denied");
+    // Aucun appel sortant : le refus precede la resolution de destination.
+    assertEquals(captured.url(), "");
+
+    // Temoin : la meme requete sans le parametre non declare traverse.
+    const ok = await app.request(`/${blob}/v1/items?status=open`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+    assertEquals(ok.status, 200);
     assertEquals(new URL(captured.url()).search, "?status=open");
   }),
   sanitizeOps: false,
