@@ -12,10 +12,10 @@
 - **Double clé** : le blob est déchiffrable uniquement avec une clé client (header `X-FGP-Key`) + un salt serveur. Le blob seul est inexploitable. La clé est générée par le serveur, ou fournie par l'utilisateur (24 à 256 caractères ASCII imprimables sans espace) pour mutualiser une clé entre plusieurs blobs en CI.
 - **TTL** : expiration encodée dans le blob, vérifiée à chaque requête.
 - **6 modes d'auth** : bearer, basic, header custom simple, headers multiples, Scalingo API (exchange), Scalingo Database API (exchange + token d'addon). Scalingo est un cas d'usage parmi d'autres.
-- **Blob v2/v3/v4** : v2 = scopes string METHOD:PATH, v3 = scopes mixtes string + ScopeEntry avec body filters, v4 = champ `auth` structuré (`string | AuthSpec`). Les trois versions restent déchiffrables, v4 n'est produit que si `auth` est un objet.
+- **Blob v2 à v5** : v2 = scopes string METHOD:PATH, v3 = scopes mixtes string + ScopeEntry avec body filters, v4 = champ `auth` structuré (`string | AuthSpec`), v5 = `queryFilters` sur un ScopeEntry. Les quatre versions restent déchiffrables. La version n'est pas une échelle mais un **plancher par axe** dont on retient le maximum : jamais une égalité, sinon un blob combinant deux axes devient indéchiffrable et la règle se casse au prochain axe. Un `v` sous-déclaré face à un axe réellement présent est refusé.
 - **Body filters** (v3) : filtrage du contenu JSON des requêtes POST/PUT/PATCH (types : any, wildcard, stringwildcard, regex, not, and). `any` n'accepte qu'un scalaire, comparer un objet dépendrait de l'ordre des clés de l'appelant. `regex` est un dialecte restreint (ADR-0010), pas une RegExp libre. Les plafonds vivent en double, `src/middleware/scope-limits.ts` à la génération pour un message actionnable et `src/crypto/blob.ts` au déchiffrement pour refuser un blob forgé. Le salt étant public, seul le second protège : toujours modifier les deux.
 - **Logs stream** (ADR-0007) : page `/logs` avec SSE live par blob, opt-in via champ `logs: { enabled, detailed }` dans le blob (décorrélé de la version du blob). In-memory only (ring buffer par blob + purge inactivité), body `detailed` chiffré AES-256-GCM côté serveur avec la clé client (zero trust). Kill switch global `FGP_LOGS_ENABLED`.
-- **Politique de sortie** (ADR-0009) : contrat unique sur tout ce qui sort du processus. `src/net/egress.ts` est le seul point de sortie et le seul `fetch` du code serveur. Destination publique obligatoire, chemin contrôlé sur la forme brute et la forme canonique mais émis en brut, authentification issue du blob et jamais de l'appelant, `redirect: "manual"` partout. Les paramètres de query ne sont contraints par aucun scope, et l'outillage doit le dire au lieu d'affirmer un refus que le proxy n'applique pas.
+- **Politique de sortie** (ADR-0009) : contrat unique sur tout ce qui sort du processus. `src/net/egress.ts` est le seul point de sortie et le seul `fetch` du code serveur. Destination publique obligatoire, chemin contrôlé sur la forme brute et la forme canonique mais émis en brut, authentification issue du blob et jamais de l'appelant, `redirect: "manual"` partout. Les paramètres de query sont contraints quand le scope déclare des `queryFilters` (v5), transmis librement sinon, et l'outillage doit dire lequel des deux s'applique au lieu d'affirmer une contrainte que le proxy n'applique pas.
 - **Limites de ressources** (ADR-0010) : chaque coût est borné avant d'être payé. Blob plafonné à 4096 caractères et refusé sous 64, décompression bornée à 128 Ko en sortie, corps proxy bufferisé à 512 Ko et seulement quand un body filter ou la capture `detailed` en a besoin, `bodyLimit` monté sur la liste explicite des chemins `/api/*` et **jamais sur `*`**, cache LRU de dérivation PBKDF2. Le critère de calibrage est unique : aucune primitive optionnelle ne doit coûter plus cher que la dérivation PBKDF2 obligatoire, soit 11,6 ms.
 
 ## Stack
@@ -75,8 +75,11 @@ src/
                     form-delivery, result, sidebar (+ sidebar-doc, sidebar-guides,
                     sidebar-panels), page-chrome, icons, constants
   ui/client/        modules TS client (auth-mode, auth-headers, addons, byok, presets, body-filters,
-                    apps, generate, ttl, clipboard, scopes, test-scope, share-config, import-config,
-                    tabs, logs-tab, elements, types)
+                    query-filters, apps, generate, ttl, clipboard, scopes, test-scope, share-config,
+                    import-config, tabs, logs-tab, elements, types). build-scopes.ts et
+                    restore-filters.ts portent la logique pure sans DOM : deno check type-checke
+                    les tests sous la config serveur, donc ce qui doit etre teste ne peut pas
+                    toucher au DOM
   ui/tailwind.css   source Tailwind (build-time vers static/styles.css)
 scripts/            version.ts (SHA de build vers static/version.txt), changelog.ts (génère
                     src/ui/changelog-data.ts depuis docs/changelog.md)
@@ -126,7 +129,8 @@ Requête, extraire blob (header X-FGP-Blob prioritaire, sinon premier segment UR
     le corps n'est jamais bufferisé et part en flux, ne jamais casser cette propriété
   vérifier les scopes via checkRequestAccess : méthode, corps, et le chemin sur DEUX formes,
     brute et canonique. Les deux doivent être autorisées, la forme émise reste la brute.
-    La query n'est contrainte par aucun scope, elle est transmise telle quelle
+    La query n'est contrainte que si le scope porte des queryFilters : sans eux elle est
+    transmise telle quelle, avec eux tout paramètre non déclaré fait échouer ce scope
   classifier la destination : parseTargetUrl (forme) puis assertPublicHost (adresse publique
     après résolution DNS), refus en 403 target_forbidden
   obtenir les credentials
