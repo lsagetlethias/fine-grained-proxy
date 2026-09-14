@@ -29,12 +29,16 @@ Si besoin, la commande de build peut etre surchargee via la variable d'environne
 Le `Procfile` a la racine du repo :
 
 ```
-web: deno run --allow-net --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB --allow-read=static src/main.ts
+web: deno run --allow-net --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB,FGP_EGRESS_ALLOW_PRIVATE,FGP_TRUSTED_PROXY_HOPS --allow-read=static src/main.ts
 ```
 
 `deno run` et non `deno serve` : `src/main.ts` appelle `Deno.serve()` sous `import.meta.main` et n'exporte plus `default { fetch }`. Sous `deno serve`, le module afficherait un avertissement et sortirait en code 0, donc le dyno ne demarrerait jamais et Scalingo echouerait le health check TCP.
 
-Pas de flag `--port` : `Deno.serve()` lit `PORT` directement. Les permissions sont les memes que celles du `Dockerfile` et de la task `start`, gardez les trois alignees.
+Pas de flag `--port` : `Deno.serve()` lit `PORT` directement.
+
+**L'allow-list `--allow-env` doit couvrir exactement les variables que le serveur lit**, ni plus ni moins. Un nom absent de cette liste ne rend pas `undefined` : `Deno.env.get` leve, et depuis un handler ce throw ressort en 500 `internal_error` sur une requete par ailleurs legitime. Ce Procfile a porte 9 variables sur 11, et le flux proxy etait mort en production pendant que le meme code tournait sans broncher en local.
+
+Vous n'avez plus a garder l'alignement a la main : le test de parite `tests/testu/env-registry.test.ts` lit le `Procfile`, le `Dockerfile`, les six listes de `deno.json` et `.env.example`, et les compare au registre `ENV_NAMES` de `src/env.ts`. Une divergence fait echouer `deno task verify`.
 
 ### 4. Configurer les variables d'environnement
 
@@ -53,6 +57,8 @@ Deux variables optionnelles mais importantes :
 # Defaut 0 : X-Forwarded-For est ignore et l'adresse du pair est utilisee.
 scalingo --app fgp-proxy env-set FGP_TRUSTED_PROXY_HOPS="1"
 ```
+
+> **Positionner la variable dans le dashboard ne suffit pas.** Tant que `FGP_TRUSTED_PROXY_HOPS` etait absente de l'allow-list `--allow-env` du `Procfile`, la valeur posee ici etait invisible du processus : la lecture levait une erreur de permission au lieu de rendre la valeur, et ce sont les deux cotes qui doivent etre a jour, l'allow-list du `Procfile` et la variable de l'app. C'est corrige, les onze variables sont dans l'allow-list, et le test de parite empeche qu'une nouvelle s'y perde.
 
 > **Ne jamais positionner `FGP_EGRESS_ALLOW_PRIVATE=1` sur une instance publique.**
 > Cet interrupteur desactive le refus des destinations non publiques, donc la garantie de destination de la politique de sortie. L'instance redevient une SSRF non authentifiee : n'importe qui lui fait emettre des requetes vers le reseau prive de l'hebergeur, service de metadonnees compris, et en recupere la reponse. Il existe pour le developpement local et les tests.

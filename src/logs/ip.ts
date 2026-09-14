@@ -1,3 +1,5 @@
+import { readEnvInt } from "../env.ts";
+
 export function truncateIp(ip: string): string {
   if (!ip) return "";
   const trimmed = ip.trim();
@@ -59,9 +61,7 @@ function expandIpv6(addr: string): string[] | null {
 // sont dignes de confiance. Une IP fausse dans un journal est pire qu'une IP absente :
 // elle sera lue comme une preuve (ADR-0009 §5).
 export function trustedProxyHops(): number {
-  const raw = Deno.env.get("FGP_TRUSTED_PROXY_HOPS");
-  const n = raw === undefined ? 0 : Number(raw);
-  return Number.isInteger(n) && n >= 0 ? n : 0;
+  return readEnvInt("FGP_TRUSTED_PROXY_HOPS", 0, 0);
 }
 
 export function extractClientIp(

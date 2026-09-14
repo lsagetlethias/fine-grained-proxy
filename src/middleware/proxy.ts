@@ -11,6 +11,7 @@ import { logsEnabled, readLogsConfig } from "../logs/config.ts";
 import { computeBlobId } from "../logs/blob-id.ts";
 import { captureDetailed, captureNetwork, extractQueryParamNames } from "../logs/capture.ts";
 import { extractClientIp, truncateIp } from "../logs/ip.ts";
+import { readEnv } from "../env.ts";
 
 const MAX_BLOB_LENGTH = 4096;
 
@@ -57,7 +58,7 @@ function jsonError(c: Context, status: number, error: string, message: string): 
 }
 
 function getServerSalt(): string {
-  const salt = Deno.env.get("FGP_SALT");
+  const salt = readEnv("FGP_SALT");
   if (!salt) throw new Error("Server misconfigured: FGP_SALT missing");
   return salt;
 }

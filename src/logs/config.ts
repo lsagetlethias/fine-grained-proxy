@@ -1,3 +1,5 @@
+import { readEnvFlag, readEnvInt } from "../env.ts";
+
 export interface LogsConfig {
   enabled: boolean;
   bufferNetwork: number;
@@ -6,24 +8,17 @@ export interface LogsConfig {
   detailedMaxKb: number;
 }
 
-function parsePositiveInt(raw: string | undefined, fallback: number): number {
-  if (!raw) return fallback;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) return fallback;
-  return n;
-}
-
 export function readLogsConfig(): LogsConfig {
-  const enabled = Deno.env.get("FGP_LOGS_ENABLED") === "1";
+  const enabled = readEnvFlag("FGP_LOGS_ENABLED");
   return {
     enabled,
-    bufferNetwork: parsePositiveInt(Deno.env.get("FGP_LOGS_BUFFER_NETWORK"), 50),
-    bufferDetailed: parsePositiveInt(Deno.env.get("FGP_LOGS_BUFFER_DETAILED"), 10),
-    inactivityMin: parsePositiveInt(Deno.env.get("FGP_LOGS_INACTIVITY_MIN"), 10),
-    detailedMaxKb: parsePositiveInt(Deno.env.get("FGP_LOGS_DETAILED_MAX_KB"), 32),
+    bufferNetwork: readEnvInt("FGP_LOGS_BUFFER_NETWORK", 50, 1),
+    bufferDetailed: readEnvInt("FGP_LOGS_BUFFER_DETAILED", 10, 1),
+    inactivityMin: readEnvInt("FGP_LOGS_INACTIVITY_MIN", 10, 1),
+    detailedMaxKb: readEnvInt("FGP_LOGS_DETAILED_MAX_KB", 32, 1),
   };
 }
 
 export function logsEnabled(): boolean {
-  return Deno.env.get("FGP_LOGS_ENABLED") === "1";
+  return readEnvFlag("FGP_LOGS_ENABLED");
 }

@@ -1866,6 +1866,8 @@ data: {}
 
 **Estime RAM** (worst case, configuration par défaut) : ~330 KB par blob actif (50 network × 200 B + 10 detailed × 32 KB). 100 blobs actifs = ~33 MB. Marge confortable vs 512 MB d'un isolate Deno Deploy.
 
+**Cette garantie de défaut vaut pour toute variable optionnelle lue par le serveur, pas seulement celles de ce tableau** : `FGP_EGRESS_ALLOW_PRIVATE` absente vaut classification des destinations active, `FGP_TRUSTED_PROXY_HOPS` absente vaut `X-Forwarded-For` ignoré, et ainsi pour chaque variable non requise. L'absence couvre deux cas distincts que le serveur traite identiquement : la variable n'est simplement pas positionnée, ou l'hôte refuse l'accès à son nom (une allow-list `--allow-env` incomplète, par exemple). Toute lecture passe par `readEnv`/`readEnvFlag`/`readEnvInt` (`src/env.ts`), qui ne traitent comme absence que ce refus d'accès et laissent remonter toute autre erreur. Un refus d'accès n'est donc jamais un opt-in silencieux à un comportement moins strict, il ne peut que retomber du côté sûr du défaut. Seule `FGP_SALT` est requise ; sa lecture manquante fait échouer la requête plutôt que de retomber sur un défaut (cf. §8.2, §10).
+
 ### 14.13 Copy UI `/logs`
 
 **Formulaire d'auth (page `/logs` initiale)** :
@@ -2222,6 +2224,7 @@ Ce qui est observable côté client :
 - **Le streaming du corps proxy est préservé** quand aucun body filter ni capture detailed n'est actif : les gros uploads à travers le proxy continuent de passer sans être mis en mémoire. C'est une propriété du proxy transparent qu'il ne fallait pas perdre en posant la limite au mauvais endroit.
 - **400 `unsupported_regex`** quand une regex du blob sort du dialecte autorisé.
 - **Un paramètre de query répété au-delà du plafond d'occurrences fait échouer le scope qui le filtre** (v5, §19.4) : 4 occurrences pour un filtre qui contient une regex à n'importe quelle profondeur, 64 pour les autres. Même code `scope_denied` que tout autre refus de scope. Contrairement aux autres limites de cette liste, celle-ci ne dépend d'aucune donnée du blob : elle porte sur la requête de l'appelant, pas sur ce que l'auteur du blob a écrit.
+- **Une variable d'environnement optionnelle absente retombe sur son défaut, et ce défaut est sûr** : classification des destinations active (`FGP_EGRESS_ALLOW_PRIVATE`), `X-Forwarded-For` ignoré (`FGP_TRUSTED_PROXY_HOPS`), feature `/logs` désactivée. L'absence inclut le refus d'accès par l'hôte à un nom hors de son allow-list, traité identiquement à une variable simplement non positionnée (§14.12). Une instance qui refuse l'accès à une variable ne bascule donc jamais vers un comportement moins strict qu'une instance où elle est proprement absente.
 
 ### 18.6 Limitation de débit : hors de l'application, et pourquoi
 

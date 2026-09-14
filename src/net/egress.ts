@@ -2,6 +2,8 @@
 // la revue d'une PR n'a plus a se demander si un appel reseau est sur, seulement s'il
 // emprunte ce module.
 
+import { readEnvFlag } from "../env.ts";
+
 export interface EgressDenial {
   code: "invalid_target" | "target_forbidden";
   message: string;
@@ -12,7 +14,7 @@ const PRIVATE_SUFFIXES = [".internal", ".local", ".localhost", ".home.arpa"];
 let warnedAllowPrivate = false;
 
 function allowPrivate(): boolean {
-  const on = Deno.env.get("FGP_EGRESS_ALLOW_PRIVATE") === "1";
+  const on = readEnvFlag("FGP_EGRESS_ALLOW_PRIVATE");
   if (on && !warnedAllowPrivate) {
     warnedAllowPrivate = true;
     console.warn(

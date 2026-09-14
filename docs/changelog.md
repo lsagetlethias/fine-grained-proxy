@@ -1,5 +1,10 @@
 # Changelog
 
+## 14 septembre 2026
+
+- Correction : sur les instances Scalingo, toute requête proxy répondait `500 internal_error`. Deux variables d'environnement manquaient à l'autorisation de lecture du `Procfile`, et une lecture non autorisée ne rend pas une absence, elle échoue
+- Une variable d'environnement optionnelle absente retombe sur son défaut sûr, y compris quand l'hébergeur en refuse la lecture : la classification des destinations reste active et `X-Forwarded-For` reste ignoré
+
 ## 6 septembre 2026
 
 - **Breaking** : un appel `/api/*` sans `Content-Type: application/json` renvoie désormais `415 unsupported_media_type` au lieu de `400`. Posez l'en-tête pour corriger

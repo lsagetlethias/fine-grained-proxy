@@ -46,7 +46,7 @@
 - `deno task check` : type checking serveur, puis `check:client`
 - `deno task check:client` : type checking du code navigateur via `deno.client.json` (lib DOM isolée, pour ne pas affaiblir le check serveur)
 - `deno task verify` : lint + fmt + check + test (pipeline complète)
-- **Permissions** : `dev:server`, `start` et les quatre tâches `test*` tournent sur une allow-list explicite de variables, jamais `--allow-env` nu. Ajouter une variable d'environnement lue par le serveur, c'est toucher trois endroits : la section « Variables d'environnement » ci-dessous, les six listes `--allow-env` de `deno.json`, et `.env.example`. Oubliée dans `deno.json`, elle lève une erreur de permission au runtime comme en test au lieu de prendre son défaut. Élargir la permission pour faire taire l'erreur annule le durcissement.
+- **Permissions** : `dev:server`, `start` et les quatre tâches `test*` tournent sur une allow-list explicite de variables, jamais `--allow-env` nu. Élargir la permission pour faire taire une erreur d'accès annule le durcissement. La liste complète des endroits à toucher pour ajouter une variable est le contrat de la section « Variables d'environnement » ci-dessous, et il vaut pour les cibles de déploiement autant que pour `deno.json`.
 
 ## Structure
 ```
@@ -109,6 +109,7 @@ docs/
 - OpenAPI : schemas de réponse stricts par route (union `z.enum([...])` des error codes autorisés). Ajouter un nouveau code d'erreur = l'ajouter dans l'enum de la route correspondante, **quand la route est documentée**. Seules les routes `/api/*` le sont : la route proxy `/{blob}/*` n'apparaît pas dans l'OpenAPI, puisque son contrat dépend entièrement du blob. Ses codes d'erreur vivent donc dans `docs/specs.md` et dans `/llms.txt`, qui doivent être mis à jour à la place. Un code produit par un **middleware monté** sur la route compte comme un code de cette route : `createRoute` ne le voit pas tout seul. Le 413 `payload_too_large` d'`apiBodyLimit` est declare depuis `ca0d899`, et un test derive la parite du comportement reel plutot que d'une liste ecrite a la main. `GET /api/salt` en est exclu a dessein, Deno n'expose aucun corps sur un GET donc le plafond ne s'y declenche jamais.
 - Toute réponse du proxy principal doit porter `X-FGP-Source: proxy|upstream` (voir `src/constants.ts`).
 - **Réseau sortant** : tout appel serveur passe par `egressFetch` de `src/net/egress.ts`, jamais par un `fetch` direct. Une URL cible se valide par `parseTargetUrl` et se construit par `buildUpstreamUrl`, jamais par concaténation. Un `fetch` nu côté serveur rouvre la SSRF que l'ADR-0009 ferme. Les `fetch` du code navigateur visent FGP lui-même et ne sont pas concernés.
+- **Lecture d'environnement** : toute lecture passe par `readEnv`, `readEnvFlag` ou `readEnvInt` de `src/env.ts`, jamais par `Deno.env.get` direct, et le nom lu doit figurer dans `ENV_NAMES`. Sur un nom absent de l'allow-list `--allow-env`, `Deno.env.get` ne rend pas `undefined` : il lève `Deno.errors.NotCapable`, et depuis un handler ce throw ressort en 500 `internal_error` sur une requête par ailleurs légitime. C'est exactement la panne qui a tué le flux proxy en production. `readEnv` ne traite comme absence que le refus d'accès, et laisse remonter le reste, `TypeError` compris.
 - **Expressions régulières issues d'une entrée** : jamais `new RegExp` en direct. Valider la source par `checkRegexSource` puis compiler par `compileAnchored` (`src/crypto/regex-policy.ts`). Non validée, la regex rouvre le ReDoS ; non ancrée, elle matche en sous-chaîne et autorise plus que son motif (ADR-0010).
 - **Autorisation d'une requête** : `checkRequestAccess` (`src/middleware/scopes.ts`) est la seule porte. Ne jamais appeler `checkAccess` directement depuis la route proxy ni depuis l'UI : il ne contrôle qu'une seule forme du chemin et retire silencieusement la garantie de l'ADR-0009. Une seule lecture des scopes, sinon l'interface finit par affirmer un refus que la production n'applique pas.
 - Exploration du code TypeScript : LSP en priorité (`workspaceSymbol`, `findReferences`, `goToDefinition`), grep en dernier recours. Le LSP suit les alias et les re-exports, grep ne fait que du pattern matching.
@@ -158,6 +159,20 @@ Requête, extraire blob (header X-FGP-Blob prioritaire, sinon premier segment UR
 **Carve-out `/logs`** : `blobHeaderProxy()` exclut `/logs` et `/logs/*` du mode header. C'est nécessaire, la feature logs consomme elle-même `X-FGP-Blob` et `X-FGP-Key` pour identifier le blob à streamer. Sans cette exclusion, `/logs/stream` serait injoignable. `/llms.txt` n'est en revanche pas exclu et reste proxyfiable.
 
 ## Variables d'environnement
+
+**Contrat d'ajout d'une variable lue par le serveur.** Le contrat disait « trois endroits », il en manquait deux : le `Procfile` et le `Dockerfile`. C'est cet oubli qui a mis la production à genoux, le `Procfile` ne portant que 9 des 11 variables alors que le code en lisait 11. Les endroits sont donc, dans l'ordre :
+
+1. `ENV_NAMES` dans `src/env.ts`, le registre. Sans lui, `readEnv` refuse le nom au type-check.
+2. Les six listes `--allow-env` de `deno.json` : `dev:server`, `start`, `test`, `test:unit`, `test:integration`, `test:e2e`.
+3. Le `Procfile`, allow-list du dyno Scalingo.
+4. Le `Dockerfile`, allow-list du `CMD`.
+5. `.env.example`, **commentée** si la variable est optionnelle. Non commentée, elle est toujours posée sous `--env-file` et le développement cesse de ressembler à la production, où elle est absente.
+6. La liste ci-dessous, et les guides de déploiement (`docs/deno-deploy.md`, `docs/scalingo-deploy.md`) quand l'opérateur doit la positionner.
+
+Les points 1 à 5 sont **verrouillés par le test de parité** `tests/testu/env-registry.test.ts`, qui lit les fichiers réels : une divergence fait échouer `deno task verify`, aucun des cinq n'est plus à la charge de la discipline humaine. Les points 6, doc et guides, restent à la charge de la revue, aucun test ne les vérifie.
+
+**Une variable optionnelle absente retombe sur son défaut, et c'est un défaut sûr** : `FGP_EGRESS_ALLOW_PRIVATE` absente vaut classification active, `FGP_TRUSTED_PROXY_HOPS` absente vaut `X-Forwarded-For` ignoré. L'absence inclut le **refus d'accès par l'hôte** : un nom hors allow-list fait lever `Deno.env.get`, et `readEnv` traite ce refus comme une absence plutôt que de laisser le throw ressortir en 500. Un refus d'accès ne vaut donc jamais opt-in, il ne peut que retomber du côté sûr.
+
 - `PORT` : port du serveur (défaut: 8000). Réellement pris en compte depuis le passage à `Deno.serve()` explicite.
 - `FGP_SALT` : salt serveur pour la dérivation de clé (requis)
 - `FGP_EGRESS_ALLOW_PRIVATE` : interrupteur de **développement uniquement**, désactivé par défaut. `1` coupe la classification des destinations (ADR-0009), jamais le contrôle de forme du `target` ni le `redirect: "manual"`. Actif en production, la garantie de destination tombe et l'instance redevient une SSRF non authentifiée, ouverte sur le réseau privé de l'hébergeur et sur son service de métadonnées. L'avertissement console est écrit au premier contrôle de destination, pas au démarrage : une instance qui n'a encore rien proxyfié reste silencieuse.

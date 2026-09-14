@@ -32,7 +32,9 @@ Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de gen
 | `FGP_LOGS_DETAILED_MAX_KB` | non | Taille max du body capture en detailed (KB) avant troncature | `32` |
 
 > **`FGP_EGRESS_ALLOW_PRIVATE=1` ne doit jamais etre actif en production.**
-> Il desactive la classification des destinations, donc la garantie G1 de la politique de sortie. L'instance redevient exactement la SSRF non authentifiee que cette politique corrige : n'importe qui peut lui faire emettre des requetes vers le reseau prive de l'hebergeur, service de metadonnees compris, et en recuperer le corps de reponse. Il existe pour le developpement local et la suite de tests, rien d'autre. Le serveur ecrit un avertissement au demarrage quand il est actif.
+> Il desactive la classification des destinations, donc la garantie G1 de la politique de sortie. L'instance redevient exactement la SSRF non authentifiee que cette politique corrige : n'importe qui peut lui faire emettre des requetes vers le reseau prive de l'hebergeur, service de metadonnees compris, et en recuperer le corps de reponse. Il existe pour le developpement local et la suite de tests, rien d'autre. Le serveur ecrit un avertissement au premier controle de destination, pas au demarrage : une instance qui n'a encore rien proxyfie reste silencieuse.
+
+Une variable non requise et absente retombe toujours sur son defaut sur, y compris quand l'hebergeur en refuse la lecture (allow-list `--allow-env` incomplete par exemple) : un refus d'acces se traite comme une absence, jamais comme un opt-in a un comportement moins strict.
 
 ### Lancer en dev
 

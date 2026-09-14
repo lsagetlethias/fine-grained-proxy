@@ -1,4 +1,5 @@
 import { egressFetch, parseTargetUrl } from "../net/egress.ts";
+import { readEnv } from "../env.ts";
 
 const DEFAULT_AUTH_URL = "https://auth.scalingo.com";
 const DEFAULT_API_URL = "https://api.osc-fr1.scalingo.com";
@@ -11,7 +12,7 @@ export interface ScalingoAddon {
 }
 
 export function resolveScalingoApiUrl(apiUrl?: string): string {
-  const resolved = apiUrl || Deno.env.get("SCALINGO_API_URL") || DEFAULT_API_URL;
+  const resolved = apiUrl || readEnv("SCALINGO_API_URL") || DEFAULT_API_URL;
   return resolved.replace(/\/+$/, "");
 }
 
@@ -26,12 +27,12 @@ export function isScalingoHost(rawUrl: string): boolean {
 // Les valeurs d'origine operateur ne viennent pas d'un appelant : elles echappent a la
 // contrainte d'hote, ce qui permet aussi aux tests de pointer un mock local.
 export function isOperatorScalingoUrl(rawUrl: string): boolean {
-  return rawUrl === (Deno.env.get("SCALINGO_API_URL") ?? "") ||
-    rawUrl === (Deno.env.get("SCALINGO_AUTH_URL") ?? "");
+  return rawUrl === (readEnv("SCALINGO_API_URL") ?? "") ||
+    rawUrl === (readEnv("SCALINGO_AUTH_URL") ?? "");
 }
 
 export async function exchangeToken(apiToken: string): Promise<string> {
-  const authUrl = Deno.env.get("SCALINGO_AUTH_URL") ?? DEFAULT_AUTH_URL;
+  const authUrl = readEnv("SCALINGO_AUTH_URL") ?? DEFAULT_AUTH_URL;
   const credentials = btoa(`:${apiToken}`);
 
   const response = await egressFetch(new URL(`${authUrl}/v1/tokens/exchange`), {

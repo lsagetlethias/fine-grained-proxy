@@ -49,6 +49,8 @@ Configurer dans la console Deno Deploy ([console.deno.com](https://console.deno.
 
 `PORT` n'est pas necessaire (gere par Deno Deploy).
 
+**Aucune variable marquee « Non » n'a besoin d'etre creee dans la console.** Absente, elle retombe sur son defaut, et ce defaut est sur : classification des destinations active pour `FGP_EGRESS_ALLOW_PRIVATE`, `X-Forwarded-For` ignore pour `FGP_TRUSTED_PROXY_HOPS`, feature `/logs` desactivee. Ne les posez que pour changer ce comportement. Cette garantie n'allait pas de soi : une optionnelle absente a deja pu tuer le flux proxy, non pas a cause de son defaut mais parce que sa lecture levait une erreur de permission quand son nom manquait a une allow-list `--allow-env`. Les lectures passent desormais par `readEnv` (`src/env.ts`), qui traite un refus d'acces comme une absence.
+
 > **SHA de build** : git n'est pas disponible sur Deno Deploy. Le script `build:version` fallback sur l'API GitHub pour resoudre le SHA du dernier commit. Si vous deployez un fork, positionnez `FGP_GITHUB_REPO` sur votre repo pour que le lien dans le footer pointe au bon endroit.
 
 > **`FGP_EGRESS_ALLOW_PRIVATE=1` annule la garantie de destination.**

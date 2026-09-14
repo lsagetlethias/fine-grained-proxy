@@ -11,6 +11,7 @@ import { logsRoutes } from "./routes/logs.tsx";
 import { logsEnabled } from "./logs/config.ts";
 import { purge } from "./logs/store.ts";
 import { purgeExpiredKeys } from "./crypto/key-cache.ts";
+import { readEnv } from "./env.ts";
 import {
   FGP_OWNED_PATHS,
   FGP_SECURITY_HEADERS,
@@ -236,7 +237,7 @@ export { app };
 // devient inoperant. L'ecoute explicite ci-dessous est le pattern Deno Deploy Classic.
 if (import.meta.main) {
   Deno.serve(
-    { port: Number(Deno.env.get("PORT") ?? 8000), hostname: "0.0.0.0" },
+    { port: Number(readEnv("PORT") ?? 8000), hostname: "0.0.0.0" },
     (req: Request, info: Deno.ServeHandlerInfo) => app.fetch(req, { info }),
   );
 }

@@ -8,6 +8,7 @@ import { computeBlobId } from "../logs/blob-id.ts";
 import { flushSince, getStreamCount, subscribe } from "../logs/store.ts";
 import type { LogEntry } from "../logs/events.ts";
 import { LogsPage } from "../ui/logs-page.tsx";
+import { readEnv } from "../env.ts";
 
 const HEARTBEAT_MS = 15_000;
 const MAX_BLOB_LENGTH = 4096;
@@ -154,7 +155,7 @@ logsRoutes.get("/logs/stream", async (c) => {
     since = n;
   }
 
-  const serverSalt = Deno.env.get("FGP_SALT");
+  const serverSalt = readEnv("FGP_SALT");
   if (!serverSalt) {
     return jsonStreamError(c, 401, "invalid_credentials", "Unable to decrypt blob");
   }

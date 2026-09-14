@@ -3,6 +3,7 @@ import { swaggerUI } from "@hono/swagger-ui";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
 import { decryptBlob, encryptBlob } from "../crypto/blob.ts";
+import { readEnv } from "../env.ts";
 import { decodePublicConfig, encodePublicConfig } from "../crypto/share.ts";
 import {
   CLIENT_KEY_MAX_LENGTH,
@@ -711,7 +712,7 @@ uiRoutes.get(LLMS_TXT_PATH, (c) => {
 });
 
 uiRoutes.openapi(saltRoute, (c) => {
-  const salt = Deno.env.get("FGP_SALT") ?? "";
+  const salt = readEnv("FGP_SALT") ?? "";
   c.header("Cache-Control", "no-store");
   return c.json({ salt }, 200);
 });
@@ -720,7 +721,7 @@ uiRoutes.openapi(decodeRoute, async (c) => {
   const { blob, key } = c.req.valid("json");
   c.header("Cache-Control", "no-store");
 
-  const serverSalt = Deno.env.get("FGP_SALT");
+  const serverSalt = readEnv("FGP_SALT");
   if (!serverSalt) {
     return c.json({ error: "server_error" as const, message: "Server misconfigured" }, 500);
   }
@@ -770,7 +771,7 @@ uiRoutes.openapi(generateRoute, async (c) => {
   const body = c.req.valid("json");
   c.header("Cache-Control", "no-store");
 
-  const serverSalt = Deno.env.get("FGP_SALT");
+  const serverSalt = readEnv("FGP_SALT");
   if (!serverSalt) {
     return c.json({ error: "server_error" as const, message: "Server misconfigured" }, 500);
   }
