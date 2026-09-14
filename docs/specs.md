@@ -730,7 +730,7 @@ Le mode `scalingo-addon` ajoute un **second cache**, indépendant du premier, po
 | `/` | GET | UI de configuration (formulaire de génération) |
 | `/healthz` | GET | Health check (`{"status": "ok"}`) |
 | `/llms.txt` | GET | Documentation markdown destinée aux agents LLM (cf. §16) |
-| `/api/salt` | GET | Retourne le salt serveur (`{"salt": "..."}`) |
+| `/api/salt` | GET | Retourne le salt serveur (`{"salt": "..."}`), ou `500 {"error": "server_error"}` si `FGP_SALT` est absent ou illisible côté serveur. Cet endpoint de diagnostic ne doit jamais annoncer une santé que le flux proxy dément : sur la même instance, une requête proxy échoue aussi en `500 internal_error` faute de salt. |
 | `/api/generate` | POST | Génération d'URL FGP (chiffrement serveur). Accepte une clé client fournie par l'appelant (cf. §15). |
 | `/api/decode` | POST | Décode un blob avec sa clé client. Token et secrets d'auth redactés (cf. §11.1.4). |
 | `/api/share/encode` | POST | Encode une configuration publique partageable (`?c=`), sans secret |

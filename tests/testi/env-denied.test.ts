@@ -192,3 +192,62 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
 });
+
+// --- AC-58.16 et AC-58.17 : le seul endpoint qui annonce la sante de la configuration ne
+// doit pas annoncer l'inverse de ce que fait le flux proxy ---
+
+Deno.test({
+  name:
+    "AC-58.16: FGP_SALT refuse par l'allow-list fait repondre 500 a /api/salt, jamais un salt vide",
+  fn: async () => {
+    denyEnvExcept({});
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    try {
+      const res = await app.request("/api/salt");
+      const body = await res.json();
+
+      assertEquals(res.status, 500);
+      assertEquals(body.error, "server_error");
+      assertEquals(body.salt, undefined, "un salt vide a ete servi comme si tout allait bien");
+      assertEquals(res.headers.get("cache-control"), "no-store");
+
+      // Le flux proxy repond deja 500 sur cette meme instance. Si les deux divergent, c'est
+      // l'endpoint de diagnostic qui ment, et c'est celui-la qu'on regarde pour conclure.
+      const proxy = await app.request(`/${"b".repeat(96)}/v1/items`, {
+        headers: { "X-FGP-Key": CLIENT_KEY },
+      });
+      const proxyBody = await proxy.json();
+
+      assertEquals(proxy.status, 500);
+      assertEquals(proxyBody.error, "internal_error");
+    } finally {
+      console.error = originalConsoleError;
+      restore();
+    }
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});
+
+Deno.test({
+  name: "AC-58.17: FGP_SALT simplement absente, sans refus de permission, sort aussi en 500",
+  fn: async () => {
+    // Le repli de readEnv n'est pas en cause ici : Deno.env.get rend undefined comme il le
+    // ferait sur une instance dont la variable n'est pas definie du tout.
+    Deno.env.get = ((name: string): string | undefined =>
+      name === "FGP_SALT" ? undefined : originalEnvGet(name)) as typeof Deno.env.get;
+    try {
+      const res = await app.request("/api/salt");
+      const body = await res.json();
+
+      assertEquals(res.status, 500);
+      assertEquals(body.error, "server_error");
+      assertEquals(body.salt, undefined, "un salt vide a ete servi comme si tout allait bien");
+    } finally {
+      restore();
+    }
+  },
+  sanitizeOps: false,
+  sanitizeResources: false,
+});

@@ -5,7 +5,7 @@
 **Ref specs** : `docs/specs.md` v5.0
 **Ref review** : `docs/review/challenge-v4-byok-llms.md` (challenge v4), `docs/review/challenge-query-filters-v5.md` (challenge v5), `docs/review/ac-coverage-v5.md` (matrice)
 
-**Etat du registre** : les series AC-1 a AC-59 sont toutes redigees ici. Les series **AC-43 a AC-50** ont ete backfillees le 2026-09-04, le lot de securite (ADR-0009 et ADR-0010) ayant ete livre sans criteres ecrits. Elles sont reconstituees **depuis les ADR et `docs/specs.md` §18**, jamais depuis les tests : rediger d'apres l'implementation produit des criteres qui decrivent le code au lieu de le contraindre. Les ecarts entre ces criteres et les tests existants, dans les deux sens, sont dans `docs/review/ac-coverage-v5.md`. Les series **AC-58 et AC-59** ont ete redigees le 2026-09-14 depuis les tests `tests/testi/env-denied.test.ts`, `tests/testu/env-registry.test.ts`, `tests/testu/env-read.test.ts` et `tests/testi/egress-failure-classes.test.ts`, qui portaient deja les noms AC-58.x et AC-59.x sans qu'aucun critere ecrit n'existe encore ici. Contrairement a AC-43 a AC-50, elles decrivent un comportement deja verifie par un test, pas seulement l'implementation.
+**Etat du registre** : les series AC-1 a AC-59 sont toutes redigees ici. Les series **AC-43 a AC-50** ont ete backfillees le 2026-09-04, le lot de securite (ADR-0009 et ADR-0010) ayant ete livre sans criteres ecrits. Elles sont reconstituees **depuis les ADR et `docs/specs.md` §18**, jamais depuis les tests : rediger d'apres l'implementation produit des criteres qui decrivent le code au lieu de le contraindre. Les ecarts entre ces criteres et les tests existants, dans les deux sens, sont dans `docs/review/ac-coverage-v5.md`. Les series **AC-58 et AC-59** ont ete redigees le 2026-09-14 depuis les tests `tests/testi/env-denied.test.ts`, `tests/testu/env-registry.test.ts`, `tests/testu/env-read.test.ts`, `tests/testi/egress-failure-classes.test.ts` et `tests/testi/openapi-internal-error.test.ts`, qui portaient deja les noms AC-58.x et AC-59.x sans qu'aucun critere ecrit n'existe encore ici. Contrairement a AC-43 a AC-50, elles decrivent un comportement deja verifie par un test, pas seulement l'implementation.
 
 ---
 
@@ -4137,6 +4137,18 @@ Ref : panne de production sur Scalingo. Le `Procfile` ne portait que 9 des 11 no
 **When** la configuration logs est lue apres chaque changement
 **Then** chaque appel rend la valeur courante ou, une fois la variable retiree, le defaut (`50`). La configuration n'est jamais figee au premier appel
 
+### AC-58.16 `FGP_SALT` refuse par l'allow-list fait repondre 500 a `/api/salt`, jamais un salt vide
+
+**Given** une allow-list qui ne porte aucun nom, `FGP_SALT` y compris
+**When** `GET /api/salt` est appele
+**Then** la reponse est `500 {"error": "server_error"}`, sans champ `salt`, avec `Cache-Control: no-store`. Sur la meme instance, une requete proxy repond aussi `500 internal_error` : l'endpoint de diagnostic ne doit jamais annoncer une sante que le flux proxy dement
+
+### AC-58.17 `FGP_SALT` simplement absente, sans refus de permission, sort aussi en 500
+
+**Given** une instance ou `FGP_SALT` n'est pas definie du tout, sans qu'aucun refus de permission n'intervienne
+**When** `GET /api/salt` est appele
+**Then** la reponse est identique au cas precedent : `500 {"error": "server_error"}`, sans champ `salt`. Le repli de `readEnv` sur un refus d'acces ne change rien au cas d'une variable simplement non definie, deja couvert avant ce correctif
+
 ---
 
 ## AC-59 : Classification des pannes d'egress, la panne locale ne s'habille plus en panne amont
@@ -4174,6 +4186,18 @@ Ref : meme panne de production. Trois endroits captaient un `catch` nu autour d'
 **Given** une reponse upstream recue avec un `Content-Type` JSON mais un corps malforme
 **When** `POST /api/test-proxy` est appele
 **Then** la reponse est `200 {"allowed": true, "reason": "upstream_unreachable"}`. La reponse est bien arrivee, seule sa lecture echoue, et cela reste une caracteristique de l'amont, pas du proxy
+
+### AC-59.6 PARITE : toute operation OpenAPI declare le code que le handler global rend sur un throw non rattrape
+
+**Given** le couple statut/code que le handler d'erreur global rend reellement sur une exception non geree
+**When** le schema OpenAPI de chaque operation documentee est inspecte
+**Then** chacune declare ce couple dans ses reponses possibles, sans exception. Aucune route n'est mise a l'abri d'un throw, contrairement au plafond de corps qui exclut `GET /api/salt`
+
+### AC-59.7 Le code derive est bien celui qu'une route documentee sert vraiment
+
+**Given** une route documentee (`/api/list-apps`) sur laquelle une lecture d'environnement echoue par une faute de programmation
+**When** la route est appelee au travers de toute la pile de l'application
+**Then** le statut et le code recus sont exactement ceux que le handler global rend sur un throw isole. Le contrat OpenAPI decrit le comportement reel de l'application, pas seulement celui d'un handler teste isolement
 
 ### AC-59.8 Une panne reseau reelle sur le flux proxy principal reste un 502 `upstream_unreachable`
 

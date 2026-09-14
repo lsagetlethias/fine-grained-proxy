@@ -69,7 +69,7 @@ function errorSchema<const T extends readonly [string, ...string[]]>(
 
 const DecodeError400Schema = errorSchema(["invalid_body"], "DecodeError400");
 const DecodeError401Schema = errorSchema(["invalid_credentials"], "DecodeError401");
-const DecodeError500Schema = errorSchema(["server_error"], "DecodeError500");
+const DecodeError500Schema = errorSchema(["server_error", "internal_error"], "DecodeError500");
 
 const ShareEncodeError400Schema = errorSchema(["invalid_body"], "ShareEncodeError400");
 
@@ -90,7 +90,9 @@ const GenerateError400Schema = errorSchema(
   ],
   "GenerateError400",
 );
-const GenerateError500Schema = errorSchema(["server_error"], "GenerateError500");
+const GenerateError500Schema = errorSchema(["server_error", "internal_error"], "GenerateError500");
+
+const SaltError500Schema = errorSchema(["server_error", "internal_error"], "SaltError500");
 
 const ListAppsError400Schema = errorSchema(
   ["invalid_body", "invalid_target"],
@@ -137,6 +139,17 @@ const UnsupportedMediaTypeErrorSchema = errorSchema(
 const unsupportedMediaTypeResponse = {
   description: "Content-Type is absent or is not application/json",
   content: { "application/json": { schema: UnsupportedMediaTypeErrorSchema } },
+};
+
+// Meme angle mort que le 413 et le 415 : app.onError (src/main.ts) rend ce code sur tout
+// throw non rattrape et createRoute ne voit pas un handler global. Difference qui compte,
+// il ne depend ni du chemin ni de la presence d'un corps : aucune operation n'y echappe,
+// donc aucune ne peut s'en dispenser.
+const InternalErrorSchema = errorSchema(["internal_error"], "InternalError");
+
+const internalErrorResponse = {
+  description: "Unhandled exception, rendered by the global error handler",
+  content: { "application/json": { schema: InternalErrorSchema } },
 };
 
 const ObjectValueSchema = z.union([
@@ -465,6 +478,7 @@ const shareEncodeRoute = createRoute({
     },
     413: payloadTooLargeResponse,
     415: unsupportedMediaTypeResponse,
+    500: internalErrorResponse,
   },
 });
 
@@ -491,6 +505,7 @@ const shareDecodeRoute = createRoute({
     },
     413: payloadTooLargeResponse,
     415: unsupportedMediaTypeResponse,
+    500: internalErrorResponse,
   },
 });
 
@@ -504,6 +519,11 @@ const saltRoute = createRoute({
     200: {
       description: "Server salt",
       content: { "application/json": { schema: SaltResponseSchema } },
+    },
+    500: {
+      description:
+        "FGP_SALT missing from the environment, or an unhandled exception rendered by the global error handler",
+      content: { "application/json": { schema: SaltError500Schema } },
     },
   },
 });
@@ -567,6 +587,7 @@ const listAppsRoute = createRoute({
     },
     413: payloadTooLargeResponse,
     415: unsupportedMediaTypeResponse,
+    500: internalErrorResponse,
     502: {
       description:
         "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing apps",
@@ -607,6 +628,7 @@ const listAddonsRoute = createRoute({
     },
     413: payloadTooLargeResponse,
     415: unsupportedMediaTypeResponse,
+    500: internalErrorResponse,
     502: {
       description:
         "Scalingo API unreachable (fetch throw) or returned a non-ok status when listing addons",
@@ -639,6 +661,7 @@ const testProxyRoute = createRoute({
     },
     413: payloadTooLargeResponse,
     415: unsupportedMediaTypeResponse,
+    500: internalErrorResponse,
   },
 });
 
@@ -714,8 +737,14 @@ uiRoutes.get(LLMS_TXT_PATH, (c) => {
 });
 
 uiRoutes.openapi(saltRoute, (c) => {
-  const salt = readEnv("FGP_SALT") ?? "";
   c.header("Cache-Control", "no-store");
+  // Rendre une chaine vide ici ferait passer pour saine une instance dont la seule variable
+  // requise manque, alors que la route proxy, elle, repond deja 500. Le repli silencieux de
+  // readEnv vaut pour les variables optionnelles, jamais pour celle-ci.
+  const salt = readEnv("FGP_SALT");
+  if (!salt) {
+    return c.json({ error: "server_error" as const, message: "Server misconfigured" }, 500);
+  }
   return c.json({ salt }, 200);
 });
 

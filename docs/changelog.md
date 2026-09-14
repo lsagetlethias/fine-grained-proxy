@@ -6,6 +6,8 @@
 - Une variable d'environnement optionnelle absente retombe sur son défaut sûr, y compris quand l'hébergeur en refuse la lecture : la classification des destinations reste active et `X-Forwarded-For` reste ignoré
 - Correction : le testeur de scopes de l'interface annonçait « API cible injoignable » pour une panne interne de FGP. Il n'accuse plus votre API tant que la requête n'a pas réellement échoué à sortir
 - Correction : les helpers Scalingo « lister les applications » et « lister les bases » ne répondent plus `upstream_unreachable` sur un incident qui n'a rien à voir avec Scalingo
+- `GET /api/salt` renvoie désormais `500` quand le salt serveur est indisponible, au lieu d'un salt vide qui laissait croire que tout allait bien pendant que le proxy, lui, était déjà en panne
+- Les huit routes `/api/*` déclarent désormais leur `500 internal_error` dans l'OpenAPI : le contrat publié était incomplet, pas le comportement
 
 ## 6 septembre 2026
 
