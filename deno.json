@@ -13,7 +13,7 @@
     "dev:server": "deno run --watch --env-file --allow-net --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB,FGP_EGRESS_ALLOW_PRIVATE,FGP_TRUSTED_PROXY_HOPS --allow-read=static src/main.ts",
     "dev": "deno run -A npm:concurrently --names css,client,server --prefix-colors yellow,blue,green 'deno task dev:css' 'deno task dev:client' 'deno task dev:server'",
     "start": "deno task build && deno run --env-file --allow-net --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB,FGP_EGRESS_ALLOW_PRIVATE,FGP_TRUSTED_PROXY_HOPS --allow-read=static src/main.ts",
-    "deploy": "deno task build && deployctl deploy --project=fgp-proxy --entrypoint=src/main.ts --include=src,static,deno.json,deno.lock",
+    "deploy": "deno task build && deno deploy",
     "test": "deno test --allow-net --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB,FGP_EGRESS_ALLOW_PRIVATE,FGP_TRUSTED_PROXY_HOPS --allow-read=static tests/",
     "test:unit": "deno test --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB,FGP_EGRESS_ALLOW_PRIVATE,FGP_TRUSTED_PROXY_HOPS --allow-read=static tests/testu/",
     "test:integration": "deno test --allow-net --allow-env=FGP_SALT,PORT,SCALINGO_API_URL,SCALINGO_AUTH_URL,FGP_LOGS_ENABLED,FGP_LOGS_BUFFER_NETWORK,FGP_LOGS_BUFFER_DETAILED,FGP_LOGS_INACTIVITY_MIN,FGP_LOGS_DETAILED_MAX_KB,FGP_EGRESS_ALLOW_PRIVATE,FGP_TRUSTED_PROXY_HOPS --allow-read=static tests/testi/",
@@ -80,6 +80,20 @@
   ],
   "deploy": {
     "org": "lsagetlethias",
-    "app": "fgp-proxy"
+    "app": "fgp-proxy",
+    "runtime": {
+      "mode": "dynamic",
+      "entrypoint": "src/main.ts"
+    },
+    "include": [
+      "src",
+      "static",
+      "deno.json",
+      "deno.lock"
+    ],
+    "exclude": [
+      "!static",
+      "!src/ui/changelog-data.ts"
+    ]
   }
 }

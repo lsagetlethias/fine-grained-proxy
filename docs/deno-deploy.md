@@ -72,6 +72,14 @@ A configurer en frontal :
 
 **Le filtrage d'egress au niveau reseau** est par ailleurs la seule defense reelle contre le rebinding DNS, que la politique de sortie ne ferme pas (specs section 18.2). Si votre frontal ou votre reseau le permet, restreindre les destinations sortantes de l'instance complete utilement la politique applicative.
 
+## Quels fichiers sont envoyes
+
+`deno deploy` lit le champ `deploy` de `deno.json` (`org`, `app`, `runtime`, `include`, `exclude`) pour decider quoi uploader et comment demarrer l'app. `runtime.entrypoint` remplace le flag `--entrypoint` de l'ancien `deployctl` : c'est le point d'entree explicite, `src/main.ts`. `include` liste les racines du projet a embarquer. Ca ne suffit pas a garantir que tout ce qu'elles contiennent parte reellement : par defaut, l'upload respecte aussi le `.gitignore` du depot, et `static/` ainsi que `src/ui/changelog-data.ts` y sont lignes, puisqu'ils sont generes localement par `deno task build` et jamais commites.
+
+Sans intervention, ces deux chemins seraient donc silencieusement absents de l'upload malgre figurer sous `include`, et l'instance deployee demarrerait sans CSS, sans JS client et sans changelog rendu. C'est le role du champ `exclude` de porter des entrees prefixees `!` : comme dans un `.gitignore`, ce prefixe annule une exclusion plutot que d'en ajouter une. `!static` et `!src/ui/changelog-data.ts` levent donc l'exclusion issue du `.gitignore` pour ces deux chemins precis, sans toucher au reste de ce que le `.gitignore` filtre normalement (`node_modules/`, `.env`, etc.).
+
+**Ne simplifiez pas ce champ sans comprendre ce mecanisme.** Retirer les entrees `!` de `exclude` en les prenant pour un doublon de `include`, ou pour du bruit, reproduit exactement la panne qui a un temps empeche `static/` et le changelog d'atteindre l'instance deployee. Verifiez le contenu exact du champ `deploy` dans `deno.json` avant d'y toucher : il peut avoir gagne d'autres cles depuis l'ecriture de ce paragraphe.
+
 ## Deployer via CLI
 
 ```bash
@@ -133,22 +141,24 @@ jobs:
         run: deno task verify
 
       - name: Deploy
-        uses: denoland/deployctl@v1
-        with:
-          project: fgp-proxy
-          entrypoint: src/main.ts
-          include: src,static,deno.json,deno.lock
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+        run: deno deploy --json --non-interactive --org lsagetlethias --app fgp-proxy --prod
 ```
+
+> **Pas de `denoland/deployctl@v1`.** `deployctl` ne pilote que Deno Deploy Classic, eteint le 20 juillet 2026. La commande vivante est `deno deploy`, integree au runtime. En CI, elle s'authentifie par `DENO_DEPLOY_TOKEN` et exige `--non-interactive`, sans quoi elle attend une reponse que personne ne donnera.
 
 ## Verifier
 
 ```bash
-curl https://fgp-proxy.deno.dev/healthz
+curl https://fgp-proxy.lsagetlethias.deno.net/healthz
 # {"status":"ok"}
 
-curl https://fgp-proxy.deno.dev/api/docs
+curl https://fgp-proxy.lsagetlethias.deno.net/api/docs
 # Swagger UI
 ```
+
+Le domaine est en `<app>.<org>.deno.net`. Le `<app>.deno.dev` de Deno Deploy Classic ne sert plus l'instance et repond 404.
 
 ## Domaines custom
 

@@ -35,7 +35,7 @@
 - `deno task build` : build:css + build:client + build:version + build:changelog (à lancer avant deploy)
 - `deno task dev` : watch parallèle CSS + client + server (concurrently)
 - `deno task start` : build + production
-- `deno task deploy` : build + deployctl vers Deno Deploy
+- `deno task deploy` : build + `deno deploy` vers Deno Deploy, org et app lues du champ `deploy` de `deno.json`. Surtout pas `deployctl`, qui ne pilote que Deno Deploy Classic, éteint le 20 juillet 2026
 - `deno task test` : tous les tests
 - `deno task test:unit` : tests unitaires
 - `deno task test:integration` : tests intégration

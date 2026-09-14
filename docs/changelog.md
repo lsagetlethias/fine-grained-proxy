@@ -8,6 +8,7 @@
 - Correction : les helpers Scalingo « lister les applications » et « lister les bases » ne répondent plus `upstream_unreachable` sur un incident qui n'a rien à voir avec Scalingo
 - `GET /api/salt` renvoie désormais `500` quand le salt serveur est indisponible, au lieu d'un salt vide qui laissait croire que tout allait bien pendant que le proxy, lui, était déjà en panne
 - Les huit routes `/api/*` déclarent désormais leur `500 internal_error` dans l'OpenAPI : le contrat publié était incomplet, pas le comportement
+- La task `deno task deploy` passe de `deployctl` à `deno deploy`. `deployctl` ne pilote que Deno Deploy Classic, éteint depuis le 20 juillet 2026
 
 ## 6 septembre 2026
 
