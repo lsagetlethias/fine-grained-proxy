@@ -317,3 +317,24 @@
   - Session reprise après l'interruption réseau d'un agent précédent en plein milieu de la tâche : le code (bump de version, schémas OpenAPI, tests) était déjà livré et vérifié, seule la documentation restait à faire.
 - **Prochaines étapes** :
   - Lancer `deno task build` (ou au moins `build:changelog`) avant déploiement pour propager la nouvelle entrée de changelog dans l'UI
+
+## 2026-09-14 : Panne Scalingo (allow-list env incomplète), classes d'échec d'egress, 26 AC rédigées
+
+- **Changements** :
+  - Panne de production identifiée sur Scalingo : le `Procfile` ne portait que 9 des 11 variables d'environnement lues par le serveur. Sur un nom absent de l'allow-list `--allow-env`, `Deno.env.get` ne rend pas `undefined`, il lève `Deno.errors.NotCapable`, et ce throw ressortait en `500 internal_error` sur chaque requête proxy légitime : le processus tournait, le flux proxy était mort.
+  - `src/env.ts` créé, seul lecteur d'environnement du code serveur : `readEnv`, `readEnvFlag`, `readEnvInt`, registre `ENV_NAMES` qui type les noms lus. Le catch ne traite comme absence que le refus d'accès (`NotCapable`, `PermissionDenied`), tout le reste remonte, `TypeError` sur clé malformée compris. 18 sites de lecture basculés, aucune mémoïsation. `Procfile` aligné sur les 11 variables.
+  - `src/net/egress.ts` : `egressFetch` ne laisse plus remonter que deux classes sous `EgressFailure` (`EgressError` pour un refus de politique, `EgressNetworkError` pour un `fetch` qui rejette). Corrige trois catch nus (`/api/list-apps`, `/api/list-addons`, `/api/test-proxy`) et celui du forward proxy principal, qui déguisaient une panne locale (par exemple une lecture d'environnement refusée) en panne de l'API cible.
+  - Le `500 internal_error` d'`app.onError`, jusque-là absent de tout schéma OpenAPI alors qu'il peut frapper les huit opérations documentées, y est désormais déclaré. Un test dérive le couple statut/code depuis le handler réellement monté plutôt que de le recopier à la main.
+  - `GET /api/salt` répond `500 server_error` quand `FGP_SALT` est indisponible, au lieu d'un salt vide qui laissait croire que tout allait bien.
+  - `deno task deploy` passe de `deployctl` (Deno Deploy Classic, éteint le 20 juillet 2026) à `deno deploy`, intégré au runtime. Nouveau champ `deploy` dans `deno.json` (`org`, `app`, `include`, `exclude`).
+  - Documentation : 26 critères d'acceptation rédigés dans `docs/acceptance-criteria.md` (AC-58.1 à AC-58.17, AC-59.1 à AC-59.9), absents alors que les tests qui les portent existaient déjà. Specs (§8.3, §10, §14.12, §18.5), changelog, `docs/deno-deploy.md` (mécanisme `include`/`exclude` du champ `deploy`, absent du guide) et `README.md` (incohérence corrigée sur le moment où l'avertissement `FGP_EGRESS_ALLOW_PRIVATE` est écrit) mis à jour.
+- **Décisions** :
+  - Le contrat d'ajout d'une variable d'environnement passe de trois endroits documentés à six : le registre `ENV_NAMES`, les six listes `--allow-env` de `deno.json`, le `Procfile`, le `Dockerfile`, `.env.example`, et la documentation. Les cinq premiers sont verrouillés par un test de parité qui lit les fichiers réels (`tests/testu/env-registry.test.ts`) ; la documentation reste à la charge de la revue.
+  - Absence de mémoïsation dans `src/env.ts` : un cache figerait un comportement comme la politique de sortie pour la durée du process et ferait dépendre le résultat des tests de l'ordre des fichiers exécutés dans un même run.
+- **ADR** : aucun. Explicitement écarté du périmètre de cette session.
+- **Process** :
+  - Le PO a rédigé les 26 AC Given/When/Then directement depuis les tests déjà écrits (`tests/testi/env-denied.test.ts`, `tests/testu/env-registry.test.ts`, `tests/testu/env-read.test.ts`, `tests/testi/egress-failure-classes.test.ts`, `tests/testi/openapi-internal-error.test.ts`), en l'absence de tout critère existant pour ces deux séries. Rédaction exceptionnelle à la place du testeur, sur demande explicite du lead.
+- **Prochaines étapes** :
+  - Recette manuelle du mode Scalingo Database API sur un vrai compte, condition d'entrée du multi-addon (follow-up de longue date, toujours ouvert)
+  - Tests e2e toujours reportés
+  - Vérifier en situation réelle que le nouveau mécanisme `include`/`exclude` de `deno.json` embarque bien `static/` et `src/ui/changelog-data.ts` au premier déploiement suivant ce changement
