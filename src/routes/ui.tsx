@@ -31,7 +31,9 @@ import {
   buildUpstreamUrl,
   classifyLiteralHost,
   EgressError,
+  EgressFailure,
   egressFetch,
+  EgressNetworkError,
   parseTargetUrl,
 } from "../net/egress.ts";
 import { renderLlmsTxt } from "./llms.ts";
@@ -927,7 +929,11 @@ uiRoutes.openapi(listAppsRoute, async (c) => {
     appsResponse = await egressFetch(new URL(`${apiUrl}/v1/apps`), {
       headers: { "Authorization": `Bearer ${bearer}` },
     });
-  } catch {
+  } catch (err) {
+    // Refus de politique et echec reseau se ressemblent ici, aucune reponse n'a ete
+    // obtenue. Une panne locale ne leur ressemble pas : elle remonte a app.onError plutot
+    // que d'accuser Scalingo d'un probleme qui est chez nous.
+    if (!(err instanceof EgressFailure)) throw err;
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
       { error: "upstream_unreachable" as const, message: "Scalingo API unreachable" },
@@ -981,7 +987,8 @@ uiRoutes.openapi(listAddonsRoute, async (c) => {
       new URL(`${apiUrl}/v1/apps/${encodeURIComponent(body.app)}/addons`),
       { headers: { "Authorization": `Bearer ${bearer}` } },
     );
-  } catch {
+  } catch (err) {
+    if (!(err instanceof EgressFailure)) throw err;
     c.header(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
     return c.json(
       { error: "upstream_unreachable" as const, message: "Scalingo API unreachable" },
@@ -1077,19 +1084,33 @@ uiRoutes.openapi(testProxyRoute, async (c) => {
     init.body = JSON.stringify(body);
   }
 
+  let res: Response;
   try {
-    const res = await egressFetch(targetUrl, init);
-    const contentType = res.headers.get("content-type") ?? "";
-    const responseBody = contentType.includes("application/json")
-      ? await res.json()
-      : await res.text();
-    return c.json({ allowed: true, upstream: { status: res.status, body: responseBody } }, 200);
+    res = await egressFetch(targetUrl, init);
   } catch (err) {
     if (err instanceof EgressError) {
       return c.json({ allowed: true, reason: "target_forbidden" }, 200);
     }
+    if (err instanceof EgressNetworkError) {
+      return c.json({ allowed: true, reason: "upstream_unreachable" }, 200);
+    }
+    // Tout ce qui n'est pas une issue connue du point de sortie est une panne locale. La
+    // rendre en « upstream_unreachable » ferait accuser l'API cible par l'outil meme qui
+    // sert a la diagnostiquer, et masquerait le vrai defaut.
+    throw err;
+  }
+
+  let responseBody: unknown;
+  try {
+    const contentType = res.headers.get("content-type") ?? "";
+    responseBody = contentType.includes("application/json") ? await res.json() : await res.text();
+  } catch {
+    // La reponse est arrivee, son corps ne se lit pas : coupure en cours de lecture ou JSON
+    // annonce et malforme. Les deux sont bien amont, contrairement a ce qui precede.
     return c.json({ allowed: true, reason: "upstream_unreachable" }, 200);
   }
+
+  return c.json({ allowed: true, upstream: { status: res.status, body: responseBody } }, 200);
 });
 
 uiRoutes.doc("/api/openapi.json", {

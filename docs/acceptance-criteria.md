@@ -5,7 +5,7 @@
 **Ref specs** : `docs/specs.md` v5.0
 **Ref review** : `docs/review/challenge-v4-byok-llms.md` (challenge v4), `docs/review/challenge-query-filters-v5.md` (challenge v5), `docs/review/ac-coverage-v5.md` (matrice)
 
-**Etat du registre** : les series AC-1 a AC-58 sont toutes redigees ici. Les series **AC-43 a AC-50** ont ete backfillees le 2026-09-04, le lot de securite (ADR-0009 et ADR-0010) ayant ete livre sans criteres ecrits. Elles sont reconstituees **depuis les ADR et `docs/specs.md` §18**, jamais depuis les tests : rediger d'apres l'implementation produit des criteres qui decrivent le code au lieu de le contraindre. Les ecarts entre ces criteres et les tests existants, dans les deux sens, sont dans `docs/review/ac-coverage-v5.md`. La serie **AC-58** a ete redigee le 2026-09-14 depuis les tests `tests/testi/env-denied.test.ts`, `tests/testu/env-registry.test.ts` et `tests/testu/env-read.test.ts`, qui portaient deja les noms AC-58.x sans qu'aucun critere ecrit n'existe encore ici. Contrairement a AC-43 a AC-50, elles decrivent un comportement deja verifie par un test, pas seulement l'implementation.
+**Etat du registre** : les series AC-1 a AC-59 sont toutes redigees ici. Les series **AC-43 a AC-50** ont ete backfillees le 2026-09-04, le lot de securite (ADR-0009 et ADR-0010) ayant ete livre sans criteres ecrits. Elles sont reconstituees **depuis les ADR et `docs/specs.md` §18**, jamais depuis les tests : rediger d'apres l'implementation produit des criteres qui decrivent le code au lieu de le contraindre. Les ecarts entre ces criteres et les tests existants, dans les deux sens, sont dans `docs/review/ac-coverage-v5.md`. Les series **AC-58 et AC-59** ont ete redigees le 2026-09-14 depuis les tests `tests/testi/env-denied.test.ts`, `tests/testu/env-registry.test.ts`, `tests/testu/env-read.test.ts` et `tests/testi/egress-failure-classes.test.ts`, qui portaient deja les noms AC-58.x et AC-59.x sans qu'aucun critere ecrit n'existe encore ici. Contrairement a AC-43 a AC-50, elles decrivent un comportement deja verifie par un test, pas seulement l'implementation.
 
 ---
 
@@ -4136,3 +4136,97 @@ Ref : panne de production sur Scalingo. Le `Procfile` ne portait que 9 des 11 no
 **Given** `FGP_LOGS_BUFFER_NETWORK` dont la valeur change entre deux appels, puis est retiree
 **When** la configuration logs est lue apres chaque changement
 **Then** chaque appel rend la valeur courante ou, une fois la variable retiree, le defaut (`50`). La configuration n'est jamais figee au premier appel
+
+---
+
+## AC-59 : Classification des pannes d'egress, la panne locale ne s'habille plus en panne amont
+
+Ref : meme panne de production. Trois endroits captaient un `catch` nu autour d'un appel sortant (`/api/list-apps`, `/api/list-addons`, `/api/test-proxy`, et le forward principal du proxy) : n'importe quelle exception, y compris une panne strictement locale comme la lecture d'environnement de la serie AC-58, se presentait comme une panne de l'API cible. L'outil cense diagnostiquer un incident accusait alors l'amont d'un probleme qui etait chez FGP. Correctif dans `src/net/egress.ts` (classes `EgressFailure`, `EgressError`, `EgressNetworkError`) et dans les points d'appel de `src/routes/ui.tsx` et `src/middleware/proxy.ts`.
+
+**Regle retenue** : `egressFetch` ne laisse remonter que deux classes connues, toutes deux sous `EgressFailure` : `EgressError` (refus de politique, par exemple une cible non publique) et `EgressNetworkError` (le `fetch` a rejete). Un appelant qui veut distinguer une panne d'egress d'une panne locale capte `EgressFailure` (ou ses deux sous-classes), jamais un `catch` nu, et laisse tout le reste remonter au handler d'erreur global, qui le rend en `500 internal_error`. Ce couple (statut, code) est desormais declare dans le schema OpenAPI de chaque operation documentee, sans exception, puisque le handler global ne regarde ni le chemin ni la presence d'un corps.
+
+### AC-59.1 Une panne locale pendant `/api/list-apps` sort en 500, pas en 502 amont
+
+**Given** un echange de token Scalingo reussi, suivi d'une panne strictement locale (par exemple une lecture d'environnement qui echoue par une faute de programmation) survenant apres cet echange
+**When** `POST /api/list-apps` est appele
+**Then** la reponse est `500 internal_error`, jamais `502 upstream_unreachable`. L'echec local qui a fait tomber le proxy en production ne doit plus se deguiser en panne de l'API Scalingo
+
+### AC-59.2 Une panne locale pendant `/api/list-addons` sort en 500, pas en 502 amont
+
+**Given** le meme scenario que AC-59.1, applique a `POST /api/list-addons`
+**When** la route est appelee
+**Then** la reponse est `500 internal_error`, jamais `502 upstream_unreachable`
+
+### AC-59.3 `/api/test-proxy` n'accuse plus l'amont d'une panne locale
+
+**Given** un mode d'authentification sans echange prealable (`bearer`) et une panne strictement locale au moment du premier appel sortant
+**When** `POST /api/test-proxy` est appele
+**Then** la reponse est `500 internal_error`, et le champ `reason` ne vaut jamais `upstream_unreachable`
+
+### AC-59.4 Un echec reseau reel garde `reason: upstream_unreachable` sur `/api/test-proxy`
+
+**Given** un `fetch` qui rejette reellement (erreur reseau)
+**When** `POST /api/test-proxy` est appele
+**Then** la reponse est `200 {"allowed": true, "reason": "upstream_unreachable"}`. Une vraie panne reseau reste imputee a l'amont
+
+### AC-59.5 Un corps upstream illisible reste impute a l'amont, pas au proxy
+
+**Given** une reponse upstream recue avec un `Content-Type` JSON mais un corps malforme
+**When** `POST /api/test-proxy` est appele
+**Then** la reponse est `200 {"allowed": true, "reason": "upstream_unreachable"}`. La reponse est bien arrivee, seule sa lecture echoue, et cela reste une caracteristique de l'amont, pas du proxy
+
+### AC-59.8 Une panne reseau reelle sur le flux proxy principal reste un 502 `upstream_unreachable`
+
+**Given** un blob valide vers une cible publique et un `fetch` qui rejette reellement pendant le forward
+**When** la requete est proxyfiee
+**Then** la reponse est `502 {"error": "upstream_unreachable"}` avec `X-FGP-Source: proxy`. La panne reseau reste correctement attribuee a l'amont sur le chemin principal du produit
+
+### AC-59.9 Une panne locale pendant le forward proxy sort en 500, pas en 502 amont
+
+**Given** un blob valide vers une cible publique, un amont qui repondrait normalement, et une panne strictement locale survenant apres la classification prealable de la destination mais avant l'appel sortant
+**When** la requete est proxyfiee
+**Then** la reponse est `500 internal_error`, jamais `502 upstream_unreachable`, alors meme que l'amont, lui, aurait repondu normalement
+
+---
+
+## Assumptions : proprietes cryptographiques non directement testables
+
+Les enonces suivants decrivent des proprietes valides **par construction cryptographique** et non par un test d'integration direct. Ils sont maintenus ici pour documenter l'intention de securite, sans polluer la matrice de couverture AC.
+
+### Assumption AC-crypto.1 Serveur ne peut pas dechiffrer sans cle client
+
+Le server_salt et le `bodyEncrypted` seuls ne permettent pas de retrouver le body en clair. PBKDF2 requiert `client_key + server_salt`. En pratique : impossible cote serveur sans exfiltration de la cle cliente, ce qui sort du modele de menace FGP. Valide par la robustesse du PBKDF2-AES-256-GCM standard.
+
+### Assumption AC-crypto.2 `blobId` non reversible
+
+Le `blobId` (SHA-256 tronque a 16 chars hex = 64 bits) ne permet pas de retrouver le blob chiffre, ni a fortiori son contenu. Valide par irreversibilite SHA-256. Collisions negligeables a l'echelle d'un blob actif (2^-32 sur 2^32 blobs actifs simultanes).
+
+---
+
+## Remarques
+
+- **Backward compat** : le proxy supporte les blobs v2 (scopes string uniquement) et v3 (scopes mixtes). Un blob v2 n'a jamais de body filters.
+
+- **Deny-all** : toute requete qui ne matche aucun scope est refusee avec 403. Le proxy est une allowlist stricte.
+
+- **Body parsing lazy** : le body n'est parse que si au moins un scope de la config contient des body filters ET que la methode est POST/PUT/PATCH. Les GET ne declenchent jamais le parsing du body.
+
+- **Proxy transparent (AC-17)** : remplace le modele gateway precedent. Les anciens AC-10.1/10.2/10.3/10.4 (upstream 401 → 502 `upstream_auth_failed`, upstream 5xx → 502 `upstream_error`, 429 → 429 `rate_limited`) sont **obsoletes**. Les AC-15.3 (messages generiques sur erreurs FGP) restent valides pour les erreurs generees par le proxy uniquement ; les bodies forwardes depuis l'upstream peuvent contenir n'importe quoi, c'est la responsabilite du client et de la cible.
+
+- **Blob v4 (AC-34 a AC-42)** : le champ `auth` accepte un `AuthSpec` structure (`headers`, `scalingo-addon`). Les blobs v2 et v3 restent lus a l'identique. Un AuthSpec `headers` a une seule entree est serialise en forme legacy `header:{name}` et ne bump pas la version.
+
+- **Codes d'erreur d'auth upstream** : `auth_exchange_failed` (502, `scalingo-exchange`) et `auth_addon_failed` (502, `scalingo-addon`) remplacent la remontee en `upstream_unreachable` sur un echec d'obtention de credentials. `upstream_unreachable` reste strictement reserve au `fetch` qui throw pendant le forward. `token_exchange_failed` (401) reste le code des endpoints internes `/api/list-apps` et `/api/list-addons`, il ne se confond avec aucun des deux.
+
+- **Arbitrages du 2026-09-03 repercutes** : multi-addon abandonne au profit du mono-addon (AuthSpec `scalingo-addon` aplati, plus de tableau, plus de `resourceId` dans le blob, code `addon_not_resolved` supprime). AC-35.2 a 35.7, AC-35.18, AC-35.19, AC-36.3 et AC-39.16 sont marques obsoletes plutot que supprimes, pour ne pas decaler la numerotation. Nouveaux AC : AC-35.24 (`resourceId` n'atteint jamais le blob), AC-36.14 a 36.16 (`app_not_found`), AC-37.12 et 37.13 (partage `?c=` en mode addon), AC-38.16 et 38.17 (`empty` vs `too-short`), AC-39.19 a 39.21 (`maxlength` retire, jauge a trois niveaux), AC-41.13 et 41.14 (parite des en-tetes).
+
+- **Copy UI `/logs` a confirmer par le PO** : trois chaines de `docs/specs.md` §14.13 ont ete modifiees dans `src/ui/logs-client.ts` pendant la purge des tirets cadratins (« Body trop volumineux, non stocke », « Blob ou cle invalide : impossible de dechiffrer. », « Dechiffrement impossible : verifiez votre cle »). Les AC-20.x et AC-26.x portent la valeur observee dans le code, mais `specs.md` §14.13 porte encore l'ancienne ponctuation. **Ce n'est pas un alignement valide** : tant que le PO n'a pas tranche et mis a jour §14.13, ces AC assertent une chaine que la spec ne porte pas. A regler avant d'implementer les tests correspondants.
+
+- **Blob v5 (AC-51 a AC-57)** : les `ScopeEntry` acceptent un axe `queryFilters`, opt-in, avec deni par defaut a l'interieur du scope qui le porte. Les blobs v2 a v4 restent lus a l'identique et leur query reste non contrainte. **Aucun de ces AC n'est implemente en test cote feature** : `queryFilters` n'existe pas encore dans `src/`. Seuls AC-52.10 a AC-52.13 sont exerces aujourd'hui, par `tests/testu/middleware/query-occurrences-budget.test.ts`, qui mesure les primitives de matching existantes et sert de garde-fou aux deux paliers.
+
+- **Ces AC sont ecrits contre les arbitrages du 2026-09-04**, pas contre la premiere redaction de `docs/specs.md` §19. Les cinq bloquants et les huit points ouverts de `docs/review/challenge-query-filters-v5.md` ont ete tranches par l'architecte. Trois series en portent la trace directe et **echoueront tant que la spec et le code n'auront pas ete corriges**, ce qui est leur fonction : AC-54.3 et AC-54.8 (la regle `v === 4` de §6.3 doit devenir un plancher de version), AC-53.15 et AC-53.16 (les schemas de `/api/generate` et `/api/share/encode` doivent refuser une cle inconnue au lieu de la stripper en silence), AC-56.6 (le quatrieme message de diagnostic, celui du surnombre d'occurrences, n'existe pas encore dans §12.5). Ce ne sont pas des tests a assouplir.
+
+- **Plafond d'occurrences a deux paliers (AC-52)** : 4 occurrences pour un `queryFilter` dont les valeurs contiennent une `regex` a n'importe quelle profondeur, 64 pour tous les autres, palier decide une fois au dechiffrement. Le 4 est calibre sur le cout mesure d'une evaluation `regex` ; le 64 sur le fait qu'un millier d'evaluations d'un `any` ou d'un `stringwildcard` coute deux ordres de grandeur de moins qu'une seule evaluation `regex`. Le 64 reste a confirmer, AC-52.11 est son garde-fou.
+
+- **Le seul fail-open de la feature est AC-53.5 et AC-53.6** : sous `not`, un `any` non-string n'est pas un filtre mort, c'est un filtre toujours vrai. L'auteur ecrit « exclure la page 1 » et obtient « accepter tout ». Partout ailleurs dans `queryFilters`, une erreur d'ecriture se traduit par un refus. C'est la raison pour laquelle la restriction de `any` aux chaines doit descendre a toute profondeur d'un `and` ou d'un `not`, et pourquoi AC-53.6 doit survivre a la correction : il documente la nature du risque, pas le comportement du produit.
+
+- **Invariant ADR-0006 sur les headers de securite (AC-41.5 a AC-41.8)** : les headers de securite ne sont poses que sur les chemins servis par FGP. Aucune reponse upstream forwardee, mode URL ou mode header, ne doit en porter. Ces quatre AC sont des tests de non-regression : ils doivent echouer si le middleware repasse un jour sur `app.use("*")`.

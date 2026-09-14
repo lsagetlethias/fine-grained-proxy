@@ -244,16 +244,33 @@ export function buildUpstreamUrl(target: URL, proxyPath: string, search: string)
 export async function egressFetch(url: URL, init: RequestInit = {}): Promise<Response> {
   const denial = await assertPublicHost(url.hostname);
   if (denial) throw new EgressError(denial);
-  // redirect manual : sans cela la classification ne vaut rien, un hote public
-  // autorise redirigerait vers l'adresse de metadonnees avec rejeu des en-tetes d'auth.
-  return await fetch(url, { ...init, redirect: "manual" });
+  try {
+    // redirect manual : sans cela la classification ne vaut rien, un hote public
+    // autorise redirigerait vers l'adresse de metadonnees avec rejeu des en-tetes d'auth.
+    return await fetch(url, { ...init, redirect: "manual" });
+  } catch (err) {
+    throw new EgressNetworkError(url, err);
+  }
 }
 
-export class EgressError extends Error {
+// Les deux issues connues du point de sortie, sous un ancetre commun. Un appelant qui n'a
+// pas a les distinguer capte l'ancetre et laisse tout le reste remonter a app.onError : une
+// panne locale cesse alors d'etre presentee comme une panne de l'API cible, ce qui accusait
+// l'amont d'un probleme qui etait chez nous.
+export abstract class EgressFailure extends Error {}
+
+export class EgressError extends EgressFailure {
   readonly denial: EgressDenial;
   constructor(denial: EgressDenial) {
     super(denial.message);
     this.name = "EgressError";
     this.denial = denial;
+  }
+}
+
+export class EgressNetworkError extends EgressFailure {
+  constructor(url: URL, cause: unknown) {
+    super(`Egress fetch failed for ${url.origin}`, { cause });
+    this.name = "EgressNetworkError";
   }
 }

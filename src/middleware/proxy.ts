@@ -4,7 +4,13 @@ import { BlobConfig, BlobPolicyError, decryptBlobWithKey, isExpired } from "../c
 import { checkClientKey } from "../crypto/client-key.ts";
 import { obtainAddonToken, obtainBearerViaExchange } from "../auth/credentials.ts";
 import { isAuthSpec, isScalingoAddonSpec } from "../auth/spec.ts";
-import { assertPublicHost, buildUpstreamUrl, egressFetch, parseTargetUrl } from "../net/egress.ts";
+import {
+  assertPublicHost,
+  buildUpstreamUrl,
+  EgressFailure,
+  egressFetch,
+  parseTargetUrl,
+} from "../net/egress.ts";
 import { checkRequestAccess, type Scope } from "./scopes.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY, FGP_SOURCE_UPSTREAM } from "../constants.ts";
 import { logsEnabled, readLogsConfig } from "../logs/config.ts";
@@ -146,14 +152,12 @@ function stripTransportHeaders(headers: Headers): void {
 
 async function forwardRequest(
   c: Context,
-  config: BlobConfig,
+  target: URL,
   proxyPath: string,
   authHeaders: Headers,
 ): Promise<{ response: Response; decodingDisabled: boolean }> {
   const url = new URL(c.req.url);
-  const parsed = parseTargetUrl(config.target);
-  if ("error" in parsed) throw new Error("Invalid target");
-  const targetUrl = buildUpstreamUrl(parsed.url, proxyPath, url.search);
+  const targetUrl = buildUpstreamUrl(target, proxyPath, url.search);
 
   const headers = new Headers(c.req.raw.headers);
   stripCallerHeaders(headers);
@@ -427,8 +431,12 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
 
   let forwardResult;
   try {
-    forwardResult = await forwardRequest(c, config, proxyPath, authHeaders);
-  } catch {
+    forwardResult = await forwardRequest(c, parsedTarget.url, proxyPath, authHeaders);
+  } catch (err) {
+    // Seules les issues connues du point de sortie donnent un 502 : tout le reste est une
+    // panne locale, qui doit remonter a app.onError et s'y voir, pas se deguiser en API
+    // cible injoignable.
+    if (!(err instanceof EgressFailure)) throw err;
     return await finishWithCapture(
       c,
       config,

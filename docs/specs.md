@@ -650,6 +650,8 @@ Les endpoints internes du proxy qui tapent eux-mêmes des APIs externes (ex : `P
 - Échec réseau (fetch throw) → 502 `upstream_unreachable` + `X-FGP-Source: proxy`.
 - Échec d'exchange token (pour `list-apps` et `list-addons`) → 401 `token_exchange_failed` + `X-FGP-Source: proxy`.
 
+**`upstream_unreachable` est strictement réservé à un échec réseau réel sur l'appel sortant.** Une panne strictement locale au proxy (une lecture d'environnement refusée par l'hôte, par exemple) qui survient dans le même bloc de code n'est pas un échec de l'API cible et ne doit jamais se présenter comme tel : elle remonte au handler d'erreur global et sort en 500 `internal_error` (§8.2). Un outil qui confondrait les deux accuserait l'amont d'un problème qui est chez FGP, ce qui est exactement l'incident de production que ce paragraphe documente.
+
 Quatre codes supplémentaires apparaissent sur ces endpoints. Trois leur sont propres, ils n'existent pas sur la route proxy. `payload_too_large` vit sur les deux surfaces, avec un plafond différent de chaque côté (§18.5) :
 
 | Status | Code | Endpoint | Condition |

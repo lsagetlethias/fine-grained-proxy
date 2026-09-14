@@ -4,6 +4,8 @@
 
 - Correction : sur les instances Scalingo, toute requête proxy répondait `500 internal_error`. Deux variables d'environnement manquaient à l'autorisation de lecture du `Procfile`, et une lecture non autorisée ne rend pas une absence, elle échoue
 - Une variable d'environnement optionnelle absente retombe sur son défaut sûr, y compris quand l'hébergeur en refuse la lecture : la classification des destinations reste active et `X-Forwarded-For` reste ignoré
+- Correction : le testeur de scopes de l'interface annonçait « API cible injoignable » pour une panne interne de FGP. Il n'accuse plus votre API tant que la requête n'a pas réellement échoué à sortir
+- Correction : les helpers Scalingo « lister les applications » et « lister les bases » ne répondent plus `upstream_unreachable` sur un incident qui n'a rien à voir avec Scalingo
 
 ## 6 septembre 2026
 
