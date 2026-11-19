@@ -9,22 +9,12 @@
     "code-review": {
       "source": "coderabbitai/skills",
       "sourceType": "github",
-      "computedHash": "7f793b91a34e2222e54572de0f8c52abdda222d4e06c1cd4ae959117c1c976e2"
-    },
-    "deno-expert": {
-      "source": "denoland/skills",
-      "sourceType": "github",
-      "computedHash": "076e8159d319521cbe8cf6181c9ce969545fc5f77ee05caee4517b3010583343"
-    },
-    "deno-guidance": {
-      "source": "denoland/skills",
-      "sourceType": "github",
-      "computedHash": "e392e0bca86d57f4798b4c1d54b9e1405a5d9cc3d6b04fcc6fdc7a119d14e652"
+      "computedHash": "a331adf0b097d38774469bd068d897ee944022f69a5bf628cbb3652836c0e7e3"
     },
     "typescript-e2e-testing": {
       "source": "bmad-labs/skills",
       "sourceType": "github",
-      "computedHash": "7077a0a19bd5625dc3033db4cfa8260a13d882949ce04ca78b10610a6e4f3548"
+      "computedHash": "3ef3d67ee5d87882574cdeb45f4daf76875576551c23508fc8d62e36a6af0429"
     }
   }
 }

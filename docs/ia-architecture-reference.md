@@ -217,15 +217,15 @@ Revue des commentaires de PR :
 
 ## 6. Skills marketplace installés
 
-La source de vérité est `skills-lock.json` à la racine du dépôt. Les cinq skills installés au moment de la rédaction :
+La source de vérité est `skills-lock.json` à la racine du dépôt. Les trois skills installés au moment de la rédaction :
 
 | Skill | Source | Usage |
 |-------|--------|-------|
-| `deno-expert` | `denoland/skills` | Expertise Deno avancée, review et debug |
-| `deno-guidance` | `denoland/skills` | Démarrage Deno, choix de packages, `deno.json` |
 | `typescript-e2e-testing` | `bmad-labs/skills` | Tests e2e TypeScript |
 | `code-review` | `coderabbitai/skills` | Review de code IA |
 | `architecture-decision` | `jwynia/agent-skills` | ADR systématique |
+
+`deno-expert` et `deno-guidance` ont été retirés avec la migration vers Node (ADR-0011). Aucun skill d'expertise runtime ne les remplace : il n'y en a pas d'équivalent officiel côté Node, et en inventer un dans ce tableau donnerait une fausse piste.
 
 Pour vérifier ce qui est réellement installé, lire `skills-lock.json` plutôt que ce tableau : la liste ci-dessus peut prendre du retard.
 
@@ -569,7 +569,7 @@ Quand un hook de gating déclenche, la bonne réaction est de corriger le proces
 
 ```bash
 # 1. Init
-git init && deno init
+git init && pnpm init
 
 # 2. CLAUDE.md
 # Copier la section "First things first" et adapter projet, stack, scripts.
@@ -593,8 +593,6 @@ mkdir -p .claude/skills/{verif,add-tests,sync-docs,check-review-pr}
 # Copier les SKILL.md depuis le template et adapter les commandes au runtime.
 
 # 6. Skills marketplace
-skills add denoland/skills@deno-expert -y
-skills add denoland/skills@deno-guidance -y
 skills add bmad-labs/skills@typescript-e2e-testing -y
 skills add coderabbitai/skills@code-review -y
 skills add jwynia/agent-skills@architecture-decision -y

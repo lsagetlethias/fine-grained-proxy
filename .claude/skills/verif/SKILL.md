@@ -12,17 +12,17 @@ Effectue les vérifications suivantes dans l'ordre :
 Lance les commandes suivantes :
 
 ```bash
-deno task lint
-deno task fmt:check
-deno task check
+pnpm run lint
+pnpm run fmt:check
+pnpm run check
 ```
 
 Si des erreurs de lint persistent, corrige-les manuellement.
-Si le formatage est incorrect, lance `deno task fmt` puis re-vérifie.
+Si le formatage est incorrect, lance `pnpm run fmt` puis re-vérifie.
 
 ## 2. Tests
 
-Lance `deno task test` pour vérifier que tous les tests passent.
+Lance `pnpm run test` pour vérifier que tous les tests passent.
 
 Si des tests échouent, analyse si le problème vient du test ou de l'implémentation.
 

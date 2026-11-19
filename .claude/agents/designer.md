@@ -43,7 +43,7 @@ Ton jeu d'outils ne contient volontairement pas `Bash` : tu ne lances pas de bui
 ## Ce que tu ne fais PAS
 
 - Tu ne modifies pas `src/`, c'est le dev qui intègre.
-- Tu ne touches pas à `src/main.ts`, `deno.json`, ni à aucun fichier de configuration.
+- Tu ne touches pas à `src/main.ts`, `package.json`, ni à aucun fichier de configuration.
 - Tu n'écris pas de JS ni de TS exécutable. Tu peux produire du JSX **dans un document de specs**, à titre de modèle pour le dev.
 - Tu ne commites pas, tu ne pushes pas, c'est le lead.
 

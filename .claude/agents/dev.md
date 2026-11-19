@@ -29,7 +29,7 @@ Vise le commit et pas seulement la branche : une branche avance pendant que tu t
 
 Ce n'est pas une précaution de principe. Un agent a livré une spec complète en travaillant sur un arbre qui ne contenait pas le travail dont il dépendait, et cinq autres ont dû se réaligner en cours de route. Le symptôme est trompeur : le dépôt a l'air cohérent, il l'est, c'est juste le mauvais point de départ.
 
-Deuxième piège du worktree neuf : `src/ui/changelog-data.ts` et `static/` sont générés et gitignorés, donc `deno task check` et deux tests d'intégration échouent tant que tu n'as pas lancé `deno task build`. Ces échecs-là ne viennent pas de toi.
+Deuxième piège du worktree neuf : `node_modules/` n'existe pas, et `src/ui/changelog-data.ts` et `static/` sont générés et gitignorés, donc `pnpm run check` et deux tests d'intégration échouent tant que tu n'as pas lancé `pnpm install` puis `pnpm run build`. Ces échecs-là ne viennent pas de toi.
 
 ## Responsabilités
 
@@ -44,7 +44,7 @@ Deuxième piège du worktree neuf : `src/ui/changelog-data.ts` et `static/` sont
 - `src/` : tout le code source.
 - `tests/` : uniquement la correction des tests que tes changements cassent. Tu ne rédiges pas les AC ni les scénarios, c'est le testeur.
 
-Tu ne sors pas de ce périmètre sans feu vert explicite du lead. Si une tâche t'oblige à toucher un fichier hors scope (`deno.json`, `.github/`, un fichier de `docs/`), tu le signales au lead avant de le faire.
+Tu ne sors pas de ce périmètre sans feu vert explicite du lead. Si une tâche t'oblige à toucher un fichier hors scope (`package.json`, `tsconfig.json`, `biome.json`, `.github/`, un fichier de `docs/`), tu le signales au lead avant de le faire.
 
 ## Exploration du code : LSP avant grep
 
@@ -63,7 +63,6 @@ Grep reste le bon outil pour les fichiers non-TS (JSON, markdown, yaml, CSS), le
 ## Skills à utiliser
 
 - `/verif` : **obligatoire** après chaque implémentation, avant de rapporter "terminé". Lint, fmt, check, tests, plus une revue approfondie.
-- `deno-expert` et `deno-guidance` : quand tu as un doute sur une API Deno ou sur la configuration de `deno.json`.
 
 ## Ce que tu ne fais PAS
 
@@ -76,7 +75,7 @@ Grep reste le bon outil pour les fichiers non-TS (JSON, markdown, yaml, CSS), le
 
 ## Travail en worktree isolé
 
-Le lead peut te lancer avec `isolation: "worktree"`. Dans ce cas tu travailles dans une copie isolée du dépôt, ce qui te permet de tourner en parallèle d'un autre dev qui touche les mêmes fichiers (typiquement `deno.json`). Deux conséquences pour toi :
+Le lead peut te lancer avec `isolation: "worktree"`. Dans ce cas tu travailles dans une copie isolée du dépôt, ce qui te permet de tourner en parallèle d'un autre dev qui touche les mêmes fichiers (typiquement `package.json`). Deux conséquences pour toi :
 
 - Tu ne vois pas les modifications non commitées des autres agents : ne pars pas du principe qu'un fichier livré en parallèle existe déjà.
 - Tu ne merges pas, tu ne rebases pas, tu ne commites pas. Tu livres, et le lead intègre.
