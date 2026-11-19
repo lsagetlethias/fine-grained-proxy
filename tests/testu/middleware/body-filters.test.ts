@@ -1,5 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals } from "../../_assert.ts";
 import {
   type BodyFilter,
   checkAccess,
@@ -9,7 +10,7 @@ import {
 
 // --- matchBodyFilter ---
 
-Deno.test("AC-5.1: matchBodyFilter: exact match with type any", () => {
+test("AC-5.1: matchBodyFilter: exact match with type any", () => {
   const filter: BodyFilter = {
     objectPath: "name",
     objectValue: [{ type: "any", value: "hello" }],
@@ -18,7 +19,7 @@ Deno.test("AC-5.1: matchBodyFilter: exact match with type any", () => {
   assertEquals(matchBodyFilter(filter, { name: "world" }), false);
 });
 
-Deno.test("matchBodyFilter: exact match number", () => {
+test("matchBodyFilter: exact match number", () => {
   const filter: BodyFilter = {
     objectPath: "count",
     objectValue: [{ type: "any", value: 42 }],
@@ -27,7 +28,7 @@ Deno.test("matchBodyFilter: exact match number", () => {
   assertEquals(matchBodyFilter(filter, { count: 43 }), false);
 });
 
-Deno.test("matchBodyFilter: exact match boolean", () => {
+test("matchBodyFilter: exact match boolean", () => {
   const filter: BodyFilter = {
     objectPath: "active",
     objectValue: [{ type: "any", value: true }],
@@ -36,7 +37,7 @@ Deno.test("matchBodyFilter: exact match boolean", () => {
   assertEquals(matchBodyFilter(filter, { active: false }), false);
 });
 
-Deno.test("matchBodyFilter: exact match null", () => {
+test("matchBodyFilter: exact match null", () => {
   const filter: BodyFilter = {
     objectPath: "data",
     objectValue: [{ type: "any", value: null }],
@@ -45,7 +46,7 @@ Deno.test("matchBodyFilter: exact match null", () => {
   assertEquals(matchBodyFilter(filter, { data: "something" }), false);
 });
 
-Deno.test("AC-5.4: matchBodyFilter: wildcard, field exists", () => {
+test("AC-5.4: matchBodyFilter: wildcard, field exists", () => {
   const filter: BodyFilter = {
     objectPath: "name",
     objectValue: [{ type: "wildcard" }],
@@ -56,7 +57,7 @@ Deno.test("AC-5.4: matchBodyFilter: wildcard, field exists", () => {
   assertEquals(matchBodyFilter(filter, { name: false }), true);
 });
 
-Deno.test("AC-5.3: matchBodyFilter: wildcard, field absent returns false", () => {
+test("AC-5.3: matchBodyFilter: wildcard, field absent returns false", () => {
   const filter: BodyFilter = {
     objectPath: "missing",
     objectValue: [{ type: "wildcard" }],
@@ -64,7 +65,7 @@ Deno.test("AC-5.3: matchBodyFilter: wildcard, field absent returns false", () =>
   assertEquals(matchBodyFilter(filter, { other: "value" }), false);
 });
 
-Deno.test("AC-5.5: matchBodyFilter: stringwildcard with glob pattern", () => {
+test("AC-5.5: matchBodyFilter: stringwildcard with glob pattern", () => {
   const filter: BodyFilter = {
     objectPath: "branch",
     objectValue: [{ type: "stringwildcard", value: "release/*" }],
@@ -75,7 +76,7 @@ Deno.test("AC-5.5: matchBodyFilter: stringwildcard with glob pattern", () => {
   assertEquals(matchBodyFilter(filter, { branch: 42 }), false);
 });
 
-Deno.test("matchBodyFilter: stringwildcard exact match (no glob)", () => {
+test("matchBodyFilter: stringwildcard exact match (no glob)", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "stringwildcard", value: "main" }],
@@ -84,7 +85,7 @@ Deno.test("matchBodyFilter: stringwildcard exact match (no glob)", () => {
   assertEquals(matchBodyFilter(filter, { ref: "develop" }), false);
 });
 
-Deno.test("AC-5.7: matchBodyFilter: OR implicite, au moins un objectValue matche", () => {
+test("AC-5.7: matchBodyFilter: OR implicite, au moins un objectValue matche", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [
@@ -99,7 +100,7 @@ Deno.test("AC-5.7: matchBodyFilter: OR implicite, au moins un objectValue matche
   assertEquals(matchBodyFilter(filter, { ref: "develop" }), false);
 });
 
-Deno.test("matchBodyFilter: and, all sub-values must match", () => {
+test("matchBodyFilter: and, all sub-values must match", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [
@@ -117,37 +118,25 @@ Deno.test("matchBodyFilter: and, all sub-values must match", () => {
   assertEquals(matchBodyFilter(filter, { ref: "main/stable" }), false);
 });
 
-Deno.test("AC-5.10: matchBodyFilter: dot-path nested object traversal", () => {
+test("AC-5.10: matchBodyFilter: dot-path nested object traversal", () => {
   const filter: BodyFilter = {
     objectPath: "deployment.git_ref",
     objectValue: [{ type: "any", value: "main" }],
   };
-  assertEquals(
-    matchBodyFilter(filter, { deployment: { git_ref: "main" } }),
-    true,
-  );
-  assertEquals(
-    matchBodyFilter(filter, { deployment: { git_ref: "develop" } }),
-    false,
-  );
+  assertEquals(matchBodyFilter(filter, { deployment: { git_ref: "main" } }), true);
+  assertEquals(matchBodyFilter(filter, { deployment: { git_ref: "develop" } }), false);
 });
 
-Deno.test("matchBodyFilter: deeply nested dot-path", () => {
+test("matchBodyFilter: deeply nested dot-path", () => {
   const filter: BodyFilter = {
     objectPath: "a.b.c.d",
     objectValue: [{ type: "any", value: 1 }],
   };
-  assertEquals(
-    matchBodyFilter(filter, { a: { b: { c: { d: 1 } } } }),
-    true,
-  );
-  assertEquals(
-    matchBodyFilter(filter, { a: { b: { c: { d: 2 } } } }),
-    false,
-  );
+  assertEquals(matchBodyFilter(filter, { a: { b: { c: { d: 1 } } } }), true);
+  assertEquals(matchBodyFilter(filter, { a: { b: { c: { d: 2 } } } }), false);
 });
 
-Deno.test("matchBodyFilter: absent field returns false", () => {
+test("matchBodyFilter: absent field returns false", () => {
   const filter: BodyFilter = {
     objectPath: "deployment.git_ref",
     objectValue: [{ type: "wildcard" }],
@@ -157,7 +146,7 @@ Deno.test("matchBodyFilter: absent field returns false", () => {
   assertEquals(matchBodyFilter(filter, { other: "value" }), false);
 });
 
-Deno.test("matchBodyFilter: body is null or not an object", () => {
+test("matchBodyFilter: body is null or not an object", () => {
   const filter: BodyFilter = {
     objectPath: "field",
     objectValue: [{ type: "wildcard" }],
@@ -167,7 +156,7 @@ Deno.test("matchBodyFilter: body is null or not an object", () => {
   assertEquals(matchBodyFilter(filter, 42), false);
 });
 
-Deno.test("matchBodyFilter: unknown type defaults to deny", () => {
+test("matchBodyFilter: unknown type defaults to deny", () => {
   const filter: BodyFilter = {
     objectPath: "field",
     objectValue: [{ type: "unknown_type" as "any", value: ".*" }],
@@ -177,7 +166,7 @@ Deno.test("matchBodyFilter: unknown type defaults to deny", () => {
 
 // --- regex ---
 
-Deno.test("AC-5.17: matchBodyFilter: regex simple match, evaluation ancree", () => {
+test("AC-5.17: matchBodyFilter: regex simple match, evaluation ancree", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "regex", value: "^release\\/v\\d+" }],
@@ -196,7 +185,7 @@ Deno.test("AC-5.17: matchBodyFilter: regex simple match, evaluation ancree", () 
   assertEquals(matchBodyFilter(prefixe, { ref: "release/v2.0.1" }), true);
 });
 
-Deno.test("AC-5.17 bis: l'ancrage ferme le contournement de scope par sous-chaine", () => {
+test("AC-5.17 bis: l'ancrage ferme le contournement de scope par sous-chaine", () => {
   // Avant l'ancrage, ce filtre autorisait « not-main-at-all » : un predicat de permission
   // qui matche en sous-chaine est un contournement de scope qui attend son heure.
   const filter: BodyFilter = {
@@ -207,7 +196,7 @@ Deno.test("AC-5.17 bis: l'ancrage ferme le contournement de scope par sous-chain
   assertEquals(matchBodyFilter(filter, { ref: "not-main-at-all" }), false);
 });
 
-Deno.test("AC-5.17 ter: une valeur de plus de 128 caracteres n'est plus testee", () => {
+test("AC-5.17 ter: une valeur de plus de 128 caracteres n'est plus testee", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "regex", value: "^a*$" }],
@@ -216,7 +205,7 @@ Deno.test("AC-5.17 ter: une valeur de plus de 128 caracteres n'est plus testee",
   assertEquals(matchBodyFilter(filter, { ref: "a".repeat(129) }), false);
 });
 
-Deno.test("AC-5.18: matchBodyFilter: regex does not match", () => {
+test("AC-5.18: matchBodyFilter: regex does not match", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "regex", value: "^hotfix-" }],
@@ -225,7 +214,7 @@ Deno.test("AC-5.18: matchBodyFilter: regex does not match", () => {
   assertEquals(matchBodyFilter(filter, { ref: "main" }), false);
 });
 
-Deno.test("matchBodyFilter: regex on non-string value returns false", () => {
+test("matchBodyFilter: regex on non-string value returns false", () => {
   const filter: BodyFilter = {
     objectPath: "count",
     objectValue: [{ type: "regex", value: "\\d+" }],
@@ -236,7 +225,7 @@ Deno.test("matchBodyFilter: regex on non-string value returns false", () => {
   assertEquals(matchBodyFilter(filter, { count: [1, 2] }), false);
 });
 
-Deno.test("matchBodyFilter: invalid regex does not crash, returns false", () => {
+test("matchBodyFilter: invalid regex does not crash, returns false", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "regex", value: "[invalid(" }],
@@ -246,15 +235,13 @@ Deno.test("matchBodyFilter: invalid regex does not crash, returns false", () => 
 
 // --- checkAccess with ScopeEntry ---
 
-Deno.test("AC-4.1: checkAccess: ScopeEntry without bodyFilters matches method + path", () => {
-  const scopes: Scope[] = [
-    { methods: ["GET"], pattern: "/v1/apps/*" },
-  ];
+test("AC-4.1: checkAccess: ScopeEntry without bodyFilters matches method + path", () => {
+  const scopes: Scope[] = [{ methods: ["GET"], pattern: "/v1/apps/*" }];
   assertEquals(checkAccess(scopes, "GET", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(scopes, "POST", "/v1/apps/my-app"), false);
 });
 
-Deno.test("AC-5.1: checkAccess: ScopeEntry with bodyFilters, body matches", () => {
+test("AC-5.1: checkAccess: ScopeEntry with bodyFilters, body matches", () => {
   const scopes: Scope[] = [
     {
       methods: ["POST"],
@@ -284,7 +271,7 @@ Deno.test("AC-5.1: checkAccess: ScopeEntry with bodyFilters, body matches", () =
   );
 });
 
-Deno.test("AC-5.8: checkAccess: ScopeEntry with bodyFilters AND, all filters must match", () => {
+test("AC-5.8: checkAccess: ScopeEntry with bodyFilters AND, all filters must match", () => {
   const scopes: Scope[] = [
     {
       methods: ["POST"],
@@ -315,7 +302,7 @@ Deno.test("AC-5.8: checkAccess: ScopeEntry with bodyFilters AND, all filters mus
   );
 });
 
-Deno.test("AC-5.21: checkAccess: ScopeEntry with bodyFilters, no body provided returns false", () => {
+test("AC-5.21: checkAccess: ScopeEntry with bodyFilters, no body provided returns false", () => {
   const scopes: Scope[] = [
     {
       methods: ["POST"],
@@ -328,21 +315,16 @@ Deno.test("AC-5.21: checkAccess: ScopeEntry with bodyFilters, no body provided r
       ],
     },
   ];
-  assertEquals(
-    checkAccess(scopes, "POST", "/v1/apps/my-app/deployments"),
-    false,
-  );
+  assertEquals(checkAccess(scopes, "POST", "/v1/apps/my-app/deployments"), false);
 });
 
-Deno.test("checkAccess: ScopeEntry wildcard method", () => {
-  const scopes: Scope[] = [
-    { methods: ["*"], pattern: "/v1/apps/*" },
-  ];
+test("checkAccess: ScopeEntry wildcard method", () => {
+  const scopes: Scope[] = [{ methods: ["*"], pattern: "/v1/apps/*" }];
   assertEquals(checkAccess(scopes, "GET", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(scopes, "DELETE", "/v1/apps/my-app"), true);
 });
 
-Deno.test("AC-4.4: checkAccess: mixed string + ScopeEntry scopes", () => {
+test("AC-4.4: checkAccess: mixed string + ScopeEntry scopes", () => {
   const scopes: Scope[] = [
     "GET:/v1/apps/*",
     {
@@ -373,17 +355,15 @@ Deno.test("AC-4.4: checkAccess: mixed string + ScopeEntry scopes", () => {
 
 // --- backward compat ---
 
-Deno.test("checkAccess: string scopes backward compat (unchanged behavior)", () => {
+test("checkAccess: string scopes backward compat (unchanged behavior)", () => {
   assertEquals(checkAccess(["GET:/v1/apps/*"], "GET", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(["GET:/v1/apps/*"], "POST", "/v1/apps/my-app"), false);
   assertEquals(checkAccess(["*:*"], "DELETE", "/anything"), true);
   assertEquals(checkAccess([], "GET", "/v1/apps"), false);
 });
 
-Deno.test("AC-4.3: checkAccess: ScopeEntry multiple methods", () => {
-  const scopes: Scope[] = [
-    { methods: ["GET", "POST"], pattern: "/v1/apps/*" },
-  ];
+test("AC-4.3: checkAccess: ScopeEntry multiple methods", () => {
+  const scopes: Scope[] = [{ methods: ["GET", "POST"], pattern: "/v1/apps/*" }];
   assertEquals(checkAccess(scopes, "GET", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(scopes, "POST", "/v1/apps/my-app"), true);
   assertEquals(checkAccess(scopes, "DELETE", "/v1/apps/my-app"), false);
@@ -391,41 +371,26 @@ Deno.test("AC-4.3: checkAccess: ScopeEntry multiple methods", () => {
 
 // --- Dot-path edge cases ---
 
-Deno.test("matchBodyFilter: 3+ levels deep nested path", () => {
+test("matchBodyFilter: 3+ levels deep nested path", () => {
   const filter: BodyFilter = {
     objectPath: "a.b.c.d.e",
     objectValue: [{ type: "any", value: "deep" }],
   };
-  assertEquals(
-    matchBodyFilter(filter, { a: { b: { c: { d: { e: "deep" } } } } }),
-    true,
-  );
-  assertEquals(
-    matchBodyFilter(filter, { a: { b: { c: { d: { e: "nope" } } } } }),
-    false,
-  );
+  assertEquals(matchBodyFilter(filter, { a: { b: { c: { d: { e: "deep" } } } } }), true);
+  assertEquals(matchBodyFilter(filter, { a: { b: { c: { d: { e: "nope" } } } } }), false);
 });
 
-Deno.test("matchBodyFilter: dot-path through array index", () => {
+test("matchBodyFilter: dot-path through array index", () => {
   const filter: BodyFilter = {
     objectPath: "items.0.name",
     objectValue: [{ type: "any", value: "first" }],
   };
-  assertEquals(
-    matchBodyFilter(filter, { items: [{ name: "first" }] }),
-    true,
-  );
-  assertEquals(
-    matchBodyFilter(filter, { items: { "0": { name: "first" } } }),
-    true,
-  );
-  assertEquals(
-    matchBodyFilter(filter, { items: [{ name: "second" }] }),
-    false,
-  );
+  assertEquals(matchBodyFilter(filter, { items: [{ name: "first" }] }), true);
+  assertEquals(matchBodyFilter(filter, { items: { "0": { name: "first" } } }), true);
+  assertEquals(matchBodyFilter(filter, { items: [{ name: "second" }] }), false);
 });
 
-Deno.test("matchBodyFilter: intermediate level is null", () => {
+test("matchBodyFilter: intermediate level is null", () => {
   const filter: BodyFilter = {
     objectPath: "a.b.c",
     objectValue: [{ type: "wildcard" }],
@@ -433,7 +398,7 @@ Deno.test("matchBodyFilter: intermediate level is null", () => {
   assertEquals(matchBodyFilter(filter, { a: { b: null } }), false);
 });
 
-Deno.test("matchBodyFilter: intermediate level is primitive", () => {
+test("matchBodyFilter: intermediate level is primitive", () => {
   const filter: BodyFilter = {
     objectPath: "a.b.c",
     objectValue: [{ type: "wildcard" }],
@@ -443,7 +408,7 @@ Deno.test("matchBodyFilter: intermediate level is primitive", () => {
   assertEquals(matchBodyFilter(filter, { a: { b: true } }), false);
 });
 
-Deno.test("matchBodyFilter: intermediate level is absent", () => {
+test("matchBodyFilter: intermediate level is absent", () => {
   const filter: BodyFilter = {
     objectPath: "a.b.c",
     objectValue: [{ type: "wildcard" }],
@@ -454,7 +419,7 @@ Deno.test("matchBodyFilter: intermediate level is absent", () => {
 
 // --- ObjectValue edge cases ---
 
-Deno.test("matchBodyFilter: and with single element", () => {
+test("matchBodyFilter: and with single element", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [
@@ -468,17 +433,15 @@ Deno.test("matchBodyFilter: and with single element", () => {
   assertEquals(matchBodyFilter(filter, { ref: "main" }), false);
 });
 
-Deno.test("matchBodyFilter: and with empty array, always true (vacuous truth)", () => {
+test("matchBodyFilter: and with empty array, always true (vacuous truth)", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
-    objectValue: [
-      { type: "and", value: [] },
-    ],
+    objectValue: [{ type: "and", value: [] }],
   };
   assertEquals(matchBodyFilter(filter, { ref: "anything" }), true);
 });
 
-Deno.test("matchBodyFilter: stringwildcard on number value returns false", () => {
+test("matchBodyFilter: stringwildcard on number value returns false", () => {
   const filter: BodyFilter = {
     objectPath: "count",
     objectValue: [{ type: "stringwildcard", value: "42*" }],
@@ -487,7 +450,7 @@ Deno.test("matchBodyFilter: stringwildcard on number value returns false", () =>
   assertEquals(matchBodyFilter(filter, { count: 420 }), false);
 });
 
-Deno.test("matchBodyFilter: stringwildcard on boolean value returns false", () => {
+test("matchBodyFilter: stringwildcard on boolean value returns false", () => {
   const filter: BodyFilter = {
     objectPath: "active",
     objectValue: [{ type: "stringwildcard", value: "true" }],
@@ -495,7 +458,7 @@ Deno.test("matchBodyFilter: stringwildcard on boolean value returns false", () =
   assertEquals(matchBodyFilter(filter, { active: true }), false);
 });
 
-Deno.test("matchBodyFilter: stringwildcard on null value returns false", () => {
+test("matchBodyFilter: stringwildcard on null value returns false", () => {
   const filter: BodyFilter = {
     objectPath: "data",
     objectValue: [{ type: "stringwildcard", value: "*" }],
@@ -503,7 +466,7 @@ Deno.test("matchBodyFilter: stringwildcard on null value returns false", () => {
   assertEquals(matchBodyFilter(filter, { data: null }), false);
 });
 
-Deno.test("matchBodyFilter: stringwildcard on array value returns false", () => {
+test("matchBodyFilter: stringwildcard on array value returns false", () => {
   const filter: BodyFilter = {
     objectPath: "tags",
     objectValue: [{ type: "stringwildcard", value: "*" }],
@@ -511,7 +474,7 @@ Deno.test("matchBodyFilter: stringwildcard on array value returns false", () => 
   assertEquals(matchBodyFilter(filter, { tags: ["a", "b"] }), false);
 });
 
-Deno.test("matchBodyFilter: any with null as expected value", () => {
+test("matchBodyFilter: any with null as expected value", () => {
   const filter: BodyFilter = {
     objectPath: "field",
     objectValue: [{ type: "any", value: null }],
@@ -523,7 +486,7 @@ Deno.test("matchBodyFilter: any with null as expected value", () => {
   assertEquals(matchBodyFilter(filter, { field: false }), false);
 });
 
-Deno.test("matchBodyFilter: any with boolean values", () => {
+test("matchBodyFilter: any with boolean values", () => {
   const filter: BodyFilter = {
     objectPath: "flag",
     objectValue: [{ type: "any", value: true }],
@@ -534,7 +497,7 @@ Deno.test("matchBodyFilter: any with boolean values", () => {
   assertEquals(matchBodyFilter(filter, { flag: "true" }), false);
 });
 
-Deno.test("matchBodyFilter: any with array as value, deep equality", () => {
+test("matchBodyFilter: any with array as value, deep equality", () => {
   const filter: BodyFilter = {
     objectPath: "tags",
     objectValue: [{ type: "any", value: ["a", "b"] }],
@@ -545,22 +508,19 @@ Deno.test("matchBodyFilter: any with array as value, deep equality", () => {
   assertEquals(matchBodyFilter(filter, { tags: "a,b" }), false);
 });
 
-Deno.test("matchBodyFilter: any with nested object as value, deep equality", () => {
+test("matchBodyFilter: any with nested object as value, deep equality", () => {
   const filter: BodyFilter = {
     objectPath: "config",
     objectValue: [{ type: "any", value: { key: "val" } }],
   };
   assertEquals(matchBodyFilter(filter, { config: { key: "val" } }), true);
-  assertEquals(
-    matchBodyFilter(filter, { config: { key: "val", extra: true } }),
-    false,
-  );
+  assertEquals(matchBodyFilter(filter, { config: { key: "val", extra: true } }), false);
   assertEquals(matchBodyFilter(filter, { config: {} }), false);
 });
 
 // --- Body edge cases ---
 
-Deno.test("matchBodyFilter: empty object body, field absent", () => {
+test("matchBodyFilter: empty object body, field absent", () => {
   const filter: BodyFilter = {
     objectPath: "name",
     objectValue: [{ type: "wildcard" }],
@@ -568,7 +528,7 @@ Deno.test("matchBodyFilter: empty object body, field absent", () => {
   assertEquals(matchBodyFilter(filter, {}), false);
 });
 
-Deno.test("matchBodyFilter: body is an array (not object)", () => {
+test("matchBodyFilter: body is an array (not object)", () => {
   const filter: BodyFilter = {
     objectPath: "0",
     objectValue: [{ type: "wildcard" }],
@@ -576,7 +536,7 @@ Deno.test("matchBodyFilter: body is an array (not object)", () => {
   assertEquals(matchBodyFilter(filter, [1, 2, 3]), true);
 });
 
-Deno.test("matchBodyFilter: body is an array, dot-path through it", () => {
+test("matchBodyFilter: body is an array, dot-path through it", () => {
   const filter: BodyFilter = {
     objectPath: "0.name",
     objectValue: [{ type: "any", value: "first" }],
@@ -585,18 +545,15 @@ Deno.test("matchBodyFilter: body is an array, dot-path through it", () => {
   assertEquals(matchBodyFilter(filter, [{ name: "second" }]), false);
 });
 
-Deno.test("matchBodyFilter: extra fields in body are ignored", () => {
+test("matchBodyFilter: extra fields in body are ignored", () => {
   const filter: BodyFilter = {
     objectPath: "name",
     objectValue: [{ type: "any", value: "hello" }],
   };
-  assertEquals(
-    matchBodyFilter(filter, { name: "hello", extra: "ignored", more: 123 }),
-    true,
-  );
+  assertEquals(matchBodyFilter(filter, { name: "hello", extra: "ignored", more: 123 }), true);
 });
 
-Deno.test("checkAccess: body = {} with bodyFilters on nested field → false", () => {
+test("checkAccess: body = {} with bodyFilters on nested field → false", () => {
   const scopes: Scope[] = [
     {
       methods: ["POST"],
@@ -612,7 +569,7 @@ Deno.test("checkAccess: body = {} with bodyFilters on nested field → false", (
   assertEquals(checkAccess(scopes, "POST", "/v1/test", {}), false);
 });
 
-Deno.test("checkAccess: body = null with bodyFilters → false", () => {
+test("checkAccess: body = null with bodyFilters → false", () => {
   const scopes: Scope[] = [
     {
       methods: ["POST"],
@@ -630,7 +587,7 @@ Deno.test("checkAccess: body = null with bodyFilters → false", () => {
 
 // --- Mixed scopes: string + ScopeEntry interaction ---
 
-Deno.test("checkAccess: string scope matches → ScopeEntry bodyFilter irrelevant", () => {
+test("checkAccess: string scope matches → ScopeEntry bodyFilter irrelevant", () => {
   const scopes: Scope[] = [
     "POST:/v1/apps/my-app/deployments",
     {
@@ -652,7 +609,7 @@ Deno.test("checkAccess: string scope matches → ScopeEntry bodyFilter irrelevan
   );
 });
 
-Deno.test("checkAccess: string scope doesn't match method → falls through to ScopeEntry", () => {
+test("checkAccess: string scope doesn't match method → falls through to ScopeEntry", () => {
   const scopes: Scope[] = [
     "GET:/v1/apps/my-app/deployments",
     {
@@ -682,7 +639,7 @@ Deno.test("checkAccess: string scope doesn't match method → falls through to S
 
 // --- Backward compat: v2 string scopes + body argument ---
 
-Deno.test("checkAccess: string scopes ignore body argument entirely", () => {
+test("checkAccess: string scopes ignore body argument entirely", () => {
   const scopes: Scope[] = ["POST:/v1/apps/*"];
   assertEquals(
     checkAccess(scopes, "POST", "/v1/apps/my-app", {
@@ -690,27 +647,19 @@ Deno.test("checkAccess: string scopes ignore body argument entirely", () => {
     }),
     true,
   );
-  assertEquals(
-    checkAccess(scopes, "POST", "/v1/apps/my-app", null),
-    true,
-  );
-  assertEquals(
-    checkAccess(scopes, "POST", "/v1/apps/my-app", {}),
-    true,
-  );
+  assertEquals(checkAccess(scopes, "POST", "/v1/apps/my-app", null), true);
+  assertEquals(checkAccess(scopes, "POST", "/v1/apps/my-app", {}), true);
 });
 
-Deno.test("checkAccess: empty bodyFilters array → no body check needed", () => {
-  const scopes: Scope[] = [
-    { methods: ["POST"], pattern: "/v1/test", bodyFilters: [] },
-  ];
+test("checkAccess: empty bodyFilters array → no body check needed", () => {
+  const scopes: Scope[] = [{ methods: ["POST"], pattern: "/v1/test", bodyFilters: [] }];
   assertEquals(checkAccess(scopes, "POST", "/v1/test"), true);
   assertEquals(checkAccess(scopes, "POST", "/v1/test", { anything: true }), true);
 });
 
 // --- OR + AND composition edge cases ---
 
-Deno.test("matchBodyFilter: OR with mixed types, first any matches, rest ignored", () => {
+test("matchBodyFilter: OR with mixed types, first any matches, rest ignored", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [
@@ -722,7 +671,7 @@ Deno.test("matchBodyFilter: OR with mixed types, first any matches, rest ignored
   assertEquals(matchBodyFilter(filter, { ref: "main" }), true);
 });
 
-Deno.test("matchBodyFilter: OR, none match → false", () => {
+test("matchBodyFilter: OR, none match → false", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [
@@ -733,7 +682,7 @@ Deno.test("matchBodyFilter: OR, none match → false", () => {
   assertEquals(matchBodyFilter(filter, { ref: "develop" }), false);
 });
 
-Deno.test("matchBodyFilter: empty objectValue array → false (no OR candidate)", () => {
+test("matchBodyFilter: empty objectValue array → false (no OR candidate)", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [],
@@ -743,7 +692,7 @@ Deno.test("matchBodyFilter: empty objectValue array → false (no OR candidate)"
 
 // --- not ---
 
-Deno.test("AC-5.11: matchBodyFilter: not with any, rejects exact value, accepts others", () => {
+test("AC-5.11: matchBodyFilter: not with any, rejects exact value, accepts others", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "not", value: { type: "any", value: "develop" } }],
@@ -753,7 +702,7 @@ Deno.test("AC-5.11: matchBodyFilter: not with any, rejects exact value, accepts 
   assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), true);
 });
 
-Deno.test("matchBodyFilter: not with stringwildcard, rejects matching patterns", () => {
+test("matchBodyFilter: not with stringwildcard, rejects matching patterns", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "not", value: { type: "stringwildcard", value: "feature/*" } }],
@@ -764,7 +713,7 @@ Deno.test("matchBodyFilter: not with stringwildcard, rejects matching patterns",
   assertEquals(matchBodyFilter(filter, { ref: "release/v1" }), true);
 });
 
-Deno.test("matchBodyFilter: not with wildcard, rejects everything (edge case)", () => {
+test("matchBodyFilter: not with wildcard, rejects everything (edge case)", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [{ type: "not", value: { type: "wildcard" } }],
@@ -775,7 +724,7 @@ Deno.test("matchBodyFilter: not with wildcard, rejects everything (edge case)", 
   assertEquals(matchBodyFilter(filter, { ref: 42 }), false);
 });
 
-Deno.test("AC-5.13: matchBodyFilter: not composed in and, accept release/* but reject release/broken", () => {
+test("AC-5.13: matchBodyFilter: not composed in and, accept release/* but reject release/broken", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [
@@ -794,7 +743,7 @@ Deno.test("AC-5.13: matchBodyFilter: not composed in and, accept release/* but r
   assertEquals(matchBodyFilter(filter, { ref: "main" }), false);
 });
 
-Deno.test("matchBodyFilter: not in OR implicite, not(develop) OR any(main)", () => {
+test("matchBodyFilter: not in OR implicite, not(develop) OR any(main)", () => {
   const filter: BodyFilter = {
     objectPath: "ref",
     objectValue: [
@@ -810,16 +759,14 @@ Deno.test("matchBodyFilter: not in OR implicite, not(develop) OR any(main)", () 
 
 // --- AC-4.2: ScopeEntry method mismatch ---
 
-Deno.test("AC-4.2: checkAccess: ScopeEntry method mismatch returns false", () => {
-  const scopes: Scope[] = [
-    { methods: ["POST"], pattern: "/v1/apps/*" },
-  ];
+test("AC-4.2: checkAccess: ScopeEntry method mismatch returns false", () => {
+  const scopes: Scope[] = [{ methods: ["POST"], pattern: "/v1/apps/*" }];
   assertEquals(checkAccess(scopes, "GET", "/v1/apps/my-app"), false);
 });
 
 // --- AC-5.2: body filter exact mismatch ---
 
-Deno.test("AC-5.2: matchBodyFilter: exact match mismatch returns false", () => {
+test("AC-5.2: matchBodyFilter: exact match mismatch returns false", () => {
   const filter: BodyFilter = {
     objectPath: "branch",
     objectValue: [{ type: "any", value: "main" }],
@@ -829,7 +776,7 @@ Deno.test("AC-5.2: matchBodyFilter: exact match mismatch returns false", () => {
 
 // --- AC-5.6: stringwildcard mismatch ---
 
-Deno.test("AC-5.6: matchBodyFilter: stringwildcard mismatch returns false", () => {
+test("AC-5.6: matchBodyFilter: stringwildcard mismatch returns false", () => {
   const filter: BodyFilter = {
     objectPath: "branch",
     objectValue: [{ type: "stringwildcard", value: "release/*" }],
@@ -839,7 +786,7 @@ Deno.test("AC-5.6: matchBodyFilter: stringwildcard mismatch returns false", () =
 
 // --- AC-5.9: body filters AND partial failure ---
 
-Deno.test("AC-5.9: checkAccess: bodyFilters AND, partial match fails", () => {
+test("AC-5.9: checkAccess: bodyFilters AND, partial match fails", () => {
   const scopes: Scope[] = [
     {
       methods: ["POST"],
@@ -858,7 +805,7 @@ Deno.test("AC-5.9: checkAccess: bodyFilters AND, partial match fails", () => {
 
 // --- AC-5.12: not match (excluded value) ---
 
-Deno.test("AC-5.12: matchBodyFilter: not excludes matching value", () => {
+test("AC-5.12: matchBodyFilter: not excludes matching value", () => {
   const filter: BodyFilter = {
     objectPath: "branch",
     objectValue: [{ type: "not", value: { type: "any", value: "develop" } }],
@@ -868,7 +815,7 @@ Deno.test("AC-5.12: matchBodyFilter: not excludes matching value", () => {
 
 // --- AC-5.14: and composition failure ---
 
-Deno.test("AC-5.14: matchBodyFilter: and composition fails when not condition fails", () => {
+test("AC-5.14: matchBodyFilter: and composition fails when not condition fails", () => {
   const filter: BodyFilter = {
     objectPath: "branch",
     objectValue: [

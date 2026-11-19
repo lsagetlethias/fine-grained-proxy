@@ -41,10 +41,7 @@ export function append(blobId: string, entry: LogEntry): void {
   slot.topic.dispatchEvent(new CustomEvent(ENTRY_EVENT, { detail: entry }));
 }
 
-export function subscribe(
-  blobId: string,
-  onEntry: (entry: LogEntry) => void,
-): () => void {
+export function subscribe(blobId: string, onEntry: (entry: LogEntry) => void): () => void {
   const slot = getOrCreateSlot(blobId);
   slot.streamCount++;
 

@@ -27,8 +27,10 @@ export function isScalingoHost(rawUrl: string): boolean {
 // Les valeurs d'origine operateur ne viennent pas d'un appelant : elles echappent a la
 // contrainte d'hote, ce qui permet aussi aux tests de pointer un mock local.
 export function isOperatorScalingoUrl(rawUrl: string): boolean {
-  return rawUrl === (readEnv("SCALINGO_API_URL") ?? "") ||
-    rawUrl === (readEnv("SCALINGO_AUTH_URL") ?? "");
+  return (
+    rawUrl === (readEnv("SCALINGO_API_URL") ?? "") ||
+    rawUrl === (readEnv("SCALINGO_AUTH_URL") ?? "")
+  );
 }
 
 export async function exchangeToken(apiToken: string): Promise<string> {
@@ -38,7 +40,7 @@ export async function exchangeToken(apiToken: string): Promise<string> {
   const response = await egressFetch(new URL(`${authUrl}/v1/tokens/exchange`), {
     method: "POST",
     headers: {
-      "Authorization": `Basic ${credentials}`,
+      Authorization: `Basic ${credentials}`,
       "Content-Type": "application/json",
     },
   });
@@ -47,7 +49,7 @@ export async function exchangeToken(apiToken: string): Promise<string> {
     throw new Error(`Token exchange failed: ${response.status} ${response.statusText}`);
   }
 
-  const body = await response.json();
+  const body = (await response.json()) as { token?: unknown } | null;
   if (typeof body?.token !== "string") {
     throw new Error("Token exchange failed: unexpected response format");
   }
@@ -72,7 +74,7 @@ export async function fetchAddonToken(
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${bearer}`,
+        Authorization: `Bearer ${bearer}`,
         "Content-Type": "application/json",
       },
     },
@@ -82,7 +84,7 @@ export async function fetchAddonToken(
     throw new Error(`Addon token request failed: ${response.status} ${response.statusText}`);
   }
 
-  const body = await response.json();
+  const body = (await response.json()) as { addon?: { token?: unknown } } | null;
   const token = body?.addon?.token;
   if (typeof token !== "string") {
     throw new Error("Addon token request failed: unexpected response format");
@@ -106,9 +108,12 @@ export function normalizeAddons(raw: unknown): ScalingoAddon[] {
     addons.push({
       id: entry.id,
       resourceId: typeof entry.resource_id === "string" ? entry.resource_id : "",
-      provider: typeof entry.addon_provider?.name === "string"
-        ? entry.addon_provider.name
-        : (typeof entry.addon_provider?.id === "string" ? entry.addon_provider.id : ""),
+      provider:
+        typeof entry.addon_provider?.name === "string"
+          ? entry.addon_provider.name
+          : typeof entry.addon_provider?.id === "string"
+            ? entry.addon_provider.id
+            : "",
       plan: typeof entry.plan?.name === "string" ? entry.plan.name : "",
     });
   }

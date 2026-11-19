@@ -19,39 +19,40 @@
 - **Limites de ressources** (ADR-0010) : chaque coût est borné avant d'être payé. Blob plafonné à 4096 caractères et refusé sous 64, décompression bornée à 128 Ko en sortie, corps proxy bufferisé à 512 Ko et seulement quand un body filter ou la capture `detailed` en a besoin, `bodyLimit` monté sur la liste explicite des chemins `/api/*` et **jamais sur `*`**, cache LRU de dérivation PBKDF2. Le critère de calibrage est unique : aucune primitive optionnelle ne doit coûter plus cher que la dérivation PBKDF2 obligatoire, soit 11,6 ms.
 
 ## Stack
-- **Runtime** : Deno
-- **Framework** : Hono
-- **Langage** : TypeScript (strict)
-- **Crypto** : Web Crypto API native (AES-256-GCM, PBKDF2)
+- **Runtime** : Node 26 (ESM pur, `.nvmrc`), migré de Deno par l'**ADR-0011**. L'équipe Deno a rejoint Cloudflare le 9 octobre 2026 : Deno Deploy ferme vers avril 2027 et le développement du runtime s'arrête un an après l'annonce.
+- **Gestionnaire de paquets** : pnpm (`packageManager` dans `package.json`, `pnpm-lock.yaml` versionné)
+- **Framework** : Hono, servi par `@hono/node-server` (`serve` et `serveStatic`)
+- **Langage** : TypeScript (strict). Les imports relatifs portent leur extension `.ts` / `.tsx` explicite, résolue par `allowImportingTsExtensions` au type-check et par tsx et esbuild à l'exécution. Ne pas les retirer.
+- **Crypto** : Web Crypto API native (AES-256-GCM, PBKDF2). Native en Node comme elle l'était en Deno, la migration n'y a rien changé.
 - **CSS** : Tailwind CSS 3 build-time (pas de CDN) vers `static/styles.css`
-- **Tests** : `deno test`, structure `tests/testu/` (unit), `tests/testi/` (integration), `tests/teste2e/` (e2e)
-- **Lint/Format** : `deno lint` + `deno fmt`
+- **Exécution du TypeScript** : tsx en développement et pour les tests, bundle esbuild unique `dist/main.js` en production
+- **Tests** : `node:test` + tsx, assertions par `tests/_assert.ts` qui porte le contrat de `@std/assert` sur `node:assert/strict`. Structure `tests/testu/` (unit), `tests/testi/` (integration), `tests/teste2e/` (e2e, vide, un `todo` y tient le trou ouvert). Chaque fichier de test tourne dans **son propre processus**, là où `deno test` les partageait : une bascule d'environnement dans un fichier n'atteint plus les autres.
+- **Lint/Format** : Biome (`biome.json`), un seul binaire pour les deux. Quatre règles `a11y` et `useBiomeIgnoreFolder` y sont coupées nommément : les premières demandent de changer le DOM rendu, ce qui n'est pas du ressort d'une migration, la dernière conseille une forme `!dossier/` qui n'exclut rien dans Biome 2.6.8.
 
-## Scripts (deno task)
-- `deno task build:css` : compile `src/ui/tailwind.css` vers `static/styles.css` (Tailwind CSS 3, minifié)
-- `deno task build:client` : compile `src/ui/client.ts` et `src/ui/logs-client.ts` vers `static/` (esbuild, minifié)
-- `deno task build:version` : résout le SHA git du commit et l'écrit dans `static/version.txt`
-- `deno task build:changelog` : génère `src/ui/changelog-data.ts` depuis `docs/changelog.md`
-- `deno task build` : build:css + build:client + build:version + build:changelog (à lancer avant deploy)
-- `deno task dev` : watch parallèle CSS + client + server (concurrently)
-- `deno task start` : build + production
-- `deno task deploy` : build + `deno deploy` vers Deno Deploy, org et app lues du champ `deploy` de `deno.json`. Surtout pas `deployctl`, qui ne pilote que Deno Deploy Classic, éteint le 20 juillet 2026
-- `deno task test` : tous les tests
-- `deno task test:unit` : tests unitaires
-- `deno task test:integration` : tests intégration
-- `deno task test:e2e` : tests e2e
-- `deno task lint` : linter
-- `deno task fmt` : formatteur
-- `deno task fmt:check` : vérification formatage
-- `deno task check` : type checking serveur, puis `check:client`
-- `deno task check:client` : type checking du code navigateur via `deno.client.json` (lib DOM isolée, pour ne pas affaiblir le check serveur)
-- `deno task verify` : lint + fmt + check + test (pipeline complète)
-- **Permissions** : `dev:server`, `start` et les quatre tâches `test*` tournent sur une allow-list explicite de variables, jamais `--allow-env` nu. Élargir la permission pour faire taire une erreur d'accès annule le durcissement. La liste complète des endroits à toucher pour ajouter une variable est le contrat de la section « Variables d'environnement » ci-dessous, et il vaut pour les cibles de déploiement autant que pour `deno.json`.
+## Scripts (pnpm)
+Lancés par `pnpm run <nom>`, et `node --run <nom>` à l'intérieur des scripts composés pour ne pas dépendre du gestionnaire de paquets.
+- `build:css` : compile `src/ui/tailwind.css` vers `static/styles.css` (Tailwind CSS 3, minifié)
+- `build:client` : compile `src/ui/client.ts` et `src/ui/logs-client.ts` vers `static/` (esbuild, minifié)
+- `build:version` : résout le SHA git du commit et l'écrit dans `static/version.txt`
+- `build:changelog` : génère `src/ui/changelog-data.ts` depuis `docs/changelog.md`
+- `build:server` : bundle `src/main.ts` vers `dist/main.js` (esbuild, ESM, cible node26)
+- `build` : les cinq ci-dessus. **`build:server` en fait partie et doit y rester** : le buildpack Scalingo n'exécute que `build`, et le `Procfile` lance `dist/main.js`. Sorti de `build`, le bundle manquerait au dyno, et il ne peut pas être fabriqué au démarrage puisque les `devDependencies` sont élaguées après la phase de build.
+- `dev` : watch parallèle CSS + client + server (concurrently). `dev:server` tourne sous `tsx watch` avec `--env-file-if-exists=.env`
+- `start` : `build` puis le serveur de production, avec les mêmes permissions que le `Procfile`
+- `test` / `test:unit` / `test:integration` / `test:e2e` : `node --import tsx --test` sur le répertoire correspondant
+- `lint` : `biome lint` (`lint:fix` pour appliquer les correctifs sûrs)
+- `fmt` : `biome format --write`
+- `fmt:check` : `biome format` sans écriture
+- `check` : type checking serveur (`tsconfig.json`), puis `check:client`
+- `check:client` : type checking du code navigateur via `tsconfig.client.json` (lib DOM isolée, `types: []`, pour ne pas affaiblir le check serveur)
+- `verify` : lint + fmt:check + check + test (pipeline complète)
+- Il n'y a **plus de script `deploy`** : Deno Deploy est abandonné (ADR-0011), le déploiement passe par Scalingo (`Procfile` + buildpack node) ou par le `Dockerfile`.
+- **Permissions** : la production tourne sous le modèle de permissions de Node, `node --permission --allow-net --allow-fs-read=./static`, à l'identique dans `Procfile`, `Dockerfile` et le script `start`. Les trois doivent rester alignés. Élargir cette liste pour faire taire une erreur d'accès annule le durcissement : si un chemin manque, c'est le code qu'il faut resserrer. C'est arrivé une fois, `serveStatic` recevant `root: "./"` sondait la racine du dépôt au montage, et la réponse n'était pas d'ouvrir la lecture à tout le dépôt mais de pointer son root sur `static/`. Node n'a **aucun équivalent de `--allow-env`** : cet axe est tenu par `lockdownEnv()`, voir la section « Variables d'environnement ».
 
 ## Structure
 ```
 src/
-  main.ts           point d'entrée, Hono app, Deno.serve sous import.meta.main
+  main.ts           point d'entrée, Hono app, serve() et lockdownEnv() sous import.meta.main
   constants.ts      constantes partagées (FGP_SOURCE_HEADER, FGP_OWNED_PATHS, FGP_SECURITY_HEADERS)
   routes/           ui.tsx : page de config, TOUS les endpoints /api/* et la route /llms.txt.
                     logs.tsx : /logs, /logs/stream, /logs/health. llms.ts : pas de route,
@@ -77,13 +78,17 @@ src/
   ui/client/        modules TS client (auth-mode, auth-headers, addons, byok, presets, body-filters,
                     query-filters, apps, generate, ttl, clipboard, scopes, test-scope, share-config,
                     import-config, tabs, logs-tab, elements, types). build-scopes.ts et
-                    restore-filters.ts portent la logique pure sans DOM : deno check type-checke
+                    restore-filters.ts portent la logique pure sans DOM : tsconfig.json type-checke
                     les tests sous la config serveur, donc ce qui doit etre teste ne peut pas
                     toucher au DOM
   ui/tailwind.css   source Tailwind (build-time vers static/styles.css)
 scripts/            version.ts (SHA de build vers static/version.txt), changelog.ts (génère
                     src/ui/changelog-data.ts depuis docs/changelog.md)
-deno.client.json    config de type checking du code navigateur (lib DOM)
+tsconfig.json       config de type checking serveur et tests (noEmit, JSX hono)
+tsconfig.client.json config de type checking du code navigateur (lib DOM, types: [])
+biome.json          lint et format
+Procfile            commande web Scalingo, alignée sur le CMD du Dockerfile
+dist/               bundle serveur de production (généré, gitignored)
 tailwind.config.js  config Tailwind (couleurs fgp, dark mode media)
 static/             assets compilés (client.js, styles.css), gitignored
 tests/
@@ -106,11 +111,11 @@ docs/
 - Imports triés : deps externes, puis internes, ligne vide entre les deux
 - Nommage : camelCase pour variables/fonctions, PascalCase pour types/interfaces
 - Erreurs : **jamais `HTTPException`**. `app.onError` (`src/main.ts`) ne la discrimine pas et la transformerait en 500 `internal_error`, perdant le status et le code voulus. Renvoyer la shape `{error, message}` par les helpers locaux : `jsonError` (`src/middleware/proxy.ts`), `jsonStreamError` (`src/routes/logs.tsx`), `c.json({ error, message }, status)` dans `src/routes/ui.tsx`.
-- OpenAPI : schemas de réponse stricts par route (union `z.enum([...])` des error codes autorisés). Ajouter un nouveau code d'erreur = l'ajouter dans l'enum de la route correspondante, **quand la route est documentée**. Seules les routes `/api/*` le sont : la route proxy `/{blob}/*` n'apparaît pas dans l'OpenAPI, puisque son contrat dépend entièrement du blob. Ses codes d'erreur vivent donc dans `docs/specs.md` et dans `/llms.txt`, qui doivent être mis à jour à la place. Un code produit par un **middleware monté** sur la route compte comme un code de cette route : `createRoute` ne le voit pas tout seul. Le 413 `payload_too_large` d'`apiBodyLimit` est declare depuis `ca0d899`, et un test derive la parite du comportement reel plutot que d'une liste ecrite a la main. `GET /api/salt` en est exclu a dessein, Deno n'expose aucun corps sur un GET donc le plafond ne s'y declenche jamais. Même chose pour le 500 `internal_error` d'`app.onError`, à une différence près : ce handler ne regarde ni le chemin ni la présence d'un corps, donc **aucune opération n'en est exclue**, `GET /api/salt` compris. Les huit opérations documentées le déclarent, et le test de parité dérive le couple status/code du handler réellement monté.
+- OpenAPI : schemas de réponse stricts par route (union `z.enum([...])` des error codes autorisés). Ajouter un nouveau code d'erreur = l'ajouter dans l'enum de la route correspondante, **quand la route est documentée**. Seules les routes `/api/*` le sont : la route proxy `/{blob}/*` n'apparaît pas dans l'OpenAPI, puisque son contrat dépend entièrement du blob. Ses codes d'erreur vivent donc dans `docs/specs.md` et dans `/llms.txt`, qui doivent être mis à jour à la place. Un code produit par un **middleware monté** sur la route compte comme un code de cette route : `createRoute` ne le voit pas tout seul. Le 413 `payload_too_large` d'`apiBodyLimit` est declare depuis `ca0d899`, et un test derive la parite du comportement reel plutot que d'une liste ecrite a la main. `GET /api/salt` en est exclu a dessein, un GET ne porte pas de corps donc le plafond ne s'y declenche jamais. Même chose pour le 500 `internal_error` d'`app.onError`, à une différence près : ce handler ne regarde ni le chemin ni la présence d'un corps, donc **aucune opération n'en est exclue**, `GET /api/salt` compris. Les huit opérations documentées le déclarent, et le test de parité dérive le couple status/code du handler réellement monté.
 - Toute réponse du proxy principal doit porter `X-FGP-Source: proxy|upstream` (voir `src/constants.ts`).
 - **Réseau sortant** : tout appel serveur passe par `egressFetch` de `src/net/egress.ts`, jamais par un `fetch` direct. Une URL cible se valide par `parseTargetUrl` et se construit par `buildUpstreamUrl`, jamais par concaténation. Un `fetch` nu côté serveur rouvre la SSRF que l'ADR-0009 ferme. Les `fetch` du code navigateur visent FGP lui-même et ne sont pas concernés.
 - **Échec de sortie** : `egressFetch` ne laisse remonter que deux classes, toutes deux sous `EgressFailure` : `EgressError` (refus de politique) et `EgressNetworkError` (le `fetch` a rejeté). Un appelant capte ces classes, **jamais un `catch` nu**, et laisse tout le reste partir vers `app.onError`. Un `catch` nu transforme n'importe quelle panne locale en panne de l'API cible, et l'outil censé diagnostiquer se met alors à accuser l'amont d'un problème qui est chez nous.
-- **Lecture d'environnement** : toute lecture passe par `readEnv`, `readEnvFlag` ou `readEnvInt` de `src/env.ts`, jamais par `Deno.env.get` direct, et le nom lu doit figurer dans `ENV_NAMES`. Sur un nom absent de l'allow-list `--allow-env`, `Deno.env.get` ne rend pas `undefined` : il lève `Deno.errors.NotCapable`, et depuis un handler ce throw ressort en 500 `internal_error` sur une requête par ailleurs légitime. C'est exactement la panne qui a tué le flux proxy en production. `readEnv` ne traite comme absence que le refus d'accès, et laisse remonter le reste, `TypeError` compris.
+- **Lecture d'environnement** : toute lecture passe par `readEnv`, `readEnvFlag` ou `readEnvInt` de `src/env.ts`, jamais par `process.env` direct, et le nom lu doit figurer dans `ENV_NAMES`. `process.env` rend `undefined` sur un nom absent et ne lève jamais : la panne qui avait tué le flux proxy en production sous Deno, un nom hors `--allow-env` ressortant en 500 `internal_error`, est devenue structurellement impossible. Le registre garde ses deux prises : le type interdit de lire un nom qui n'y figure pas, et `lockdownEnv()` efface du processus serveur tout ce qui n'y figure pas. Ce qui a disparu, c'est l'interdiction faite au **code lui-même** d'appeler `process.env` en direct : rien ne l'empêche plus techniquement, un tel appel est simplement condamné à ne rien lire en production, et la règle reste à la charge de la revue.
 - **Expressions régulières issues d'une entrée** : jamais `new RegExp` en direct. Valider la source par `checkRegexSource` puis compiler par `compileAnchored` (`src/crypto/regex-policy.ts`). Non validée, la regex rouvre le ReDoS ; non ancrée, elle matche en sous-chaîne et autorise plus que son motif (ADR-0010).
 - **Autorisation d'une requête** : `checkRequestAccess` (`src/middleware/scopes.ts`) est la seule porte. Ne jamais appeler `checkAccess` directement depuis la route proxy ni depuis l'UI : il ne contrôle qu'une seule forme du chemin et retire silencieusement la garantie de l'ADR-0009. Une seule lecture des scopes, sinon l'interface finit par affirmer un refus que la production n'applique pas.
 - Exploration du code TypeScript : LSP en priorité (`workspaceSymbol`, `findReferences`, `goToDefinition`), grep en dernier recours. Le LSP suit les alias et les re-exports, grep ne fait que du pattern matching.
@@ -151,7 +156,7 @@ Requête, extraire blob (header X-FGP-Blob prioritaire, sinon premier segment UR
 
 **Proxy transparent (ADR-0006)** : toute réponse effectivement reçue de l'upstream est forwardée sans transformation, avec header `X-FGP-Source: upstream`. Les erreurs générées par FGP lui-même portent `X-FGP-Source: proxy` et la shape `{error, message}`. Trois 502 sont légitimes côté proxy : `upstream_unreachable` (fetch throw), `auth_exchange_failed` (échange de token Scalingo échoué) et `auth_addon_failed` (obtention du token d'addon échouée). Les 500 non catchés passent par `app.onError` dans `src/main.ts` vers la shape FGP `{error: "internal_error", ...}`. Ne jamais réintroduire de transformation de status/body upstream.
 
-**En-têtes de codage de la réponse** : la transparence porte sur ce qu'on envoie, pas sur ce que l'amont a dit. `fetch` décode `gzip` et `br` à la réception mais laisse en place les en-têtes qui décrivaient le corps compressé, donc les relayer serait mentir sur ce qu'on émet, et un client conforme échoue dessus (undici tente un gunzip sur du clair et coupe, un `Content-Length` périmé tronque la réponse). `Content-Encoding` et `Content-Length` sont donc retirés **quand le runtime a effectivement décodé**, jamais systématiquement. Deux en-têtes de la requête sortante désactivent ce décodage et font ressortir le corps réellement compressé, un `Range` quelle que soit sa valeur et un `Accept-Encoding` valant exactement `identity` : dans ces cas les en-têtes amont sont exacts et doivent survivre. `Transfer-Encoding` est retiré dans tous les cas, il est hop-by-hop et décrit le framing du hop amont, pas le nôtre.
+**En-têtes de codage de la réponse** : la transparence porte sur ce qu'on envoie, pas sur ce que l'amont a dit. `fetch` décode le corps à la réception mais laisse en place les en-têtes qui le décrivaient compressé, donc les relayer serait mentir sur ce qu'on émet, et un client conforme échoue dessus (undici tente un gunzip sur du clair et coupe, un `Content-Length` périmé tronque la réponse). `Content-Encoding` et `Content-Length` sont donc retirés **quand le runtime a effectivement décodé**, jamais systématiquement. La liste est celle de Node et non celle de Deno, qui n'en décodait que deux : `gzip`, `x-gzip`, `deflate`, `br` et `zstd`, et le prédicat porte sur la liste entière des codings, un seul encodage inconnu annulant tout le décodage (`gzip, foo` ressort compressé). Cette liste est une **mesure du runtime**, pas une préférence : la vérifier plutôt que la deviner à chaque montée de version de Node. Sous Deno, un `Range` ou un `Accept-Encoding: identity` sur la requête sortante désactivait le décodage ; sous Node **rien ne le désactive**, le code qui en dépendait a donc disparu. Conséquence qu'aucun code de notre côté ne peut rattraper : un 206 portant un fragment de corps compressé est vidé par undici, là où Deno relayait le fragment intact. `Transfer-Encoding` est retiré dans tous les cas, il est hop-by-hop et décrit le framing du hop amont, pas le nôtre.
 
 **En-têtes de sécurité** : montés sur la liste explicite `FGP_OWNED_PATHS`, **jamais sur `*`**, plus un wrapper qui couvre les erreurs FGP de la route proxy (discriminées par `X-FGP-Source: proxy`). La transparence de l'ADR-0006 est ainsi garantie par construction et non par une condition qui peut se tromper. La couverture est vérifiée par un test de recensement des routes réellement enregistrées, et la parité entre `FGP_SECURITY_HEADERS` et ce que servent les routes par un test dédié. Ne jamais remonter ce middleware sur un pattern fourre-tout.
 
@@ -161,20 +166,19 @@ Requête, extraire blob (header X-FGP-Blob prioritaire, sinon premier segment UR
 
 ## Variables d'environnement
 
-**Contrat d'ajout d'une variable lue par le serveur.** Le contrat disait « trois endroits », il en manquait deux : le `Procfile` et le `Dockerfile`. C'est cet oubli qui a mis la production à genoux, le `Procfile` ne portant que 9 des 11 variables alors que le code en lisait 11. Les endroits sont donc, dans l'ordre :
+**Contrat d'ajout d'une variable lue par le serveur.** Le contrat comptait six endroits sous Deno, dont cinq étaient des allow-lists `--allow-env` à tenir synchronisées, et c'est un oubli dans deux d'entre elles qui avait mis la production à genoux. Node n'ayant aucun équivalent de `--allow-env` (ADR-0011), ces listes ont disparu et il ne reste que trois endroits, dans l'ordre :
 
-1. `ENV_NAMES` dans `src/env.ts`, le registre. Sans lui, `readEnv` refuse le nom au type-check.
-2. Les six listes `--allow-env` de `deno.json` : `dev:server`, `start`, `test`, `test:unit`, `test:integration`, `test:e2e`.
-3. Le `Procfile`, allow-list du dyno Scalingo.
-4. Le `Dockerfile`, allow-list du `CMD`.
-5. `.env.example`, **commentée** si la variable est optionnelle. Non commentée, elle est toujours posée sous `--env-file` et le développement cesse de ressembler à la production, où elle est absente.
-6. La liste ci-dessous, et les guides de déploiement (`docs/deno-deploy.md`, `docs/scalingo-deploy.md`) quand l'opérateur doit la positionner.
+1. `ENV_NAMES` dans `src/env.ts`, le registre. Sans lui, `readEnv` refuse le nom au type-check, et `lockdownEnv()` efface la variable du processus serveur au démarrage.
+2. `.env.example`, **commentée** si la variable est optionnelle. Non commentée, elle est toujours posée sous `--env-file` et le développement cesse de ressembler à la production, où elle est absente.
+3. La liste ci-dessous, et `docs/scalingo-deploy.md` quand l'opérateur doit la positionner.
 
-Les points 1 à 5 sont **verrouillés par le test de parité** `tests/testu/env-registry.test.ts`, qui lit les fichiers réels : une divergence fait échouer `deno task verify`, aucun des cinq n'est plus à la charge de la discipline humaine. Les points 6, doc et guides, restent à la charge de la revue, aucun test ne les vérifie.
+Les points 1 et 2 sont **verrouillés par le test de parité** `tests/testu/env-registry.test.ts`, qui lit les fichiers réels : une divergence fait échouer `pnpm run verify`. Le point 3, doc et guide, reste à la charge de la revue, aucun test ne le vérifie. Le `Procfile` et le `Dockerfile` ne portent plus de liste de variables et sortent donc du contrat : ils ne portent que les permissions de fichiers et de réseau, qui doivent rester alignées entre eux et le script `start`.
 
-**Une variable optionnelle absente retombe sur son défaut, et c'est un défaut sûr** : `FGP_EGRESS_ALLOW_PRIVATE` absente vaut classification active, `FGP_TRUSTED_PROXY_HOPS` absente vaut `X-Forwarded-For` ignoré. L'absence inclut le **refus d'accès par l'hôte** : un nom hors allow-list fait lever `Deno.env.get`, et `readEnv` traite ce refus comme une absence plutôt que de laisser le throw ressortir en 500. Un refus d'accès ne vaut donc jamais opt-in, il ne peut que retomber du côté sûr.
+**`lockdownEnv()` tient la place de l'allow-list `--allow-env`.** Appelée au démarrage du serveur dans `src/main.ts`, elle retire de `process.env` tout ce qui n'est ni dans `ENV_NAMES` ni dans `HOST_ENV_NAMES` (la liste nommée des variables que l'hôte et le runtime doivent conserver, `PATH` et `NODE_EXTRA_CA_CERTS` en tête), pour qu'une dépendance compromise n'y trouve pas le secret d'un autre service. Trois limites à connaître avant de s'y fier. Elle ne couvre pas les lectures faites au **chargement** des modules, les imports ESM étant évalués avant le corps de `main.ts`. Elle ampute l'environnement des éventuels processus enfants. Et elle n'est appelée que sous `import.meta.main`, donc jamais dans les tests, qui importent `src/main.ts` : une purge à l'import du module amputerait l'environnement du lanceur de tests.
 
-- `PORT` : port du serveur (défaut: 8000). Réellement pris en compte depuis le passage à `Deno.serve()` explicite.
+**Une variable optionnelle absente retombe sur son défaut, et c'est un défaut sûr** : `FGP_EGRESS_ALLOW_PRIVATE` absente vaut classification active, `FGP_TRUSTED_PROXY_HOPS` absente vaut `X-Forwarded-For` ignoré. L'absence inclut désormais le cas où `lockdownEnv()` a effacé la variable, faute d'être déclarée au registre : une variable qu'on croit positionnée mais qui manque à `ENV_NAMES` ne vaut jamais opt-in, elle ne peut que retomber du côté sûr.
+
+- `PORT` : port du serveur (défaut: 8000). Pris en compte par l'écoute explicite de `src/main.ts` sous `import.meta.main`, et nulle part ailleurs.
 - `FGP_SALT` : salt serveur pour la dérivation de clé (requis)
 - `FGP_EGRESS_ALLOW_PRIVATE` : interrupteur de **développement uniquement**, désactivé par défaut. `1` coupe la classification des destinations (ADR-0009), jamais le contrôle de forme du `target` ni le `redirect: "manual"`. Actif en production, la garantie de destination tombe et l'instance redevient une SSRF non authentifiée, ouverte sur le réseau privé de l'hébergeur et sur son service de métadonnées. L'avertissement console est écrit au premier contrôle de destination, pas au démarrage : une instance qui n'a encore rien proxyfié reste silencieuse.
 - `SCALINGO_API_URL` : URL de l'API Scalingo pour les helpers list-apps et list-addons, et pour l'obtention du token d'addon (défaut: https://api.osc-fr1.scalingo.com)
@@ -198,7 +202,7 @@ Les points 1 à 5 sont **verrouillés par le test de parité** `tests/testu/env-
 - **Fiches de poste** dans `docs/team/` : doc humaine (place dans le process, interactions) et source de vérité des **checklists de fin de tâche**. Le hook de commit ne les audite plus : un sous-agent n'a accès ni au transcript parent ni à celui de ses frères, il concluait donc systématiquement à l'absence et bloquait à tort. Il ne vérifie plus que ce qui est vérifiable depuis le diff, et autorise en cas de doute. Les checklists restent à la charge de chaque rôle et du lead. Partage détaillé en section 4.2 de la référence.
 - **Avant de dispatcher** : ne plus recopier la fiche dans le brief. Lancer l'agent par son type (`subagent_type: "dev"`) et ne mettre dans le brief que la tâche et son contexte.
 - **Parallélisme** : `isolation: "worktree"` dès que deux agents parallèles écrivent dans le même fichier, plutôt que de les séquencer.
-- **Base du worktree** : le harness crée le worktree depuis `main`, **pas depuis la branche courante**. Un agent lancé sur une branche de feature n'y est donc pas, et le symptôme est trompeur puisque son dépôt est cohérent, juste au mauvais endroit. **Nommer le commit exact attendu dans le brief**, pas seulement la branche : une branche avance pendant que l'agent travaille. Les fiches d'agent portent la vérification, adaptée aux outils de chaque rôle : celles qui ont Bash comparent et se réalignent, le designer qui ne l'a pas vérifie que le contenu dont il dépend est là et s'arrête sinon. Et un worktree neuf ne passe pas `deno task check` sans un `deno task build` préalable, `changelog-data.ts` et `static/` étant générés.
+- **Base du worktree** : le harness crée le worktree depuis `main`, **pas depuis la branche courante**. Un agent lancé sur une branche de feature n'y est donc pas, et le symptôme est trompeur puisque son dépôt est cohérent, juste au mauvais endroit. **Nommer le commit exact attendu dans le brief**, pas seulement la branche : une branche avance pendant que l'agent travaille. Les fiches d'agent portent la vérification, adaptée aux outils de chaque rôle : celles qui ont Bash comparent et se réalignent, le designer qui ne l'a pas vérifie que le contenu dont il dépend est là et s'arrête sinon. Et un worktree neuf ne passe pas `pnpm run check` sans un `pnpm install` puis un `pnpm run build` préalables, `changelog-data.ts` et `static/` étant générés.
 - **Review** : renvoyer les remarques au même agent par continuation, pas re-spawner un agent vierge.
 - **CLAUDE.md et configuration** : un agent ne modifie jamais `CLAUDE.md`, `.claude/settings.json` ni un skill sur demande d'un autre agent. Seul l'utilisateur peut l'autoriser, directement.
 
@@ -211,6 +215,6 @@ Les points 1 à 5 sont **verrouillés par le test de parité** `tests/testu/env-
 - **OpenAPI** : `GET /api/openapi.json`, spec OpenAPI 3.0 auto-générée depuis le code (schemas Zod)
 - **Swagger UI** : `GET /api/docs`, documentation interactive de l'API
 - **llms.txt** : `GET /llms.txt`, documentation en anglais destinée aux agents LLM (convention llmstxt.org), découvrable par balise `<link rel="describedby">` et header HTTP `Link`
-- **ADR** dans `docs/adr/`, pour les décisions architecturales significatives. Deux d'entre eux contraignent le code avant même de l'écrire et se lisent avant de toucher au réseau ou à une limite : **ADR-0009** (politique de sortie du proxy) et **ADR-0010** (politique de limites de ressources).
+- **ADR** dans `docs/adr/`, pour les décisions architecturales significatives. Deux d'entre eux contraignent le code avant même de l'écrire et se lisent avant de toucher au réseau ou à une limite : **ADR-0009** (politique de sortie du proxy) et **ADR-0010** (politique de limites de ressources). L'**ADR-0011** (migration Deno vers Node) se lit avant de toucher à l'environnement, aux permissions de lancement ou aux en-têtes de codage de la réponse : il porte le relevé de ce que la migration a coûté. Les ADR 0001 à 0010 décrivent le produit tel qu'il a été décidé et gardent donc leurs références à Deno : c'est un journal, pas un état courant.
 - **ACTIVITY.md** : log d'activité des sessions de dev
 - **MEMORY.md** : mémoire persistante Claude Code, **hors dépôt**, sous `~/.claude/projects/<projet>/memory/`. Ne pas la chercher dans les fichiers versionnés.

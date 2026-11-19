@@ -1,7 +1,7 @@
 # ADR 0001. Stack technique : Hono sur Deno avec Web Crypto API
 
 - **Date** : 2026-04-08
-- **Statut** : Accepted
+- **Statut** : Accepted, partiellement Superseded par l'[ADR-0011](./0011-migration-deno-vers-node.md) : le choix de runtime tombe, ceux du framework et de la crypto tiennent
 
 ## Contexte
 

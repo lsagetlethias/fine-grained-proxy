@@ -62,9 +62,7 @@ export function ExamplesPanel() {
                 API g&eacute;n&eacute;rique : lecture seule
               </a>
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                  GET:*
-                </code>{" "}
+                <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">GET:*</code>{" "}
                 (bearer, 1h)
               </p>
             </li>
@@ -86,7 +84,8 @@ export function ExamplesPanel() {
                 Swagger UI
               </a>
               <span class="text-xs text-gray-500 dark:text-gray-400">
-                {" "}: documentation interactive de l'API
+                {" "}
+                : documentation interactive de l'API
               </span>
             </li>
             <li>
@@ -97,7 +96,8 @@ export function ExamplesPanel() {
                 OpenAPI JSON
               </a>
               <span class="text-xs text-gray-500 dark:text-gray-400">
-                {" "}: sp&eacute;cification OpenAPI 3.0
+                {" "}
+                : sp&eacute;cification OpenAPI 3.0
               </span>
             </li>
             <li>
@@ -108,12 +108,12 @@ export function ExamplesPanel() {
                 llms.txt
               </a>
               <span class="text-xs text-gray-500 dark:text-gray-400">
-                {" "}: documentation destin&eacute;e aux agents LLM, au format markdown de la
-                convention llmstxt.org. Elle d&eacute;crit la syntaxe des scopes, les modes d'auth
-                et les codes d'erreur, pour qu'un agent produise une URL FGP correcte sans lire
-                cette interface. Les pages de FGP la signalent par une balise{" "}
-                <code class="font-mono">link rel="describedby"</code> et par l'en-t&ecirc;te HTTP
                 {" "}
+                : documentation destin&eacute;e aux agents LLM, au format markdown de la convention
+                llmstxt.org. Elle d&eacute;crit la syntaxe des scopes, les modes d'auth et les codes
+                d'erreur, pour qu'un agent produise une URL FGP correcte sans lire cette interface.
+                Les pages de FGP la signalent par une balise{" "}
+                <code class="font-mono">link rel="describedby"</code> et par l'en-t&ecirc;te HTTP{" "}
                 <code class="font-mono">Link</code>.
               </span>
             </li>
@@ -127,7 +127,8 @@ export function ExamplesPanel() {
                 GitHub
               </a>
               <span class="text-xs text-gray-500 dark:text-gray-400">
-                {" "}: code source, issues, ADR
+                {" "}
+                : code source, issues, ADR
               </span>
             </li>
           </ul>
@@ -161,21 +162,15 @@ export function LogsPanel() {
       class="hidden space-y-6 text-sm text-gray-600 dark:text-gray-400"
     >
       <section>
-        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
-          Logs
-        </h3>
+        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Logs</h3>
         <p>
           Activez la capture in-memory des requ&ecirc;tes passant par ce blob. Les logs sont
-          visibles uniquement via <code class="font-mono">/logs</code>{" "}
-          et ne sont jamais persist&eacute;s.
+          visibles uniquement via <code class="font-mono">/logs</code> et ne sont jamais
+          persist&eacute;s.
         </p>
       </section>
 
-      <div
-        id="logs-feature-off"
-        hidden
-        class={ALERT_INFO_CLASS}
-      >
+      <div id="logs-feature-off" hidden class={ALERT_INFO_CLASS}>
         <AlertInfoIcon />
         <span>
           Les logs sont d&eacute;sactiv&eacute;s sur cette instance FGP. Contactez l'administrateur
@@ -191,8 +186,7 @@ export function LogsPanel() {
           <span
             class="relative inline-block h-5 w-9 shrink-0 rounded-full bg-gray-300 transition-colors peer-checked:bg-fgp-600 peer-focus-visible:ring-2 peer-focus-visible:ring-fgp-500 peer-focus-visible:ring-offset-2 dark:bg-gray-600 dark:peer-checked:bg-fgp-500 dark:peer-focus-visible:ring-offset-gray-900 after:absolute after:top-0.5 after:left-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-4"
             aria-hidden="true"
-          >
-          </span>
+          ></span>
           <div class="flex-1">
             <span class="font-medium text-gray-900 dark:text-gray-100">
               Activer les logs pour ce blob
@@ -204,10 +198,7 @@ export function LogsPanel() {
           </div>
         </label>
 
-        <label
-          id="logs-detailed-label"
-          class="flex items-start gap-3 cursor-pointer opacity-50"
-        >
+        <label id="logs-detailed-label" class="flex items-start gap-3 cursor-pointer opacity-50">
           <input
             type="checkbox"
             id="logs-detailed"
@@ -218,16 +209,12 @@ export function LogsPanel() {
           <span
             class="relative inline-block h-5 w-9 shrink-0 rounded-full bg-gray-300 transition-colors peer-checked:bg-fgp-600 peer-focus-visible:ring-2 peer-focus-visible:ring-fgp-500 peer-focus-visible:ring-offset-2 dark:bg-gray-600 dark:peer-checked:bg-fgp-500 dark:peer-focus-visible:ring-offset-gray-900 after:absolute after:top-0.5 after:left-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-4"
             aria-hidden="true"
-          >
-          </span>
+          ></span>
           <div class="flex-1">
             <span class="font-medium text-gray-900 dark:text-gray-100">
               Capturer aussi les bodies d&eacute;taill&eacute;s (POST/PUT/PATCH JSON)
             </span>
-            <p
-              id="logs-detailed-help"
-              class="mt-0.5 text-xs text-gray-500 dark:text-gray-400"
-            >
+            <p id="logs-detailed-help" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
               Le body request est compress&eacute; puis chiffr&eacute; avec votre cl&eacute; client
               avant d'&ecirc;tre stock&eacute;. Le serveur ne peut pas le lire. Multipart exclu.
             </p>
@@ -235,16 +222,12 @@ export function LogsPanel() {
         </label>
       </fieldset>
 
-      <div
-        id="logs-detailed-warning"
-        hidden
-        class={ALERT_CAUTION_CLASS}
-      >
+      <div id="logs-detailed-warning" hidden class={ALERT_CAUTION_CLASS}>
         <AlertTriangleIcon />
         <span>
           Activez uniquement si vous avez besoin d'inspecter les payloads. Le body peut contenir des
-          informations sensibles, n'ouvrez <code class="font-mono">/logs</code>{" "}
-          que sur un poste de confiance.
+          informations sensibles, n'ouvrez <code class="font-mono">/logs</code> que sur un poste de
+          confiance.
         </span>
       </div>
 

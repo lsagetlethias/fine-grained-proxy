@@ -173,6 +173,8 @@ RE2 ou le crate `regex` de Rust compilé en wasm, garantie de temps linéaire.
 
 ## Deno Deploy et auto-hébergement : ce qui est garanti dans chaque cas
 
+> **Statut : la cible Deno Deploy n'existe plus.** Cette section compare les deux cibles telles qu'elles étaient au moment de la décision, et son raisonnement reste la référence. Depuis l'ADR-0011, les cibles sont Scalingo et Docker, toutes deux à processus unique et durable : c'est le cas « auto-hébergement en conteneur » qui décrit la production, et ce qui est écrit sur Deploy est à lire comme de l'histoire, le guide `docs/deno-deploy.md` ayant été supprimé avec la plateforme. Les limites de cet ADR sont inchangées.
+
 ### Ce qui est identique
 
 Toutes les limites de cet ADR sont appliquées dans le code applicatif, sur chaque requête. Elles tiennent à l'identique sur les deux cibles. C'est la raison pour laquelle la politique est écrite en code et pas en configuration d'infrastructure.
@@ -353,4 +355,5 @@ Si l'équipe préfère conserver l'endpoint, les deux ADR restent compatibles : 
 - ADR-0006 : proxy transparent, forme des erreurs FGP
 - ADR-0007 : logs stream, capture detailed
 - `docs/limits.md` : limites fonctionnelles des body filters, dont la section 6 sur la taille de blob
-- `docs/deno-deploy.md` : quotas de la plateforme
+- `docs/deno-deploy.md` : quotas de la plateforme. **Fichier supprimé** par l'ADR-0011 avec la cible qu'il documentait ; les mentions qui en subsistent dans cet ADR sont de l'histoire
+- ADR-0011 : migration de Deno vers Node, qui retire la cible Deno Deploy sans toucher à aucune limite de cet ADR, et qui rend à la décision D9 son réexamen

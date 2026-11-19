@@ -1,4 +1,4 @@
-import { encodeBase64Url } from "@std/encoding/base64url";
+import { encodeBase64Url } from "../crypto/base64url.ts";
 
 import { readLogsConfig } from "./config.ts";
 import type { DetailedEntry, NetworkEntry } from "./events.ts";
@@ -7,9 +7,9 @@ import { append } from "./store.ts";
 const IV_LENGTH = 12;
 
 async function gzip(data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
-  const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(
-    new CompressionStream("gzip"),
-  );
+  const stream = new Blob([data as Uint8Array<ArrayBuffer>])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 

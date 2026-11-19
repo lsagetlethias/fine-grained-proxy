@@ -1,5 +1,6 @@
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { type ErrorHandler, Hono, type MiddlewareHandler } from "hono";
-import { serveStatic } from "hono/deno";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
@@ -11,7 +12,7 @@ import { logsRoutes } from "./routes/logs.tsx";
 import { logsEnabled } from "./logs/config.ts";
 import { purge } from "./logs/store.ts";
 import { purgeExpiredKeys } from "./crypto/key-cache.ts";
-import { readEnv } from "./env.ts";
+import { lockdownEnv, readEnv } from "./env.ts";
 import {
   FGP_OWNED_PATHS,
   FGP_SECURITY_HEADERS,
@@ -154,10 +155,7 @@ function apiBodyLimit(maxSize: number): MiddlewareHandler {
   return bodyLimit({
     maxSize,
     onError: (c) => {
-      const res = c.json(
-        { error: "payload_too_large", message: "Request body is too large" },
-        413,
-      );
+      const res = c.json({ error: "payload_too_large", message: "Request body is too large" }, 413);
       res.headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_PROXY);
       return res;
     },
@@ -192,16 +190,23 @@ app.use("/api/*", async (c, next) => {
 
 app.get("/healthz", (c) => c.json({ status: "ok" }));
 
-app.get(
-  "/static/*",
-  serveStatic({
-    root: "./",
-    rewriteRequestPath: (path) => path,
-    onFound: (_path, c) => {
-      c.header("Cache-Control", "public, max-age=86400");
-    },
-  }),
-);
+// onFound est appele apres la construction de la reponse : un c.header() y arriverait trop
+// tard pour y figurer, et les assets repartiraient sans duree de cache. L'en-tete se pose
+// donc sur la reponse rendue, et seulement quand le fichier a ete trouve : sur un manque,
+// serveStatic passe la main et c'est le 404 ci-dessous qui repond.
+// root sur static/ et non sur la racine du projet : serveStatic sonde son root au montage,
+// et un root a "./" reclamait un droit de lecture sur tout le depot, node_modules et sources
+// comprises, la ou --allow-read=static suffisait sous Deno.
+const staticFiles = serveStatic({
+  root: "./static",
+  rewriteRequestPath: (path) => path.replace(/^\/static/, ""),
+});
+
+app.get("/static/*", async (c, next) => {
+  const res = await staticFiles(c, next);
+  if (res instanceof Response) res.headers.set("Cache-Control", "public, max-age=86400");
+  return res;
+});
 
 app.get("/static/*", (c) => {
   const response = c.json({ error: "not_found", message: "Static file not found" }, 404);
@@ -220,6 +225,8 @@ app.all("/api/*", (c) => {
 
 // Le timer n'est plus conditionne a logsEnabled() : le cache de derivation a besoin de
 // sa purge meme quand la feature logs est coupee (ADR-0010 D8).
+// unref : le serveur en ecoute suffit a tenir le processus en vie, et sans lui tout fichier
+// de test qui importe ce module garderait la boucle d'evenements ouverte indefiniment.
 setInterval(() => {
   try {
     if (logsEnabled()) purge();
@@ -227,17 +234,25 @@ setInterval(() => {
   } catch (err) {
     console.error("[fgp] purge failed:", err);
   }
-}, 60_000);
+}, 60_000).unref();
 
 app.use("/:blob/*", withProxyErrorSecurity(proxyMiddleware()));
 
 export { app };
 
-// Pas d'`export default { fetch }` : sous `deno serve` le champ `port` est ignore et PORT
-// devient inoperant. L'ecoute explicite ci-dessous est le pattern Deno Deploy Classic.
+// L'ecoute est conditionnee a l'execution directe du module : les tests importent `app` et
+// l'interrogent par app.fetch, sans jamais ouvrir de socket. C'est ici, et nulle part
+// ailleurs, que PORT est pris en compte.
 if (import.meta.main) {
-  Deno.serve(
-    { port: Number(readEnv("PORT") ?? 8000), hostname: "0.0.0.0" },
-    (req: Request, info: Deno.ServeHandlerInfo) => app.fetch(req, { info }),
-  );
+  // Tient la place de l'allow-list --allow-env de Deno (ADR-0011). Appele ici et pas au
+  // chargement de env.ts, que les fichiers de test importent : une purge a l'import
+  // amputerait l'environnement du lanceur de tests.
+  const removed = lockdownEnv();
+  console.log(`[fgp] env lockdown: ${removed.length} variables hors registre retirees`);
+
+  serve({
+    fetch: app.fetch,
+    port: Number(readEnv("PORT") ?? 8000),
+    hostname: "0.0.0.0",
+  });
 }

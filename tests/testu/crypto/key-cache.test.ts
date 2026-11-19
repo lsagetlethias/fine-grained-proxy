@@ -1,4 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+
+import { assertEquals } from "../../_assert.ts";
 import {
   _keyCacheSizeForTests,
   _resetKeyCacheForTests,
@@ -12,14 +14,14 @@ import { decryptBlob, deriveKey, encryptBlob } from "../../../src/crypto/blob.ts
 
 const SALT = "key-cache-test-salt";
 
-Deno.test("AC-50.1: deux derivations avec la meme cle n'appellent deriveKey qu'une fois", async () => {
+test("AC-50.1: deux derivations avec la meme cle n'appellent deriveKey qu'une fois", async () => {
   _resetKeyCacheForTests();
   const original = crypto.subtle.deriveKey.bind(crypto.subtle);
   let calls = 0;
-  // deno-lint-ignore no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
   (crypto.subtle as any).deriveKey = (...args: unknown[]) => {
     calls++;
-    // deno-lint-ignore no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
     return (original as any)(...args);
   };
   try {
@@ -28,13 +30,13 @@ Deno.test("AC-50.1: deux derivations avec la meme cle n'appellent deriveKey qu'u
     assertEquals(calls, 1);
     assertEquals(k1, k2);
   } finally {
-    // deno-lint-ignore no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
     (crypto.subtle as any).deriveKey = original;
     _resetKeyCacheForTests();
   }
 });
 
-Deno.test("AC-50.2: la table ne contient jamais la cle client en clair", async () => {
+test("AC-50.2: la table ne contient jamais la cle client en clair", async () => {
   _resetKeyCacheForTests();
   const clientKey = "cle-client-tres-reconnaissable-42";
   const index = await fingerprint(clientKey, SALT);
@@ -42,10 +44,10 @@ Deno.test("AC-50.2: la table ne contient jamais la cle client en clair", async (
   assertEquals(index.length, 64);
   assertEquals(/^[0-9a-f]+$/.test(index), true);
   // deux sels differents produisent deux index differents
-  assertEquals(index === await fingerprint(clientKey, "autre-sel"), false);
+  assertEquals(index === (await fingerprint(clientKey, "autre-sel")), false);
 });
 
-Deno.test("AC-50.3: l'entree 513 evince la plus ancienne", async () => {
+test("AC-50.3: l'entree 513 evince la plus ancienne", async () => {
   _resetKeyCacheForTests();
   const key = await deriveKey("cle-de-base-pour-le-test-01234", SALT);
   for (let i = 0; i < KEY_CACHE_CAPACITY; i++) setCachedKey(`index-${i}`, key);
@@ -60,7 +62,7 @@ Deno.test("AC-50.3: l'entree 513 evince la plus ancienne", async () => {
   _resetKeyCacheForTests();
 });
 
-Deno.test("AC-50.4: une entree expiree est purgee et redérivee", async () => {
+test("AC-50.4: une entree expiree est purgee et redérivee", async () => {
   _resetKeyCacheForTests();
   const key = await deriveKey("cle-pour-expiration-0123456789", SALT);
   setCachedKey("index-expirable", key);
@@ -80,7 +82,7 @@ Deno.test("AC-50.4: une entree expiree est purgee et redérivee", async () => {
   }
 });
 
-Deno.test("AC-50.5 (registre v5): le cache n'est jamais une dependance de correction", async () => {
+test("AC-50.5 (registre v5): le cache n'est jamais une dependance de correction", async () => {
   const clientKey = "cle-pour-la-correction-0123456789";
   const salt = "salt-correction";
   const blob = await encryptBlob(
@@ -98,8 +100,8 @@ Deno.test("AC-50.5 (registre v5): le cache n'est jamais une dependance de correc
   );
 
   // Cache vide, cache chaud, cache purge entre deux lectures : les trois rendent exactement
-  // la meme configuration. Sur Deno Deploy le cache est par isolate et ephemere, un produit
-  // dont la correction en dependrait serait faux une requete sur deux.
+  // la meme configuration. Le cache est local au processus et ephemere, un produit dont la
+  // correction en dependrait serait faux une requete sur deux.
   _resetKeyCacheForTests();
   const froid = await decryptBlob(blob, clientKey, salt);
 
@@ -116,14 +118,14 @@ Deno.test("AC-50.5 (registre v5): le cache n'est jamais une dependance de correc
   assertEquals(apresPurge, froid);
 });
 
-Deno.test("AC-50.6: le trafic legitime rate le cache une fois, le trafic a cles aleatoires a 100 %", async () => {
+test("AC-50.6: le trafic legitime rate le cache une fois, le trafic a cles aleatoires a 100 %", async () => {
   _resetKeyCacheForTests();
   const original = crypto.subtle.deriveKey.bind(crypto.subtle);
   let calls = 0;
-  // deno-lint-ignore no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
   (crypto.subtle as any).deriveKey = (...args: unknown[]) => {
     calls++;
-    // deno-lint-ignore no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
     return (original as any)(...args);
   };
   try {
@@ -141,20 +143,20 @@ Deno.test("AC-50.6: le trafic legitime rate le cache une fois, le trafic a cles 
     }
     assertEquals(calls, tours, "des cles toutes differentes doivent rater le cache a 100 %");
   } finally {
-    // deno-lint-ignore no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
     (crypto.subtle as any).deriveKey = original;
     _resetKeyCacheForTests();
   }
 });
 
-Deno.test("AC-50.11: le nombre d'iterations PBKDF2 vaut toujours 100 000", async () => {
+test("AC-50.11: le nombre d'iterations PBKDF2 vaut toujours 100 000", async () => {
   _resetKeyCacheForTests();
   const original = crypto.subtle.deriveKey.bind(crypto.subtle);
   const parametres: { name?: string; iterations?: number; hash?: string }[] = [];
-  // deno-lint-ignore no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
   (crypto.subtle as any).deriveKey = (...args: unknown[]) => {
     parametres.push(args[0] as { name?: string; iterations?: number; hash?: string });
-    // deno-lint-ignore no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
     return (original as any)(...args);
   };
   try {
@@ -167,7 +169,7 @@ Deno.test("AC-50.11: le nombre d'iterations PBKDF2 vaut toujours 100 000", async
     assertEquals(parametres[0].iterations, 100_000);
     assertEquals(parametres[0].hash, "SHA-256");
   } finally {
-    // deno-lint-ignore no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: remplacement d'une primitive Web Crypto en lecture seule, le temps du test
     (crypto.subtle as any).deriveKey = original;
     _resetKeyCacheForTests();
   }

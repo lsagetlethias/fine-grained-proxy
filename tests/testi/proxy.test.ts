@@ -1,6 +1,7 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 import { Hono } from "hono";
 
+import { assertEquals } from "../_assert.ts";
 import { encryptBlob } from "../../src/crypto/blob.ts";
 import { proxyMiddleware } from "../../src/middleware/proxy.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
@@ -12,16 +13,16 @@ const originalFetch = globalThis.fetch;
 
 function setup() {
   _resetStoreForTests();
-  Deno.env.set("FGP_SALT", SERVER_SALT);
-  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
-  Deno.env.set("SCALINGO_AUTH_URL", "https://auth.mock.local");
+  process.env.FGP_SALT = SERVER_SALT;
+  process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
+  process.env.SCALINGO_AUTH_URL = "https://auth.mock.local";
 }
 
 function teardown() {
   globalThis.fetch = originalFetch;
-  Deno.env.delete("FGP_SALT");
-  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-  Deno.env.delete("SCALINGO_AUTH_URL");
+  delete process.env.FGP_SALT;
+  delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+  delete process.env.SCALINGO_AUTH_URL;
 }
 
 function mockFetch(overrides?: { apiStatus?: number; authStatus?: number }) {
@@ -106,662 +107,531 @@ async function makeBlob(
 
 // --- Core proxy flow ---
 
-Deno.test({
-  name: "AC-1.5: integration: full proxy flow returns 200 (scalingo-exchange)",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+test("AC-1.5: integration: full proxy flow returns 200 (scalingo-exchange)", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
 
-    assertEquals(res.status, 200);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 200);
+  teardown();
 });
 
-Deno.test({
-  name: "AC-1.1: integration: missing X-FGP-Key returns 401 missing_key",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+test("AC-1.1: integration: missing X-FGP-Key returns 401 missing_key", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`);
-    const body = await res.json();
+  const res = await app.request(`/${blob}/v1/apps/my-app`);
+  const body = await res.json();
 
-    assertEquals(res.status, 401);
-    assertEquals(body.error, "missing_key");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 401);
+  assertEquals(body.error, "missing_key");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-1.2: integration: wrong key returns 401 invalid_credentials",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+test("AC-1.2: integration: wrong key returns 401 invalid_credentials", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": "wrong-key" },
-    });
-    const body = await res.json();
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": "wrong-key" },
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 401);
-    assertEquals(body.error, "invalid_credentials");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 401);
+  assertEquals(body.error, "invalid_credentials");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-2.2: integration: expired token returns 410 token_expired",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"], { ttl: 1, createdAt: nowUnix() - 60 });
+test("AC-2.2: integration: expired token returns 410 token_expired", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"], { ttl: 1, createdAt: nowUnix() - 60 });
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const body = await res.json();
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 410);
-    assertEquals(body.error, "token_expired");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 410);
+  assertEquals(body.error, "token_expired");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-2.3: integration: ttl 0 never expires",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"], { ttl: 0, createdAt: 0 });
+test("AC-2.3: integration: ttl 0 never expires", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"], { ttl: 0, createdAt: 0 });
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
 
-    assertEquals(res.status, 200);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 200);
+  teardown();
 });
 
-Deno.test({
-  name: "AC-1.4: integration: blob > 4096 chars returns 414 blob_too_large",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const fakeBlob = "A".repeat(4097);
+test("AC-1.4: integration: blob > 4096 chars returns 414 blob_too_large", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const fakeBlob = "A".repeat(4097);
 
-    const res = await app.request(`/${fakeBlob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const body = await res.json();
+  const res = await app.request(`/${fakeBlob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 414);
-    assertEquals(body.error, "blob_too_large");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 414);
+  assertEquals(body.error, "blob_too_large");
+  teardown();
 });
 
 // --- Scope checks (METHOD:PATH) ---
 
-Deno.test({
-  name: "AC-3.1+AC-3.11: integration: GET allowed, POST denied with GET-only scope",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+test("AC-3.1+AC-3.11: integration: GET allowed, POST denied with GET-only scope", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const resGet = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(resGet.status, 200);
+  const resGet = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(resGet.status, 200);
 
-    _resetStoreForTests();
-    mockFetch();
-    const resPost = await app.request(`/${blob}/v1/apps/my-app/scale`, {
-      method: "POST",
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const body = await resPost.json();
-    assertEquals(resPost.status, 403);
-    assertEquals(body.error, "scope_denied");
+  _resetStoreForTests();
+  mockFetch();
+  const resPost = await app.request(`/${blob}/v1/apps/my-app/scale`, {
+    method: "POST",
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const body = await resPost.json();
+  assertEquals(resPost.status, 403);
+  assertEquals(body.error, "scope_denied");
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "AC-3.2: integration: exact path scope matches only that path",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["POST:/v1/apps/my-app/scale"]);
+test("AC-3.2: integration: exact path scope matches only that path", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["POST:/v1/apps/my-app/scale"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app/scale`, {
-      method: "POST",
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res.status, 200);
+  const res = await app.request(`/${blob}/v1/apps/my-app/scale`, {
+    method: "POST",
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res.status, 200);
 
-    _resetStoreForTests();
-    mockFetch();
-    const resDenied = await app.request(`/${blob}/v1/apps/my-app/restart`, {
-      method: "POST",
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(resDenied.status, 403);
+  _resetStoreForTests();
+  mockFetch();
+  const resDenied = await app.request(`/${blob}/v1/apps/my-app/restart`, {
+    method: "POST",
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(resDenied.status, 403);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "AC-3.4: integration: wildcard method allows any method",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["*:/v1/apps/*"]);
+test("AC-3.4: integration: wildcard method allows any method", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["*:/v1/apps/*"]);
 
-    const resGet = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(resGet.status, 200);
+  const resGet = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(resGet.status, 200);
 
-    _resetStoreForTests();
-    mockFetch();
-    const resPost = await app.request(`/${blob}/v1/apps/my-app/scale`, {
-      method: "POST",
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(resPost.status, 200);
+  _resetStoreForTests();
+  mockFetch();
+  const resPost = await app.request(`/${blob}/v1/apps/my-app/scale`, {
+    method: "POST",
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(resPost.status, 200);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "AC-3.7: integration: full wildcard scope allows everything",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["*:*"]);
+test("AC-3.7: integration: full wildcard scope allows everything", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["*:*"]);
 
-    const res = await app.request(`/${blob}/v1/anything/at/all`, {
-      method: "PUT",
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res.status, 200);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  const res = await app.request(`/${blob}/v1/anything/at/all`, {
+    method: "PUT",
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res.status, 200);
+  teardown();
 });
 
-Deno.test({
-  name: "AC-3.5+AC-3.6: integration: multi-method scope works",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob(["GET|POST:/v1/apps/*"]);
+test("AC-3.5+AC-3.6: integration: multi-method scope works", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob(["GET|POST:/v1/apps/*"]);
 
-    const resGet = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(resGet.status, 200);
+  const resGet = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(resGet.status, 200);
 
-    _resetStoreForTests();
-    mockFetch();
-    const resPost = await app.request(`/${blob}/v1/apps/my-app/scale`, {
-      method: "POST",
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(resPost.status, 200);
+  _resetStoreForTests();
+  mockFetch();
+  const resPost = await app.request(`/${blob}/v1/apps/my-app/scale`, {
+    method: "POST",
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(resPost.status, 200);
 
-    _resetStoreForTests();
-    mockFetch();
-    const resPut = await app.request(`/${blob}/v1/apps/my-app/variables`, {
-      method: "PUT",
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(resPut.status, 403);
+  _resetStoreForTests();
+  mockFetch();
+  const resPut = await app.request(`/${blob}/v1/apps/my-app/variables`, {
+    method: "PUT",
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(resPut.status, 403);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "AC-3.11: integration: empty scopes deny everything",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
-    const blob = await makeBlob([]);
+test("AC-3.11: integration: empty scopes deny everything", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
+  const blob = await makeBlob([]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res.status, 403);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res.status, 403);
+  teardown();
 });
 
 // --- Auth modes ---
 
-Deno.test({
-  name: "AC-7.1: integration: bearer auth sends Authorization: Bearer header",
-  fn: async () => {
-    setup();
-    let capturedAuth = "";
-    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("api.mock.local")) {
-        capturedAuth = (init?.headers as Headers)?.get("Authorization") ?? "";
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+test("AC-7.1: integration: bearer auth sends Authorization: Bearer header", async () => {
+  setup();
+  let capturedAuth = "";
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("api.mock.local")) {
+      capturedAuth = (init?.headers as Headers)?.get("Authorization") ?? "";
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["*:*"], { auth: "bearer", token: "my-api-token" });
+  const app = createApp();
+  const blob = await makeBlob(["*:*"], { auth: "bearer", token: "my-api-token" });
 
-    const res = await app.request(`/${blob}/v1/apps`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res.status, 200);
-    assertEquals(capturedAuth, "Bearer my-api-token");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  const res = await app.request(`/${blob}/v1/apps`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res.status, 200);
+  assertEquals(capturedAuth, "Bearer my-api-token");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-7.2: integration: basic auth sends Authorization: Basic header",
-  fn: async () => {
-    setup();
-    let capturedAuth = "";
-    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("api.mock.local")) {
-        capturedAuth = (init?.headers as Headers)?.get("Authorization") ?? "";
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+test("AC-7.2: integration: basic auth sends Authorization: Basic header", async () => {
+  setup();
+  let capturedAuth = "";
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("api.mock.local")) {
+      capturedAuth = (init?.headers as Headers)?.get("Authorization") ?? "";
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["*:*"], { auth: "basic", token: "my-api-token" });
+  const app = createApp();
+  const blob = await makeBlob(["*:*"], { auth: "basic", token: "my-api-token" });
 
-    const res = await app.request(`/${blob}/v1/apps`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res.status, 200);
-    assertEquals(capturedAuth, `Basic ${btoa(":my-api-token")}`);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  const res = await app.request(`/${blob}/v1/apps`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res.status, 200);
+  assertEquals(capturedAuth, `Basic ${btoa(":my-api-token")}`);
+  teardown();
 });
 
-Deno.test({
-  name: "AC-7.4: integration: header:X-API-Key auth sends custom header",
-  fn: async () => {
-    setup();
-    let capturedHeader = "";
-    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("api.mock.local")) {
-        capturedHeader = (init?.headers as Headers)?.get("X-API-Key") ?? "";
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+test("AC-7.4: integration: header:X-API-Key auth sends custom header", async () => {
+  setup();
+  let capturedHeader = "";
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("api.mock.local")) {
+      capturedHeader = (init?.headers as Headers)?.get("X-API-Key") ?? "";
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["*:*"], { auth: "header:X-API-Key", token: "secret-key" });
+  const app = createApp();
+  const blob = await makeBlob(["*:*"], { auth: "header:X-API-Key", token: "secret-key" });
 
-    const res = await app.request(`/${blob}/v1/data`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res.status, 200);
-    assertEquals(capturedHeader, "secret-key");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  const res = await app.request(`/${blob}/v1/data`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res.status, 200);
+  assertEquals(capturedHeader, "secret-key");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-7.3+AC-8.1: integration: scalingo-exchange does token exchange and caches bearer",
-  fn: async () => {
-    setup();
-    let exchangeCount = 0;
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        exchangeCount++;
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "bearer-from-exchange" }), { status: 200 }),
-        );
-      }
+test("AC-7.3+AC-8.1: integration: scalingo-exchange does token exchange and caches bearer", async () => {
+  setup();
+  let exchangeCount = 0;
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      exchangeCount++;
       return Promise.resolve(
-        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+        new Response(JSON.stringify({ token: "bearer-from-exchange" }), { status: 200 }),
       );
-    }) as typeof globalThis.fetch;
+    }
+    return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["*:*"], { auth: "scalingo-exchange" });
+  const app = createApp();
+  const blob = await makeBlob(["*:*"], { auth: "scalingo-exchange" });
 
-    const res1 = await app.request(`/${blob}/v1/apps`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res1.status, 200);
-    assertEquals(exchangeCount, 1);
+  const res1 = await app.request(`/${blob}/v1/apps`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res1.status, 200);
+  assertEquals(exchangeCount, 1);
 
-    const res2 = await app.request(`/${blob}/v1/apps`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res2.status, 200);
-    assertEquals(exchangeCount, 1);
+  const res2 = await app.request(`/${blob}/v1/apps`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res2.status, 200);
+  assertEquals(exchangeCount, 1);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
 // --- Upstream error handling ---
 
-Deno.test({
-  name: "AC-17.2: upstream 401 forwarded transparently with X-FGP-Source: upstream",
-  fn: async () => {
-    setup();
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "mock-bearer" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      }
+test("AC-17.2: upstream 401 forwarded transparently with X-FGP-Source: upstream", async () => {
+  setup();
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
       return Promise.resolve(
-        new Response(JSON.stringify({ error: "invalid_token" }), {
-          status: 401,
+        new Response(JSON.stringify({ token: "mock-bearer" }), {
+          status: 200,
           headers: { "Content-Type": "application/json" },
         }),
       );
-    }) as typeof globalThis.fetch;
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify({ error: "invalid_token" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  }) as typeof globalThis.fetch;
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const body = await res.json();
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 401);
-    assertEquals(body.error, "invalid_token");
-    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 401);
+  assertEquals(body.error, "invalid_token");
+  assertEquals(res.headers.get("X-FGP-Source"), "upstream");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-17.5: upstream 429 forwarded transparently with Retry-After and X-FGP-Source: upstream",
-  fn: async () => {
-    setup();
-    mockFetch({ apiStatus: 429 });
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+test("AC-17.5: upstream 429 forwarded transparently with Retry-After and X-FGP-Source: upstream", async () => {
+  setup();
+  mockFetch({ apiStatus: 429 });
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const body = await res.text();
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const body = await res.text();
 
-    assertEquals(res.status, 429);
-    assertEquals(body, "{}");
-    assertEquals(res.headers.get("Retry-After"), "30");
-    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 429);
+  assertEquals(body, "{}");
+  assertEquals(res.headers.get("Retry-After"), "30");
+  assertEquals(res.headers.get("X-FGP-Source"), "upstream");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-17.7: upstream 500 forwarded transparently with X-FGP-Source: upstream",
-  fn: async () => {
-    setup();
-    mockFetch({ apiStatus: 500 });
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+test("AC-17.7: upstream 500 forwarded transparently with X-FGP-Source: upstream", async () => {
+  setup();
+  mockFetch({ apiStatus: 500 });
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const body = await res.text();
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const body = await res.text();
 
-    assertEquals(res.status, 500);
-    assertEquals(body, "Internal Server Error");
-    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 500);
+  assertEquals(body, "Internal Server Error");
+  assertEquals(res.headers.get("X-FGP-Source"), "upstream");
+  teardown();
 });
 
 // --- Target forwarding ---
 
-Deno.test({
-  name: "integration: request is forwarded to config.target",
-  fn: async () => {
-    setup();
-    let capturedUrl = "";
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("custom-api.example.com")) {
-        capturedUrl = url;
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+test("integration: request is forwarded to config.target", async () => {
+  setup();
+  let capturedUrl = "";
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("custom-api.example.com")) {
+      capturedUrl = url;
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["*:*"], {
-      auth: "bearer",
-      target: "https://custom-api.example.com",
-    });
+  const app = createApp();
+  const blob = await makeBlob(["*:*"], {
+    auth: "bearer",
+    target: "https://custom-api.example.com",
+  });
 
-    const res = await app.request(`/${blob}/v1/resources/123`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    assertEquals(res.status, 200);
-    assertEquals(capturedUrl, "https://custom-api.example.com/v1/resources/123");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  const res = await app.request(`/${blob}/v1/resources/123`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  assertEquals(res.status, 200);
+  assertEquals(capturedUrl, "https://custom-api.example.com/v1/resources/123");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-17.18: Set-Cookie from upstream is stripped, X-FGP-Source: upstream is set",
-  fn: async () => {
-    setup();
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "bearer" }), { status: 200 }),
-        );
-      }
-      return Promise.resolve(
-        new Response("{}", {
-          status: 200,
-          headers: { "Set-Cookie": "session=abc; Path=/", "Content-Type": "application/json" },
-        }),
-      );
-    }) as typeof globalThis.fetch;
+test("AC-17.18: Set-Cookie from upstream is stripped, X-FGP-Source: upstream is set", async () => {
+  setup();
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      return Promise.resolve(new Response(JSON.stringify({ token: "bearer" }), { status: 200 }));
+    }
+    return Promise.resolve(
+      new Response("{}", {
+        status: 200,
+        headers: { "Set-Cookie": "session=abc; Path=/", "Content-Type": "application/json" },
+      }),
+    );
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["*:*"]);
+  const app = createApp();
+  const blob = await makeBlob(["*:*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
 
-    assertEquals(res.status, 200);
-    assertEquals(res.headers.get("Set-Cookie"), null);
-    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("Set-Cookie"), null);
+  assertEquals(res.headers.get("X-FGP-Source"), "upstream");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-9.1+AC-15.2: integration: X-FGP-Key is not forwarded to target",
-  fn: async () => {
-    setup();
-    let forwardedFgpKey: string | null = "not-checked";
-    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "bearer" }), { status: 200 }),
-        );
-      }
-      forwardedFgpKey = (init?.headers as Headers)?.get("X-FGP-Key");
-      return Promise.resolve(new Response("{}", { status: 200 }));
-    }) as typeof globalThis.fetch;
+test("AC-9.1+AC-15.2: integration: X-FGP-Key is not forwarded to target", async () => {
+  setup();
+  let forwardedFgpKey: string | null = "not-checked";
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      return Promise.resolve(new Response(JSON.stringify({ token: "bearer" }), { status: 200 }));
+    }
+    forwardedFgpKey = (init?.headers as Headers)?.get("X-FGP-Key");
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["*:*"]);
+  const app = createApp();
+  const blob = await makeBlob(["*:*"]);
 
-    await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
+  await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
 
-    assertEquals(forwardedFgpKey, null);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(forwardedFgpKey, null);
+  teardown();
 });
 
 // --- Singleflight ---
 
-Deno.test({
-  name: "AC-8.3: integration: singleflight deduplicates concurrent exchanges",
-  fn: async () => {
-    setup();
-    let exchangeCount = 0;
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        exchangeCount++;
-        return new Promise<Response>((resolve) =>
-          setTimeout(
-            () =>
-              resolve(
-                new Response(JSON.stringify({ token: "bearer-sf" }), { status: 200 }),
-              ),
-            50,
-          )
-        );
-      }
-      return Promise.resolve(
-        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+test("AC-8.3: integration: singleflight deduplicates concurrent exchanges", async () => {
+  setup();
+  let exchangeCount = 0;
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      exchangeCount++;
+      return new Promise<Response>((resolve) =>
+        setTimeout(
+          () => resolve(new Response(JSON.stringify({ token: "bearer-sf" }), { status: 200 })),
+          50,
+        ),
       );
-    }) as typeof globalThis.fetch;
+    }
+    return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["*:*"]);
+  const app = createApp();
+  const blob = await makeBlob(["*:*"]);
 
-    const [r1, r2, r3] = await Promise.all([
-      app.request(`/${blob}/v1/apps/my-app`, { headers: { "X-FGP-Key": CLIENT_KEY } }),
-      app.request(`/${blob}/v1/apps/my-app`, { headers: { "X-FGP-Key": CLIENT_KEY } }),
-      app.request(`/${blob}/v1/apps/my-app`, { headers: { "X-FGP-Key": CLIENT_KEY } }),
-    ]);
+  const [r1, r2, r3] = await Promise.all([
+    app.request(`/${blob}/v1/apps/my-app`, { headers: { "X-FGP-Key": CLIENT_KEY } }),
+    app.request(`/${blob}/v1/apps/my-app`, { headers: { "X-FGP-Key": CLIENT_KEY } }),
+    app.request(`/${blob}/v1/apps/my-app`, { headers: { "X-FGP-Key": CLIENT_KEY } }),
+  ]);
 
-    assertEquals(r1.status, 200);
-    assertEquals(r2.status, 200);
-    assertEquals(r3.status, 200);
-    assertEquals(exchangeCount, 1);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(r1.status, 200);
+  assertEquals(r2.status, 200);
+  assertEquals(r3.status, 200);
+  assertEquals(exchangeCount, 1);
+  teardown();
 });
 
 // --- Token not leaked in errors ---
 
-Deno.test({
-  name: "AC-15.1: integration: token never appears in error response bodies",
-  fn: async () => {
-    setup();
-    mockFetch();
-    const app = createApp();
+test("AC-15.1: integration: token never appears in error response bodies", async () => {
+  setup();
+  mockFetch();
+  const app = createApp();
 
-    const blob = await makeBlob(["GET:/v1/apps/*"], { ttl: 1, createdAt: nowUnix() - 60 });
-    const expiredRes = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const expiredBody = await expiredRes.text();
-    assertEquals(expiredBody.includes("tk-us-test-token"), false);
+  const blob = await makeBlob(["GET:/v1/apps/*"], { ttl: 1, createdAt: nowUnix() - 60 });
+  const expiredRes = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const expiredBody = await expiredRes.text();
+  assertEquals(expiredBody.includes("tk-us-test-token"), false);
 
-    const blob2 = await makeBlob([]);
-    const forbiddenRes = await app.request(`/${blob2}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const forbiddenBody = await forbiddenRes.text();
-    assertEquals(forbiddenBody.includes("tk-us-test-token"), false);
+  const blob2 = await makeBlob([]);
+  const forbiddenRes = await app.request(`/${blob2}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const forbiddenBody = await forbiddenRes.text();
+  assertEquals(forbiddenBody.includes("tk-us-test-token"), false);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });

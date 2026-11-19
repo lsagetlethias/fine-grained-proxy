@@ -1,4 +1,4 @@
-import { decodeBase64Url, encodeBase64Url } from "@std/encoding/base64url";
+import { decodeBase64Url, encodeBase64Url } from "./base64url.ts";
 import { readBounded } from "./bounded.ts";
 
 import {
@@ -68,16 +68,16 @@ async function deriveKeyUncached(clientKey: string, serverSalt: string): Promise
 }
 
 async function compress(data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
-  const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(
-    new CompressionStream("gzip"),
-  );
+  const stream = new Blob([data as Uint8Array<ArrayBuffer>])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 async function decompress(data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
-  const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(
-    new DecompressionStream("gzip"),
-  );
+  const stream = new Blob([data as Uint8Array<ArrayBuffer>])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
   return new Uint8Array(await readBounded(stream));
 }
 
@@ -122,8 +122,12 @@ interface BlobBudget {
 }
 
 function isScalar(value: unknown): boolean {
-  return value === null || typeof value === "string" || typeof value === "number" ||
-    typeof value === "boolean";
+  return (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
 }
 
 function isValidObjectValue(
@@ -168,7 +172,7 @@ function isValidObjectValue(
       if (o.value.length < 2) return false;
       if (o.value.length > MAX_AND_WIDTH) return false;
       return o.value.every((sub: unknown) =>
-        isValidObjectValue(sub, budget, depth + 1, queryScoped)
+        isValidObjectValue(sub, budget, depth + 1, queryScoped),
       );
     }
     case "not": {
@@ -219,7 +223,8 @@ function isValidScopeEntry(s: unknown, budget: BlobBudget): s is ScopeEntry {
   if (typeof s !== "object" || s === null) return false;
   const entry = s as Record<string, unknown>;
   if (
-    !Array.isArray(entry.methods) || !entry.methods.every((m: unknown) => typeof m === "string")
+    !Array.isArray(entry.methods) ||
+    !entry.methods.every((m: unknown) => typeof m === "string")
   ) {
     return false;
   }
@@ -301,7 +306,8 @@ export async function decryptBlobWithKey(
   if (
     typeof config.v !== "number" ||
     (config.v !== 2 && config.v !== 3 && config.v !== 4 && config.v !== 5) ||
-    typeof config.target !== "string" || !config.target ||
+    typeof config.target !== "string" ||
+    !config.target ||
     !Array.isArray(config.scopes) ||
     typeof config.ttl !== "number" ||
     typeof config.createdAt !== "number"
@@ -359,9 +365,7 @@ export async function decryptBlobWithKey(
       throw new Error("Invalid blob: malformed BlobConfig");
     }
     if (
-      !config.scopes.every(
-        (s: unknown) => typeof s === "string" || isValidScopeEntry(s, budget),
-      )
+      !config.scopes.every((s: unknown) => typeof s === "string" || isValidScopeEntry(s, budget))
     ) {
       throw new Error("Invalid blob: malformed BlobConfig");
     }

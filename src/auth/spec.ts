@@ -23,7 +23,7 @@ export const MAX_ADDON_FIELD_LENGTH = 64;
 // Token RFC 7230 : seule definition qui garantit qu'aucun runtime ne rejette le nom au forward.
 const HEADER_NAME_TOKEN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
 
-// deno-lint-ignore no-control-regex
+// biome-ignore lint/suspicious/noControlCharactersInRegex: les caracteres de controle sont precisement ce que ce validateur refuse
 const CONTROL_CHARS = /[\x00-\x1F\x7F]/;
 
 // Headers qui gouvernent le transport ou l'identification FGP : les laisser surcharger

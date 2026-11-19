@@ -1587,11 +1587,11 @@ Nouveau guide repliable, même registre que les guides existants (§12.4, scopes
 La feature `/logs` permet à un opérateur de consulter les requêtes passées par un blob FGP donné, en stream live et avec un court historique. C'est une feature **UI uniquement** : il n'existe aucun endpoint JSON public équivalent, et aucune entrée de log n'est jamais persistée.
 
 **Principes** :
-- **Zero storage strict** : les logs vivent exclusivement en mémoire, dans l'isolate qui a capturé la requête. Pas de DB, pas de fichier, pas de bus externe.
+- **Zero storage strict** : les logs vivent exclusivement en mémoire, dans le processus qui a capturé la requête. Pas de DB, pas de fichier, pas de bus externe.
 - **Opt-in** : aucune capture n'a lieu tant que le blob ne l'autorise pas explicitement et que le kill switch global n'est pas activé.
 - **Scoping strict par blob** : les logs sont isolés par blob via un hash SHA-256 tronqué. Un opérateur ne peut voir que les logs du blob dont il possède la clé client.
 - **Zero-trust serveur pour le body** : quand le mode `detailed` est activé, le body request est chiffré côté client avant d'être stocké en mémoire. Le serveur FGP ne peut pas lire le contenu en clair, même en dump mémoire.
-- **Agnostique infra** : pas de dépendance à une feature PaaS spécifique. La visibilité est limitée à l'isolate qui a capturé la requête (per-isolate), ce qui est une conséquence assumée du choix zero storage.
+- **Agnostique infra** : pas de dépendance à une feature PaaS spécifique. La visibilité est limitée au processus qui a capturé la requête, ce qui est une conséquence assumée du choix zero storage. Sur une instance à processus unique, l'opérateur voit donc tout son trafic ; sur un déploiement à plusieurs conteneurs, il ne voit que celui du conteneur auquel il est connecté.
 
 ### 14.2 Scope et non-goals
 
@@ -1654,7 +1654,7 @@ Le champ `name` (optionnel, introduit antérieurement avec le champ « Nom de la
 
 - Le champ est **strictement optionnel** : un blob v2 ou v3 existant sans `logs` reste valide et continue de fonctionner à l'identique.
 - Un blob avec `logs` absent ou `logs.enabled !== true` est traité comme « logs désactivés », pas comme un blob malformé.
-- Les anciennes versions du proxy qui ne connaissent pas ce champ l'ignorent gracieusement (Deno `JSON.parse` ne plante pas sur un champ supplémentaire, et la validation `decryptBlob` actuelle ne rejette pas les champs extra).
+- Les anciennes versions du proxy qui ne connaissent pas ce champ l'ignorent gracieusement (`JSON.parse` ne plante pas sur un champ supplémentaire, et la validation `decryptBlob` actuelle ne rejette pas les champs extra).
 - Aucun bump de version de blob : v3 reste v3. Le champ `logs` est un **additif non-cassant** décorrélé du versioning du format. Il s'applique de la même façon à un blob v4.
 - À la génération d'un blob depuis l'UI, le champ `logs` n'est inclus que si l'utilisateur a explicitement coché une case dans l'onglet « Logs ». Sinon il est omis (blob identique à aujourd'hui).
 
@@ -1813,7 +1813,7 @@ data: {}
 ```
 
 - Event `log` : une entry de log (network ou detailed).
-- Event `ping` : heartbeat envoyé toutes les 15 secondes pour éviter les idle kills de reverse proxies (Deno Deploy, Cloudflare, nginx). Payload `{}` ignoré par le client, il suffit de maintenir la connexion.
+- Event `ping` : heartbeat envoyé toutes les 15 secondes pour éviter les idle kills de reverse proxies (Cloudflare, nginx). Payload `{}` ignoré par le client, il suffit de maintenir la connexion.
 - Le client track le `ts` du dernier event `log` reçu. En cas de déconnexion (réseau, idle kill malgré le heartbeat), il reconnecte avec `?since=<lastTs>`.
 
 **Pourquoi `fetch` streaming plutôt que `EventSource`** : l'API `EventSource` ne permet pas d'envoyer des headers custom (pas de moyen de passer `X-FGP-Blob` + `X-FGP-Key`). Le client utilise donc `fetch` en mode streaming et parse le flux SSE à la main.
@@ -1866,9 +1866,9 @@ data: {}
 | `FGP_LOGS_INACTIVITY_MIN` | `10` | Minutes sans nouvel event → libération du buffer et du topic pub/sub pour ce blob. |
 | `FGP_LOGS_DETAILED_MAX_KB` | `32` | Taille max en KB du body compressé par entry detailed. Au-delà, entry `truncated: true` sans body. |
 
-**Estime RAM** (worst case, configuration par défaut) : ~330 KB par blob actif (50 network × 200 B + 10 detailed × 32 KB). 100 blobs actifs = ~33 MB. Marge confortable vs 512 MB d'un isolate Deno Deploy.
+**Estime RAM** (worst case, configuration par défaut) : ~330 KB par blob actif (50 network × 200 B + 10 detailed × 32 KB). 100 blobs actifs = ~33 MB. Marge confortable au regard d'un conteneur de 512 MB.
 
-**Cette garantie de défaut vaut pour toute variable optionnelle lue par le serveur, pas seulement celles de ce tableau** : `FGP_EGRESS_ALLOW_PRIVATE` absente vaut classification des destinations active, `FGP_TRUSTED_PROXY_HOPS` absente vaut `X-Forwarded-For` ignoré, et ainsi pour chaque variable non requise. L'absence couvre deux cas distincts que le serveur traite identiquement : la variable n'est simplement pas positionnée, ou l'hôte refuse l'accès à son nom (une allow-list `--allow-env` incomplète, par exemple). Toute lecture passe par `readEnv`/`readEnvFlag`/`readEnvInt` (`src/env.ts`), qui ne traitent comme absence que ce refus d'accès et laissent remonter toute autre erreur. Un refus d'accès n'est donc jamais un opt-in silencieux à un comportement moins strict, il ne peut que retomber du côté sûr du défaut. Seule `FGP_SALT` est requise ; sa lecture manquante fait échouer la requête plutôt que de retomber sur un défaut (cf. §8.2, §10).
+**Cette garantie de défaut vaut pour toute variable optionnelle lue par le serveur, pas seulement celles de ce tableau** : `FGP_EGRESS_ALLOW_PRIVATE` absente vaut classification des destinations active, `FGP_TRUSTED_PROXY_HOPS` absente vaut `X-Forwarded-For` ignoré, et ainsi pour chaque variable non requise. Toute lecture passe par `readEnv`/`readEnvFlag`/`readEnvInt` (`src/env.ts`), seul lecteur d'environnement du code serveur, et le registre `ENV_NAMES` du même module est la source de vérité des noms lus. Le runtime ne peut pas refuser l'accès à un nom : une variable est positionnée, ou elle est absente et son défaut sûr s'applique. Il n'existe donc aucun chemin par lequel une instance basculerait silencieusement vers un comportement moins strict. Seule `FGP_SALT` est requise ; sa lecture manquante fait échouer la requête plutôt que de retomber sur un défaut (cf. §8.2, §10).
 
 ### 14.13 Copy UI `/logs`
 
@@ -2226,17 +2226,17 @@ Ce qui est observable côté client :
 - **Le streaming du corps proxy est préservé** quand aucun body filter ni capture detailed n'est actif : les gros uploads à travers le proxy continuent de passer sans être mis en mémoire. C'est une propriété du proxy transparent qu'il ne fallait pas perdre en posant la limite au mauvais endroit.
 - **400 `unsupported_regex`** quand une regex du blob sort du dialecte autorisé.
 - **Un paramètre de query répété au-delà du plafond d'occurrences fait échouer le scope qui le filtre** (v5, §19.4) : 4 occurrences pour un filtre qui contient une regex à n'importe quelle profondeur, 64 pour les autres. Même code `scope_denied` que tout autre refus de scope. Contrairement aux autres limites de cette liste, celle-ci ne dépend d'aucune donnée du blob : elle porte sur la requête de l'appelant, pas sur ce que l'auteur du blob a écrit.
-- **Une variable d'environnement optionnelle absente retombe sur son défaut, et ce défaut est sûr** : classification des destinations active (`FGP_EGRESS_ALLOW_PRIVATE`), `X-Forwarded-For` ignoré (`FGP_TRUSTED_PROXY_HOPS`), feature `/logs` désactivée. L'absence inclut le refus d'accès par l'hôte à un nom hors de son allow-list, traité identiquement à une variable simplement non positionnée (§14.12). Une instance qui refuse l'accès à une variable ne bascule donc jamais vers un comportement moins strict qu'une instance où elle est proprement absente.
+- **Une variable d'environnement optionnelle absente retombe sur son défaut, et ce défaut est sûr** : classification des destinations active (`FGP_EGRESS_ALLOW_PRIVATE`), `X-Forwarded-For` ignoré (`FGP_TRUSTED_PROXY_HOPS`), feature `/logs` désactivée. Le runtime ne refuse l'accès à aucun nom, donc l'absence est le seul cas à traiter (§14.12).
 
 ### 18.6 Limitation de débit : hors de l'application, et pourquoi
 
 Toutes les limites ci-dessus bornent le **coût d'une requête**. Aucune ne borne le **nombre de requêtes**. C'est un choix.
 
-Un limiteur en mémoire du processus est **quasi inopérant sur Deno Deploy** : l'état est par isolate, les isolates sont éphémères, et les requêtes se répartissent entre eux. Il fonctionnerait en auto-hébergement, où le processus est unique et durable. Livrer un limiteur applicatif efficace sur une cible de déploiement sur deux donnerait une **fausse couverture**, ce qui est pire que pas de couverture : l'opérateur croirait le problème réglé.
+L'argument d'origine était la portabilité : un limiteur en mémoire du processus était **quasi inopérant sur Deno Deploy**, où l'état est par isolate, et livrer un limiteur efficace sur une cible de déploiement sur deux aurait donné une **fausse couverture**, ce qui est pire que pas de couverture. Cette cible a disparu avec la migration vers Node (ADR-0011), et les deux qui restent, Scalingo et Docker, ont un processus unique et durable où un limiteur fonctionnerait réellement. **La décision n'est pas renversée pour autant**, elle attend d'être réexaminée pour elle-même.
 
-La limitation de débit est donc documentée **côté opérateur**, par cible de déploiement, dans `docs/deno-deploy.md` et `docs/scalingo-deploy.md`.
+La limitation de débit est donc documentée **côté opérateur** dans `docs/scalingo-deploy.md`.
 
-L'ordre de grandeur qui justifie qu'on ne l'ignore pas : avant les correctifs de l'ADR-0010, **1 900 requêtes suffisaient à épuiser les 20 heures de CPU mensuelles** du plan gratuit de la plateforme. Les correctifs suppriment le coût unitaire aberrant, ils ne suppriment pas la nécessité d'une borne sur le débit.
+L'ordre de grandeur qui justifie qu'on ne l'ignore pas : avant les correctifs de l'ADR-0010, **1 900 requêtes suffisaient à épuiser les 20 heures de CPU mensuelles** du plan gratuit de l'ancienne plateforme. Les correctifs suppriment le coût unitaire aberrant, ils ne suppriment pas la nécessité d'une borne sur le débit.
 
 ---
 

@@ -48,7 +48,7 @@ Pour un changement UI trivial (ajout d'un champ dans un formulaire existant, mod
 ## Points de vigilance
 
 - Les classes Tailwind proposées doivent exister dans la configuration du projet (`tailwind.config.js`, couleurs `fgp`, dark mode par `prefers-color-scheme`). Tailwind est compilé au build, il n'y a pas de CDN pour rattraper une classe inventée.
-- Le designer ne touche pas à `src/main.ts`, `deno.json`, ni aux fichiers de configuration.
+- Le designer ne touche pas à `src/main.ts`, `package.json`, ni aux fichiers de configuration.
 - **Pause** : un message de pause du lead arrête le designer immédiatement.
 
 ## Checklist de fin de tâche

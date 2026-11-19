@@ -32,12 +32,12 @@ pnpm format:check  # verifie sans ecrire
 ## Demo live
 
 Le deck reference une demo en 4 temps. **Zero dependance reseau** : un mock upstream
-local en Deno (`demo-upstream/server.ts`) tient lieu d'API cible, protege par une cle
+local en Node (`demo-upstream/server.ts`) tient lieu d'API cible, protege par une cle
 API bidon. Tout tourne en local. Le script `demo.ts` affiche chaque requete envoyee
 (methode, URL, headers, body) et pretty-print les reponses JSON, pour une demo lisible.
 
 Trois terminaux. Les commandes sont dispo en script pnpm (`pnpm demoN`) ou en direct
-(`deno run -A demo.ts <cmd>`) :
+(`pnpm exec tsx demo.ts <cmd>`) :
 
 1. **Mock upstream** (API cible locale sur `:9000`) :
    ```bash
@@ -45,7 +45,7 @@ Trois terminaux. Les commandes sont dispo en script pnpm (`pnpm demoN`) ou en di
    ```
 2. **FGP** (proxy sur `:8000`, `FGP_SALT` requis dans `.env`) :
    ```bash
-   cd .. && deno task dev
+   cd .. && pnpm run dev
    ```
 3. **Terminal de demo** :
    ```bash

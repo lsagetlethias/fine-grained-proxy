@@ -38,7 +38,7 @@ Il intervient à l'étape 6 du process type (section 8 de [`../ia-architecture-r
 
 - **Changelog** : le dev ne touche jamais au contenu de `docs/changelog.md`. Il peut modifier le renderer JSX. S'il livre une feature user-facing, il signale au lead qu'elle mérite une entrée, le lead relaie au PO.
 - **Exploration** : LSP avant grep sur ce projet TypeScript. `workspaceSymbol`, `findReferences`, `goToDefinition`, `hover`. Grep reste le bon outil pour les fichiers non-TS, les chaînes littérales et les TODO/FIXME.
-- **Parallélisation** : quand deux devs tournent en parallèle et touchent le même fichier (typiquement `deno.json`), le lead les lance avec `isolation: "worktree"` au lieu de les séquencer.
+- **Parallélisation** : quand deux devs tournent en parallèle et touchent le même fichier (typiquement `package.json`), le lead les lance avec `isolation: "worktree"` au lieu de les séquencer.
 - **Pause** : un message de pause du lead arrête le dev immédiatement, tâche en cours non terminée.
 
 ## Checklist de fin de tâche

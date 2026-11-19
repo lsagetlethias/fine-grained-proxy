@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+
 let resolved = "dev";
 try {
-  resolved = Deno.readTextFileSync("static/version.txt").trim() || "dev";
+  resolved = readFileSync("static/version.txt", "utf8").trim() || "dev";
 } catch {
-  // no version.txt, run deno task build to generate it
+  // no version.txt, run the build to generate it
 }
 
 export const ASSET_VERSION = resolved;

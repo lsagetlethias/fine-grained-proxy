@@ -135,7 +135,7 @@ Une tâche mécanique confiée à Opus est un gâchis de budget ; une tâche de 
 
 **Séparation des rôles**
 - Le designer produit des specs (wireframes, classes Tailwind, structure), le dev intègre. Ils se challengent mutuellement.
-- Le designer ne touche pas à `main.ts`, `deno.json`, ni aux fichiers d'intégration.
+- Le designer ne touche pas à `main.ts`, `package.json`, ni aux fichiers d'intégration.
 - Le PO et le designer ne commitent pas. Le lead commite.
 
 **Dev senior autonome**
@@ -366,7 +366,7 @@ if (!design) log('specs UI absentes, le dev implémentera sans maquette')
 
 const impl = await agent(
   `Rôle dev senior. Implémente ${args.besoin} d'après ${specs.specPath} et les specs UI de docs/design/.
-   Lance deno task verify et corrige avant de rendre.`,
+   Lance pnpm verify et corrige avant de rendre.`,
   { label: 'dev:impl', phase: 'Implémentation', schema: IMPL_SCHEMA, effort: 'high' },
 )
 
@@ -474,7 +474,7 @@ Cette convention est inscrite dans `.claude/agents/dev.md` et `.claude/agents/te
 
 Dependabot couvre les mises à jour et les alertes de sécurité au niveau du dépôt. Il ne couvre pas la lecture : personne ne lit les changelogs des dépendances, ni les avis qui ne déclenchent pas d'alerte automatique.
 
-Une **tâche planifiée récurrente** peut compléter ça : un agent lancé chaque semaine qui lit les nouvelles versions des dépendances de `deno.json`, résume ce qui change pour le projet, signale les breaking changes et les avis de sécurité non couverts par Dependabot, et rend un rapport court. C'est un complément, pas un remplacement : Dependabot ouvre les PR, la tâche planifiée dit s'il faut s'en occuper maintenant.
+Une **tâche planifiée récurrente** peut compléter ça : un agent lancé chaque semaine qui lit les nouvelles versions des dépendances de `package.json`, résume ce qui change pour le projet, signale les breaking changes et les avis de sécurité non couverts par Dependabot, et rend un rapport court. C'est un complément, pas un remplacement : Dependabot ouvre les PR, la tâche planifiée dit s'il faut s'en occuper maintenant.
 
 **Rien de tel n'est configuré sur FGP à ce jour.** C'est une option documentée, à arbitrer avec l'architecte, et à mettre en place seulement après que la configuration Dependabot soit stabilisée.
 

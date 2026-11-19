@@ -21,9 +21,7 @@ export function DocPanel() {
         <ol class="list-decimal list-inside space-y-2">
           <li>Choisissez un preset ou configurez manuellement les champs.</li>
           <li>Renseignez le token API de votre service cible.</li>
-          <li>
-            D&eacute;finissez les scopes (permissions par route et m&eacute;thode HTTP).
-          </li>
+          <li>D&eacute;finissez les scopes (permissions par route et m&eacute;thode HTTP).</li>
           <li>Configurez la dur&eacute;e de validit&eacute; (TTL) de l'URL.</li>
           <li>G&eacute;n&eacute;rez l'URL et la cl&eacute; client.</li>
         </ol>
@@ -61,21 +59,21 @@ export function DocPanel() {
             impos&eacute;e par certains services.
           </p>
           <p class="mt-2 text-xs">
-            Dans ce mode, <strong>tous</strong>{" "}
-            les chemins sont transmis &agrave; l'API cible, y compris{" "}
+            Dans ce mode, <strong>tous</strong> les chemins sont transmis &agrave; l'API cible, y
+            compris{" "}
             <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
               /llms.txt
             </code>{" "}
             et{" "}
             <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">/api/*</code>.
             Seules les pages{" "}
-            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">/logs</code>
-            {" "}
+            <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">/logs</code>{" "}
             restent servies par FGP. Pour consulter une page de FGP, envoyez la requ&ecirc;te sans
             le header{" "}
             <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
               X-FGP-Blob
-            </code>.
+            </code>
+            .
           </p>
         </div>
       </section>
@@ -88,8 +86,8 @@ export function DocPanel() {
         </h3>
 
         <p class="mb-2">
-          Cette section couvre les erreurs re&ccedil;ues en <strong>consommant</strong>{" "}
-          une URL FGP. Les erreurs de g&eacute;n&eacute;ration s'affichent directement sous le champ
+          Cette section couvre les erreurs re&ccedil;ues en <strong>consommant</strong> une URL FGP.
+          Les erreurs de g&eacute;n&eacute;ration s'affichent directement sous le champ
           concern&eacute; du formulaire.
         </p>
 
@@ -98,27 +96,25 @@ export function DocPanel() {
           Toute r&eacute;ponse renvoy&eacute;e par le proxy porte l'en-t&ecirc;te{" "}
           <code class="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">
             X-FGP-Source
-          </code>. Il dit qui a r&eacute;pondu, avant m&ecirc;me de regarder le status.
+          </code>
+          . Il dit qui a r&eacute;pondu, avant m&ecirc;me de regarder le status.
         </p>
         <ul class="mt-1 list-disc list-inside space-y-0.5">
           <li>
-            <code class="font-mono text-xs">proxy</code>{" "}
-            : c'est FGP qui a r&eacute;pondu. Le corps a la forme{" "}
-            <code class="font-mono text-xs">{"{error, message}"}</code>{" "}
-            et le code figure dans la liste ci-dessous.
+            <code class="font-mono text-xs">proxy</code> : c'est FGP qui a r&eacute;pondu. Le corps
+            a la forme <code class="font-mono text-xs">{"{error, message}"}</code> et le code figure
+            dans la liste ci-dessous.
           </li>
           <li>
-            <code class="font-mono text-xs">upstream</code>{" "}
-            : la r&eacute;ponse vient de votre API cible. FGP n'a touch&eacute; ni au status ni au
-            corps. Il ajoute cet en-t&ecirc;te et retire trois en-t&ecirc;tes au plus :{" "}
-            <code class="font-mono text-xs">Set-Cookie</code> et{" "}
-            <code class="font-mono text-xs">Transfer-Encoding</code> toujours,{" "}
+            <code class="font-mono text-xs">upstream</code> : la r&eacute;ponse vient de votre API
+            cible. FGP n'a touch&eacute; ni au status ni au corps. Il ajoute cet en-t&ecirc;te et
+            retire trois en-t&ecirc;tes au plus : <code class="font-mono text-xs">Set-Cookie</code>{" "}
+            et <code class="font-mono text-xs">Transfer-Encoding</code> toujours,{" "}
             <code class="font-mono text-xs">Content-Encoding</code> et{" "}
-            <code class="font-mono text-xs">Content-Length</code>{" "}
-            uniquement si votre corps est arriv&eacute; compress&eacute; puis
-            d&eacute;compress&eacute; avant de vous &ecirc;tre transmis (ils d&eacute;criraient
-            alors un corps qui n'existe plus). Interpr&eacute;tez la r&eacute;ponse avec la
-            documentation de cette API.
+            <code class="font-mono text-xs">Content-Length</code> uniquement si votre corps est
+            arriv&eacute; compress&eacute; puis d&eacute;compress&eacute; avant de vous &ecirc;tre
+            transmis (ils d&eacute;criraient alors un corps qui n'existe plus). Interpr&eacute;tez
+            la r&eacute;ponse avec la documentation de cette API.
           </li>
         </ul>
         <p class="mt-1">
@@ -139,9 +135,9 @@ export function DocPanel() {
                   <code class="font-mono text-xs">missing_key</code> (401)
                 </dt>
                 <dd>
-                  L'en-t&ecirc;te <code class="font-mono text-xs">X-FGP-Key</code>{" "}
-                  est absent de la requ&ecirc;te. Sans la cl&eacute; client, le blob ne peut pas
-                  &ecirc;tre d&eacute;chiffr&eacute;.
+                  L'en-t&ecirc;te <code class="font-mono text-xs">X-FGP-Key</code> est absent de la
+                  requ&ecirc;te. Sans la cl&eacute; client, le blob ne peut pas &ecirc;tre
+                  d&eacute;chiffr&eacute;.
                 </dd>
               </div>
               <div>
@@ -252,8 +248,7 @@ export function DocPanel() {
             </p>
             <p class="mt-1">
               Ces trois erreurs sont les seules 502 produites par FGP. Toute autre 502 vient de
-              votre API cible : v&eacute;rifiez <code class="font-mono text-xs">X-FGP-Source</code>
-              {" "}
+              votre API cible : v&eacute;rifiez <code class="font-mono text-xs">X-FGP-Source</code>{" "}
               avant de conclure.
             </p>
             <dl class="mt-1 space-y-2">
@@ -293,19 +288,17 @@ export function DocPanel() {
           <div class="mt-3">
             <p class="font-medium text-gray-700 dark:text-gray-300">Anomalies</p>
             <p class="mt-1">
-              <code class="font-mono text-xs">invalid_request</code>{" "}
-              (400) quand l'URL ne contient pas de chemin apr&egrave;s le blob,{" "}
-              <code class="font-mono text-xs">invalid_auth_mode</code>{" "}
-              (400) quand le mode d'authentification du blob n'est pas reconnu par cette instance,
-              et <code class="font-mono text-xs">internal_error</code>{" "}
-              (500) qui signale un bug de FGP et m&eacute;rite un rapport.
+              <code class="font-mono text-xs">invalid_request</code> (400) quand l'URL ne contient
+              pas de chemin apr&egrave;s le blob,{" "}
+              <code class="font-mono text-xs">invalid_auth_mode</code> (400) quand le mode
+              d'authentification du blob n'est pas reconnu par cette instance, et{" "}
+              <code class="font-mono text-xs">internal_error</code> (500) qui signale un bug de FGP
+              et m&eacute;rite un rapport.
             </p>
           </div>
         </details>
 
-        <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">
-          Param&egrave;tres de query
-        </p>
+        <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">Param&egrave;tres de query</p>
         <p class="mt-1">
           Par d&eacute;faut, les scopes contraignent la m&eacute;thode et le chemin, pas les
           param&egrave;tres de query. Un scope autoris&eacute; sur{" "}
@@ -325,18 +318,17 @@ export function DocPanel() {
         </p>
         <p class="mt-1">
           Un code absent de cette liste n'a pas &eacute;t&eacute; produit par FGP. Un 401, un 404,
-          un 429 ou un 500 portant <code class="font-mono text-xs">X-FGP-Source: upstream</code>
-          {" "}
+          un 429 ou un 500 portant <code class="font-mono text-xs">X-FGP-Source: upstream</code>{" "}
           sont la r&eacute;ponse de votre API cible : status et corps inchang&eacute;s, seuls{" "}
-          <code class="font-mono text-xs">X-FGP-Source</code>{" "}
-          est ajout&eacute; et quelques en-t&ecirc;tes de transport sont retir&eacute;s ({" "}
+          <code class="font-mono text-xs">X-FGP-Source</code> est ajout&eacute; et quelques
+          en-t&ecirc;tes de transport sont retir&eacute;s ({" "}
           <code class="font-mono text-xs">Set-Cookie</code>,{" "}
           <code class="font-mono text-xs">Transfer-Encoding</code>, et{" "}
           <code class="font-mono text-xs">Content-Encoding</code>/
-          <code class="font-mono text-xs">Content-Length</code>{" "}
-          si votre corps a &eacute;t&eacute; d&eacute;compress&eacute; en route). FGP ne les
-          reformule pas et ne les traduit pas : c'est ce qui vous permet de traiter les erreurs de
-          votre API exactement comme si vous l'appeliez en direct.
+          <code class="font-mono text-xs">Content-Length</code> si votre corps a &eacute;t&eacute;
+          d&eacute;compress&eacute; en route). FGP ne les reformule pas et ne les traduit pas :
+          c'est ce qui vous permet de traiter les erreurs de votre API exactement comme si vous
+          l'appeliez en direct.
         </p>
       </section>
 
@@ -348,9 +340,7 @@ export function DocPanel() {
         </h3>
         <div class="space-y-3">
           <div>
-            <p class="font-medium text-gray-800 dark:text-gray-200">
-              URL de partage
-            </p>
+            <p class="font-medium text-gray-800 dark:text-gray-200">URL de partage</p>
             <p>
               L'URL dans la barre d'adresse se met &agrave; jour automatiquement avec un
               param&egrave;tre{" "}
@@ -362,15 +352,12 @@ export function DocPanel() {
             </p>
           </div>
           <div>
-            <p class="font-medium text-gray-800 dark:text-gray-200">
-              Importer une URL FGP
-            </p>
+            <p class="font-medium text-gray-800 dark:text-gray-200">Importer une URL FGP</p>
             <p>
-              Le bouton <strong>Importer</strong>{" "}
-              dans les presets permet de d&eacute;coder une URL FGP existante (ou un blob brut) avec
-              sa cl&eacute; client. La configuration est r&eacute;cup&eacute;r&eacute;e avec le
-              token masqu&eacute;, fournissez le token manuellement pour g&eacute;n&eacute;rer ou
-              tester.
+              Le bouton <strong>Importer</strong> dans les presets permet de d&eacute;coder une URL
+              FGP existante (ou un blob brut) avec sa cl&eacute; client. La configuration est
+              r&eacute;cup&eacute;r&eacute;e avec le token masqu&eacute;, fournissez le token
+              manuellement pour g&eacute;n&eacute;rer ou tester.
             </p>
           </div>
         </div>
@@ -385,9 +372,7 @@ export function DocPanel() {
         <dl class="space-y-3">
           <div>
             <dt class="font-medium text-gray-800 dark:text-gray-200">URL cible</dt>
-            <dd>
-              L'URL de base de l'API que vous souhaitez proxifier.
-            </dd>
+            <dd>L'URL de base de l'API que vous souhaitez proxifier.</dd>
           </div>
           <div
             id="doc-auth-modes"
@@ -396,15 +381,10 @@ export function DocPanel() {
             aria-labelledby="doc-auth-modes-title"
             class="focus:outline-none focus-visible:ring-2 focus-visible:ring-fgp-500 rounded-md"
           >
-            <dt
-              id="doc-auth-modes-title"
-              class="font-medium text-gray-800 dark:text-gray-200"
-            >
+            <dt id="doc-auth-modes-title" class="font-medium text-gray-800 dark:text-gray-200">
               Mode d'auth
             </dt>
-            <dd>
-              Comment le proxy s'authentifie aupr&egrave;s de l'API cible.
-            </dd>
+            <dd>Comment le proxy s'authentifie aupr&egrave;s de l'API cible.</dd>
             <dd class="mt-1">
               <ul class="list-disc list-inside space-y-0.5">
                 <li>
@@ -415,8 +395,8 @@ export function DocPanel() {
                   <code class="font-mono text-xs">basic</code> : Basic Auth
                 </li>
                 <li>
-                  Scalingo API (<code class="font-mono text-xs">scalingo-exchange</code>){" "}
-                  : &eacute;change token Scalingo (tk-us-... &rarr; bearer)
+                  Scalingo API (<code class="font-mono text-xs">scalingo-exchange</code>) :
+                  &eacute;change token Scalingo (tk-us-... &rarr; bearer)
                 </li>
                 <li>
                   Scalingo Database API : token d'addon obtenu en trois temps, valable 1h et
@@ -471,10 +451,7 @@ POST:/v1/apps/my-app/scale`}</pre>
             aria-labelledby="doc-client-key-title"
             class="focus:outline-none focus-visible:ring-2 focus-visible:ring-fgp-500 rounded-md"
           >
-            <dt
-              id="doc-client-key-title"
-              class="font-medium text-gray-800 dark:text-gray-200"
-            >
+            <dt id="doc-client-key-title" class="font-medium text-gray-800 dark:text-gray-200">
               Cl&eacute; client
             </dt>
             <dd>

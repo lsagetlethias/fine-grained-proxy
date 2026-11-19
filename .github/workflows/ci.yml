@@ -19,27 +19,31 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      # Avant setup-node : le cache pnpm a besoin du binaire pour resoudre le store.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # A garder aligne sur le FROM du Dockerfile : aucun ecosysteme Dependabot
           # ne suit ce champ, alors qu'il suit l'image. Sans quoi on teste sur une
           # version et on livre sur une autre.
-          deno-version: "2.9.6"
+          node-version: "26"
+          cache: pnpm
 
       - name: Install dependencies
-        run: deno install --frozen
+        run: pnpm install --frozen-lockfile
 
       - name: Build assets (CSS + client JS)
-        run: deno task build
+        run: pnpm run build
 
       - name: Lint
-        run: deno task lint
+        run: pnpm run lint
 
       - name: Format check
-        run: deno task fmt:check
+        run: pnpm run fmt:check
 
       - name: Type check
-        run: deno task check
+        run: pnpm run check
 
       - name: Tests
-        run: deno task test
+        run: pnpm run test

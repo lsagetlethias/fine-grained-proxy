@@ -1,4 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+
+import { assertEquals } from "../../_assert.ts";
 import {
   _resetStoreForTests,
   addonTokenCache,
@@ -12,20 +14,20 @@ function setup() {
   _resetStoreForTests();
 }
 
-Deno.test("hashToken returns consistent hex string", async () => {
+test("hashToken returns consistent hex string", async () => {
   const h1 = await hashToken("tk-us-test");
   const h2 = await hashToken("tk-us-test");
   assertEquals(h1, h2);
   assertEquals(h1.length, 64);
 });
 
-Deno.test("hashToken returns different hashes for different inputs", async () => {
+test("hashToken returns different hashes for different inputs", async () => {
   const h1 = await hashToken("tk-us-aaa");
   const h2 = await hashToken("tk-us-bbb");
   assertEquals(h1 !== h2, true);
 });
 
-Deno.test("hashToken composes multiple parts into a single key", async () => {
+test("hashToken composes multiple parts into a single key", async () => {
   const single = await hashToken("tk-us-aaa");
   const composed = await hashToken("tk-us-aaa", "my-app", "ad-1111");
   const other = await hashToken("tk-us-aaa", "my-app", "ad-2222");
@@ -33,18 +35,18 @@ Deno.test("hashToken composes multiple parts into a single key", async () => {
   assertEquals(composed !== other, true);
 });
 
-Deno.test("AC-8.1: set and get cached bearer", () => {
+test("AC-8.1: set and get cached bearer", () => {
   setup();
   bearerCache.set("hash-1", "bearer-abc");
   assertEquals(bearerCache.get("hash-1"), "bearer-abc");
 });
 
-Deno.test("cache get returns null for missing key", () => {
+test("cache get returns null for missing key", () => {
   setup();
   assertEquals(bearerCache.get("nonexistent"), null);
 });
 
-Deno.test("AC-8.2: cache get returns null for expired entry (56min > 55min TTL)", () => {
+test("AC-8.2: cache get returns null for expired entry (56min > 55min TTL)", () => {
   setup();
   bearerCache.set("hash-exp", "bearer-value");
 
@@ -56,7 +58,7 @@ Deno.test("AC-8.2: cache get returns null for expired entry (56min > 55min TTL)"
   Date.now = origNow;
 });
 
-Deno.test("clearExpired removes only expired entries", () => {
+test("clearExpired removes only expired entries", () => {
   setup();
   bearerCache.set("hash-fresh", "bearer-fresh");
   bearerCache.set("hash-old", "bearer-old");
@@ -80,7 +82,7 @@ Deno.test("clearExpired removes only expired entries", () => {
   assertEquals(bearerCache.get("hash-a"), "bearer-a");
 });
 
-Deno.test("bearer and addon caches are independent", () => {
+test("bearer and addon caches are independent", () => {
   setup();
   bearerCache.set("same-key", "bearer-value");
   addonTokenCache.set("same-key", "addon-value");
@@ -89,7 +91,7 @@ Deno.test("bearer and addon caches are independent", () => {
   assertEquals(addonTokenCache.get("same-key"), "addon-value");
 });
 
-Deno.test("cachedSingleflight runs the producer once for concurrent callers", async () => {
+test("cachedSingleflight runs the producer once for concurrent callers", async () => {
   const cache = createTokenCache();
   let calls = 0;
   const produce = () =>
@@ -109,7 +111,7 @@ Deno.test("cachedSingleflight runs the producer once for concurrent callers", as
   assertEquals(cache.get("k"), "value");
 });
 
-Deno.test("cachedSingleflight propagates the failure to every waiter and caches nothing", async () => {
+test("cachedSingleflight propagates the failure to every waiter and caches nothing", async () => {
   const cache = createTokenCache();
   let calls = 0;
   const produce = () =>
@@ -124,7 +126,10 @@ Deno.test("cachedSingleflight propagates the failure to every waiter and caches 
   ]);
 
   assertEquals(calls, 1);
-  assertEquals(results.map((r) => r.status), ["rejected", "rejected"]);
+  assertEquals(
+    results.map((r) => r.status),
+    ["rejected", "rejected"],
+  );
   assertEquals(cache.get("k"), null);
   assertEquals(cache.getInflight("k"), undefined);
 });

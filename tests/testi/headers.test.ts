@@ -1,6 +1,7 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 import { Hono } from "hono";
 
+import { assertEquals } from "../_assert.ts";
 import { encryptBlob } from "../../src/crypto/blob.ts";
 import { proxyMiddleware } from "../../src/middleware/proxy.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
@@ -12,16 +13,16 @@ const originalFetch = globalThis.fetch;
 
 function setup() {
   _resetStoreForTests();
-  Deno.env.set("FGP_SALT", SERVER_SALT);
-  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
-  Deno.env.set("SCALINGO_AUTH_URL", "https://auth.mock.local");
+  process.env.FGP_SALT = SERVER_SALT;
+  process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
+  process.env.SCALINGO_AUTH_URL = "https://auth.mock.local";
 }
 
 function teardown() {
   globalThis.fetch = originalFetch;
-  Deno.env.delete("FGP_SALT");
-  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-  Deno.env.delete("SCALINGO_AUTH_URL");
+  delete process.env.FGP_SALT;
+  delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+  delete process.env.SCALINGO_AUTH_URL;
 }
 
 function createApp(): Hono {
@@ -50,217 +51,191 @@ async function makeBlob(scopes: string[]): Promise<string> {
   );
 }
 
-Deno.test({
-  name: "AC-9.1: X-FGP-Key header is not forwarded to target",
-  fn: async () => {
-    setup();
-    let capturedHeaders: Headers | null = null;
+test("AC-9.1: X-FGP-Key header is not forwarded to target", async () => {
+  setup();
+  let capturedHeaders: Headers | null = null;
 
-    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "mock-bearer" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      }
-      if (url.includes("api.mock.local")) {
-        capturedHeaders = new Headers(init?.headers as HeadersInit);
-        return Promise.resolve(
-          new Response(JSON.stringify({ ok: true }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ token: "mock-bearer" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    if (url.includes("api.mock.local")) {
+      capturedHeaders = new Headers(init?.headers as HeadersInit);
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
+  await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
 
-    assertEquals(capturedHeaders!.get("X-FGP-Key"), null);
-    assertEquals(capturedHeaders!.get("Authorization"), "Bearer mock-bearer");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(capturedHeaders!.get("X-FGP-Key"), null);
+  assertEquals(capturedHeaders!.get("Authorization"), "Bearer mock-bearer");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-17.6: upstream 429 without Retry-After forwarded transparently, no Retry-After added",
-  fn: async () => {
-    setup();
+test("AC-17.6: upstream 429 without Retry-After forwarded transparently, no Retry-After added", async () => {
+  setup();
 
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "mock-bearer" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      }
-      if (url.includes("api.mock.local")) {
-        return Promise.resolve(new Response("upstream body", { status: 429 }));
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ token: "mock-bearer" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    if (url.includes("api.mock.local")) {
+      return Promise.resolve(new Response("upstream body", { status: 429 }));
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
-    const body = await res.text();
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
+  const body = await res.text();
 
-    assertEquals(res.status, 429);
-    assertEquals(body, "upstream body");
-    assertEquals(res.headers.get("Retry-After"), null);
-    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 429);
+  assertEquals(body, "upstream body");
+  assertEquals(res.headers.get("Retry-After"), null);
+  assertEquals(res.headers.get("X-FGP-Source"), "upstream");
+  teardown();
 });
 
-Deno.test({
-  name:
-    "AC-17.14: non-JSON (text/html) response forwarded with original Content-Type + X-FGP-Source: upstream",
-  fn: async () => {
-    setup();
+test("AC-17.14: non-JSON (text/html) response forwarded with original Content-Type + X-FGP-Source: upstream", async () => {
+  setup();
 
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "mock-bearer" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      }
-      if (url.includes("api.mock.local")) {
-        return Promise.resolve(
-          new Response("<html><body>Maintenance</body></html>", {
-            status: 200,
-            headers: { "Content-Type": "text/html" },
-          }),
-        );
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ token: "mock-bearer" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    if (url.includes("api.mock.local")) {
+      return Promise.resolve(
+        new Response("<html><body>Maintenance</body></html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
 
-    assertEquals(res.status, 200);
-    assertEquals(res.headers.get("Content-Type"), "text/html");
-    assertEquals(res.headers.get("X-FGP-Source"), "upstream");
-    const body = await res.text();
-    assertEquals(body.includes("Maintenance"), true);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("Content-Type"), "text/html");
+  assertEquals(res.headers.get("X-FGP-Source"), "upstream");
+  const body = await res.text();
+  assertEquals(body.includes("Maintenance"), true);
+  teardown();
 });
 
-Deno.test({
-  name: "AC-9.2: Host header is stripped before forwarding",
-  fn: async () => {
-    setup();
-    let capturedHeaders: Headers | null = null;
+test("AC-9.2: Host header is stripped before forwarding", async () => {
+  setup();
+  let capturedHeaders: Headers | null = null;
 
-    globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "mock-bearer" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      }
-      if (url.includes("api.mock.local")) {
-        capturedHeaders = new Headers(init?.headers as HeadersInit);
-        return Promise.resolve(
-          new Response(JSON.stringify({ ok: true }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ token: "mock-bearer" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    if (url.includes("api.mock.local")) {
+      capturedHeaders = new Headers(init?.headers as HeadersInit);
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY, "Host": "fgp.example.com" },
-    });
+  await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY, Host: "fgp.example.com" },
+  });
 
-    assertEquals(capturedHeaders!.get("Host"), null);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(capturedHeaders!.get("Host"), null);
+  teardown();
 });
 
-Deno.test({
-  name: "AC-9.4+AC-9.5: Set-Cookie header from target is filtered, X-Request-Id propagated",
-  fn: async () => {
-    setup();
+test("AC-9.4+AC-9.5: Set-Cookie header from target is filtered, X-Request-Id propagated", async () => {
+  setup();
 
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ token: "mock-bearer" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      }
-      if (url.includes("api.mock.local")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ ok: true }), {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "Set-Cookie": "session=abc; Path=/",
-              "X-Request-Id": "req-123",
-            },
-          }),
-        );
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ token: "mock-bearer" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    if (url.includes("api.mock.local")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Set-Cookie": "session=abc; Path=/",
+            "X-Request-Id": "req-123",
+          },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    const app = createApp();
-    const blob = await makeBlob(["GET:/v1/apps/*"]);
+  const app = createApp();
+  const blob = await makeBlob(["GET:/v1/apps/*"]);
 
-    const res = await app.request(`/${blob}/v1/apps/my-app`, {
-      headers: { "X-FGP-Key": CLIENT_KEY },
-    });
+  const res = await app.request(`/${blob}/v1/apps/my-app`, {
+    headers: { "X-FGP-Key": CLIENT_KEY },
+  });
 
-    assertEquals(res.status, 200);
-    assertEquals(res.headers.get("X-Request-Id"), "req-123");
-    assertEquals(res.headers.get("Set-Cookie"), null);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("X-Request-Id"), "req-123");
+  assertEquals(res.headers.get("Set-Cookie"), null);
+  teardown();
 });

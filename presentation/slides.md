@@ -783,12 +783,12 @@ C'est le slide qui montre que le zero-trust est applique partout, y compris dans
 
 <div>
 
-- **Runtime** : Deno 2.x
-- **Framework** : Hono
+- **Runtime** : Node 26
+- **Framework** : Hono (`@hono/node-server`)
 - **Langage** : TypeScript strict, zero `any`
 - **Crypto** : Web Crypto API native (AES-256-GCM, PBKDF2)
-- **Tests** : `deno test` (unit / integration / e2e)
-- **Deploy** : Deno Deploy (edge, stateless)
+- **Tests** : `node:test` (unit / integration / e2e)
+- **Deploy** : Scalingo ou Docker (stateless)
 
 </div>
 

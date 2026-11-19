@@ -1,6 +1,7 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 import { Hono } from "hono";
 
+import { assertEquals } from "../_assert.ts";
 import { app } from "../../src/main.ts";
 import { decryptBlob, encryptBlob } from "../../src/crypto/blob.ts";
 import { proxyMiddleware } from "../../src/middleware/proxy.ts";
@@ -15,16 +16,16 @@ const originalFetch = globalThis.fetch;
 
 function setup() {
   _resetStoreForTests();
-  Deno.env.set("FGP_SALT", SERVER_SALT);
-  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
-  Deno.env.set("SCALINGO_AUTH_URL", AUTH_URL);
+  process.env.FGP_SALT = SERVER_SALT;
+  process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
+  process.env.SCALINGO_AUTH_URL = AUTH_URL;
 }
 
 function teardown() {
   globalThis.fetch = originalFetch;
-  Deno.env.delete("FGP_SALT");
-  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-  Deno.env.delete("SCALINGO_AUTH_URL");
+  delete process.env.FGP_SALT;
+  delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+  delete process.env.SCALINGO_AUTH_URL;
 }
 
 function nowUnix(): number {
@@ -68,7 +69,7 @@ function captureUpstream(): Capture {
   return capture;
 }
 
-// deno-lint-ignore no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: config de blob volontairement hors du type, c'est l'objet du test
 async function blobOf(config: any): Promise<string> {
   return await encryptBlob(config, CLIENT_KEY, SERVER_SALT);
 }
@@ -88,270 +89,231 @@ const BASE_V2 = {
   ttl: 3600,
 };
 
-Deno.test({
-  name: "AC-42.1: un blob v2 en bearer se comporte exactement comme avant le lot v4",
-  fn: async () => {
-    setup();
-    try {
-      const capture = captureUpstream();
-      const blob = await blobOf({ ...BASE_V2, createdAt: nowUnix() });
+test("AC-42.1: un blob v2 en bearer se comporte exactement comme avant le lot v4", async () => {
+  setup();
+  try {
+    const capture = captureUpstream();
+    const blob = await blobOf({ ...BASE_V2, createdAt: nowUnix() });
 
-      const res = await proxyApp().request(`/${blob}/v1/apps`, {
-        headers: { "X-FGP-Key": CLIENT_KEY },
-      });
-      await res.body?.cancel();
+    const res = await proxyApp().request(`/${blob}/v1/apps`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+    await res.body?.cancel();
 
-      assertEquals(res.status, 200);
-      assertEquals(res.headers.get("X-FGP-Source"), FGP_SOURCE_UPSTREAM);
-      assertEquals(capture.calls[0].headers.get("Authorization"), "Bearer tk-legacy-1234");
-      // X-FGP-Key reste consomme par le proxy, jamais transmis.
-      assertEquals(capture.calls[0].headers.get("X-FGP-Key"), null);
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    assertEquals(res.status, 200);
+    assertEquals(res.headers.get("X-FGP-Source"), FGP_SOURCE_UPSTREAM);
+    assertEquals(capture.calls[0].headers.get("Authorization"), "Bearer tk-legacy-1234");
+    // X-FGP-Key reste consomme par le proxy, jamais transmis.
+    assertEquals(capture.calls[0].headers.get("X-FGP-Key"), null);
+  } finally {
+    teardown();
+  }
 });
 
-Deno.test({
-  name: "AC-42.1: un blob v2 en basic reste inchange",
-  fn: async () => {
-    setup();
-    try {
-      const capture = captureUpstream();
-      const blob = await blobOf({ ...BASE_V2, auth: "basic", createdAt: nowUnix() });
+test("AC-42.1: un blob v2 en basic reste inchange", async () => {
+  setup();
+  try {
+    const capture = captureUpstream();
+    const blob = await blobOf({ ...BASE_V2, auth: "basic", createdAt: nowUnix() });
 
-      const res = await proxyApp().request(`/${blob}/v1/apps`, {
-        headers: { "X-FGP-Key": CLIENT_KEY },
-      });
-      await res.body?.cancel();
+    const res = await proxyApp().request(`/${blob}/v1/apps`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+    await res.body?.cancel();
 
-      assertEquals(
-        capture.calls[0].headers.get("Authorization"),
-        `Basic ${btoa(":tk-legacy-1234")}`,
-      );
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    assertEquals(capture.calls[0].headers.get("Authorization"), `Basic ${btoa(":tk-legacy-1234")}`);
+  } finally {
+    teardown();
+  }
 });
 
-Deno.test({
-  name: "AC-42.2: un blob v3 en scalingo-exchange avec body filters reste inchange",
-  fn: async () => {
-    setup();
-    try {
-      const capture = captureUpstream();
-      const blob = await blobOf({
-        v: 3,
-        token: "tk-us-compte",
-        target: "https://api.mock.local",
-        auth: "scalingo-exchange",
-        scopes: [
-          {
-            methods: ["POST"],
-            pattern: "/v1/apps/my-app/deployments",
-            bodyFilters: [
-              {
-                objectPath: "deployment.git_ref",
-                objectValue: [{ type: "any", value: "main" }],
-              },
-            ],
-          },
-        ],
-        ttl: 3600,
-        createdAt: nowUnix(),
-      });
-
-      const allowed = await proxyApp().request(`/${blob}/v1/apps/my-app/deployments`, {
-        method: "POST",
-        headers: { "X-FGP-Key": CLIENT_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ deployment: { git_ref: "main" } }),
-      });
-      await allowed.body?.cancel();
-
-      assertEquals(allowed.status, 200);
-      // Exchange puis forward : le flow v3 est intact.
-      assertEquals(capture.calls[0].url.startsWith(AUTH_URL), true);
-      assertEquals(capture.calls[1].headers.get("Authorization"), "Bearer bearer-echange");
-      // Le body brut est forwarde tel quel, meme quand un body filter l'a inspecte.
-      assertEquals(capture.calls[1].body, JSON.stringify({ deployment: { git_ref: "main" } }));
-
-      const denied = await proxyApp().request(`/${blob}/v1/apps/my-app/deployments`, {
-        method: "POST",
-        headers: { "X-FGP-Key": CLIENT_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ deployment: { git_ref: "prod" } }),
-      });
-      const deniedBody = await denied.json();
-
-      assertEquals(denied.status, 403);
-      assertEquals(deniedBody.error, "scope_denied");
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
-
-Deno.test({
-  name: "AC-42.9: le champ logs reste lisible sur un blob v4",
-  fn: async () => {
-    setup();
-    try {
-      // Le champ logs est orthogonal au versioning : il s'applique a toutes les versions.
-      const blob = await blobOf({
-        v: 4,
-        target: "https://api.mock.local",
-        auth: {
-          type: "headers",
-          headers: [
-            { name: "X-A", value: "a" },
-            { name: "X-B", value: "b" },
+test("AC-42.2: un blob v3 en scalingo-exchange avec body filters reste inchange", async () => {
+  setup();
+  try {
+    const capture = captureUpstream();
+    const blob = await blobOf({
+      v: 3,
+      token: "tk-us-compte",
+      target: "https://api.mock.local",
+      auth: "scalingo-exchange",
+      scopes: [
+        {
+          methods: ["POST"],
+          pattern: "/v1/apps/my-app/deployments",
+          bodyFilters: [
+            {
+              objectPath: "deployment.git_ref",
+              objectValue: [{ type: "any", value: "main" }],
+            },
           ],
         },
-        scopes: ["GET:/v1/apps"],
-        ttl: 3600,
-        createdAt: nowUnix(),
-        logs: { enabled: true, detailed: true },
-      });
+      ],
+      ttl: 3600,
+      createdAt: nowUnix(),
+    });
 
-      const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
-      assertEquals(config.v, 4);
-      assertEquals(config.logs, { enabled: true, detailed: true });
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    const allowed = await proxyApp().request(`/${blob}/v1/apps/my-app/deployments`, {
+      method: "POST",
+      headers: { "X-FGP-Key": CLIENT_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ deployment: { git_ref: "main" } }),
+    });
+    await allowed.body?.cancel();
+
+    assertEquals(allowed.status, 200);
+    // Exchange puis forward : le flow v3 est intact.
+    assertEquals(capture.calls[0].url.startsWith(AUTH_URL), true);
+    assertEquals(capture.calls[1].headers.get("Authorization"), "Bearer bearer-echange");
+    // Le body brut est forwarde tel quel, meme quand un body filter l'a inspecte.
+    assertEquals(capture.calls[1].body, JSON.stringify({ deployment: { git_ref: "main" } }));
+
+    const denied = await proxyApp().request(`/${blob}/v1/apps/my-app/deployments`, {
+      method: "POST",
+      headers: { "X-FGP-Key": CLIENT_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ deployment: { git_ref: "prod" } }),
+    });
+    const deniedBody = await denied.json();
+
+    assertEquals(denied.status, 403);
+    assertEquals(deniedBody.error, "scope_denied");
+  } finally {
+    teardown();
+  }
 });
 
-Deno.test({
-  name: "AC-42.9: un champ logs mal type reste traite comme desactive, sans erreur",
-  fn: async () => {
-    setup();
-    try {
-      const blob = await blobOf({
-        ...BASE_V2,
-        createdAt: nowUnix(),
-        logs: { enabled: "true", detailed: 1 },
-      });
+test("AC-42.9: le champ logs reste lisible sur un blob v4", async () => {
+  setup();
+  try {
+    // Le champ logs est orthogonal au versioning : il s'applique a toutes les versions.
+    const blob = await blobOf({
+      v: 4,
+      target: "https://api.mock.local",
+      auth: {
+        type: "headers",
+        headers: [
+          { name: "X-A", value: "a" },
+          { name: "X-B", value: "b" },
+        ],
+      },
+      scopes: ["GET:/v1/apps"],
+      ttl: 3600,
+      createdAt: nowUnix(),
+      logs: { enabled: true, detailed: true },
+    });
 
-      const capture = captureUpstream();
-      const res = await proxyApp().request(`/${blob}/v1/apps`, {
-        headers: { "X-FGP-Key": CLIENT_KEY },
-      });
-      await res.body?.cancel();
-
-      assertEquals(res.status, 200, "un logs mal type ne doit pas casser le forward");
-      assertEquals(capture.calls.length, 1);
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    const config = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+    assertEquals(config.v, 4);
+    assertEquals(config.logs, { enabled: true, detailed: true });
+  } finally {
+    teardown();
+  }
 });
 
-Deno.test({
-  name: "AC-42.12: FGP ne migre jamais un blob a la volee",
-  fn: async () => {
-    setup();
-    try {
-      // Un aller-retour dechiffrement puis rechiffrement ne doit rien changer a la version
-      // ni au contenu : aucune migration implicite.
-      const original = { ...BASE_V2, createdAt: nowUnix() };
-      const blob = await blobOf(original);
+test("AC-42.9: un champ logs mal type reste traite comme desactive, sans erreur", async () => {
+  setup();
+  try {
+    const blob = await blobOf({
+      ...BASE_V2,
+      createdAt: nowUnix(),
+      logs: { enabled: "true", detailed: 1 },
+    });
 
-      const decoded = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
-      assertEquals(decoded.v, 2);
+    const capture = captureUpstream();
+    const res = await proxyApp().request(`/${blob}/v1/apps`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+    await res.body?.cancel();
 
-      const rechiffre = await encryptBlob(decoded, CLIENT_KEY, SERVER_SALT);
-      const again = await decryptBlob(rechiffre, CLIENT_KEY, SERVER_SALT);
-
-      assertEquals(again.v, 2);
-      assertEquals(again.auth, "bearer");
-      assertEquals(again.scopes, original.scopes);
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    assertEquals(res.status, 200, "un logs mal type ne doit pas casser le forward");
+    assertEquals(capture.calls.length, 1);
+  } finally {
+    teardown();
+  }
 });
 
-Deno.test({
-  name: "AC-42.10: /api/decode d'un blob v3 garde la shape existante",
-  fn: async () => {
-    setup();
-    try {
-      const blob = await blobOf({
-        v: 3,
-        token: "tk-legacy-9876",
-        target: "https://api.mock.local",
-        auth: "scalingo-exchange",
-        scopes: ["GET:/v1/apps", { methods: ["POST"], pattern: "/v1/deploy" }],
-        ttl: 3600,
-        createdAt: nowUnix(),
-      });
+test("AC-42.12: FGP ne migre jamais un blob a la volee", async () => {
+  setup();
+  try {
+    // Un aller-retour dechiffrement puis rechiffrement ne doit rien changer a la version
+    // ni au contenu : aucune migration implicite.
+    const original = { ...BASE_V2, createdAt: nowUnix() };
+    const blob = await blobOf(original);
 
-      const res = await app.request("/api/decode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blob, key: CLIENT_KEY }),
-      });
-      const decoded = await res.json();
+    const decoded = await decryptBlob(blob, CLIENT_KEY, SERVER_SALT);
+    assertEquals(decoded.v, 2);
 
-      assertEquals(res.status, 200);
-      // auth reste une string : un consommateur existant qui la typait ainsi ne casse pas.
-      assertEquals(decoded.auth, "scalingo-exchange");
-      assertEquals(decoded.version, 3);
-      assertEquals(decoded.tokenRedacted.endsWith("9876"), true);
-      assertEquals(decoded.scopes.length, 2);
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    const rechiffre = await encryptBlob(decoded, CLIENT_KEY, SERVER_SALT);
+    const again = await decryptBlob(rechiffre, CLIENT_KEY, SERVER_SALT);
+
+    assertEquals(again.v, 2);
+    assertEquals(again.auth, "bearer");
+    assertEquals(again.scopes, original.scopes);
+  } finally {
+    teardown();
+  }
 });
 
-Deno.test({
-  name: "AC-42.11: l'aller-retour de partage d'une config v2 reste fidele",
-  fn: async () => {
-    setup();
-    try {
-      const config = {
-        target: "https://api.mock.local",
-        auth: "bearer",
-        scopes: ["GET:/v1/apps"],
-        ttl: 3600,
-      };
+test("AC-42.10: /api/decode d'un blob v3 garde la shape existante", async () => {
+  setup();
+  try {
+    const blob = await blobOf({
+      v: 3,
+      token: "tk-legacy-9876",
+      target: "https://api.mock.local",
+      auth: "scalingo-exchange",
+      scopes: ["GET:/v1/apps", { methods: ["POST"], pattern: "/v1/deploy" }],
+      ttl: 3600,
+      createdAt: nowUnix(),
+    });
 
-      const encoded = await (await app.request("/api/share/encode", {
+    const res = await app.request("/api/decode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blob, key: CLIENT_KEY }),
+    });
+    const decoded = await res.json();
+
+    assertEquals(res.status, 200);
+    // auth reste une string : un consommateur existant qui la typait ainsi ne casse pas.
+    assertEquals(decoded.auth, "scalingo-exchange");
+    assertEquals(decoded.version, 3);
+    assertEquals(decoded.tokenRedacted.endsWith("9876"), true);
+    assertEquals(decoded.scopes.length, 2);
+  } finally {
+    teardown();
+  }
+});
+
+test("AC-42.11: l'aller-retour de partage d'une config v2 reste fidele", async () => {
+  setup();
+  try {
+    const config = {
+      target: "https://api.mock.local",
+      auth: "bearer",
+      scopes: ["GET:/v1/apps"],
+      ttl: 3600,
+    };
+
+    const encoded = await (
+      await app.request("/api/share/encode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
-      })).json();
+      })
+    ).json();
 
-      const decoded = await (await app.request("/api/share/decode", {
+    const decoded = await (
+      await app.request("/api/share/decode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ encoded: encoded.encoded }),
-      })).json();
+      })
+    ).json();
 
-      assertEquals(decoded.target, config.target);
-      assertEquals(decoded.auth, config.auth);
-      assertEquals(decoded.scopes, config.scopes);
-      assertEquals(decoded.ttl, config.ttl);
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    assertEquals(decoded.target, config.target);
+    assertEquals(decoded.auth, config.auth);
+    assertEquals(decoded.scopes, config.scopes);
+    assertEquals(decoded.ttl, config.ttl);
+  } finally {
+    teardown();
+  }
 });

@@ -2,6 +2,8 @@
 // la revue d'une PR n'a plus a se demander si un appel reseau est sur, seulement s'il
 // emprunte ce module.
 
+import { resolve4, resolve6 } from "node:dns/promises";
+
 import { readEnvFlag } from "../env.ts";
 
 export interface EgressDenial {
@@ -62,9 +64,13 @@ export function parseTargetUrl(raw: string): { url: URL } | { error: EgressDenia
   const base = url.pathname;
   const rawPath = raw.slice(raw.indexOf(url.host) + url.host.length);
   if (
-    /%2f/i.test(base) || /%5c/i.test(base) || /%2e/i.test(rawPath) ||
-    base.includes("..") || rawPath.includes("..") ||
-    base.includes("\\") || rawPath.includes("\\")
+    /%2f/i.test(base) ||
+    /%5c/i.test(base) ||
+    /%2e/i.test(rawPath) ||
+    base.includes("..") ||
+    rawPath.includes("..") ||
+    base.includes("\\") ||
+    rawPath.includes("\\")
   ) {
     return {
       error: { code: "invalid_target", message: "Target base path must not contain .., %2f or \\" },
@@ -147,7 +153,10 @@ export function isBlockedAddress(ip: string): boolean {
   // IPv4-mapped (::ffff:a.b.c.d) et IPv4-compatible (::a.b.c.d) : la decision porte
   // sur l'adresse v4 encapsulee, sinon 169.254.169.254 passe sous forme v6.
   if (allZeroPrefix && (v6[5] === 0xffff || v6[5] === 0)) {
-    const a = v6[6] >> 8, b = v6[6] & 0xff, c = v6[7] >> 8, d = v6[7] & 0xff;
+    const a = v6[6] >> 8,
+      b = v6[6] & 0xff,
+      c = v6[7] >> 8,
+      d = v6[7] & 0xff;
     if (!(a === 0 && b === 0 && c === 0 && d === 0)) {
       return ipv4Blocked(a, b, c, d);
     }
@@ -223,7 +232,7 @@ let injectedResolver: Resolver | null = null;
 
 function resolver(): Resolver {
   if (injectedResolver) return injectedResolver;
-  return (host, kind) => Deno.resolveDns(host, kind);
+  return (host, kind) => (kind === "A" ? resolve4(host) : resolve6(host));
 }
 
 export function _setResolverForTests(fn: Resolver | null): void {

@@ -64,11 +64,8 @@ export const RESULT_COPY_BTN_CLASS =
 // l'icone distingue l'information de l'avertissement (WCAG 1.4.1).
 const ALERT_BASE_CLASS = "flex items-start gap-2 rounded-md border border-l-4 p-2 text-xs";
 
-export const ALERT_INFO_CLASS =
-  `${ALERT_BASE_CLASS} border-blue-200 border-l-blue-500 bg-blue-50 text-blue-800 dark:border-blue-700 dark:border-l-blue-500 dark:bg-blue-900/30 dark:text-blue-300`;
+export const ALERT_INFO_CLASS = `${ALERT_BASE_CLASS} border-blue-200 border-l-blue-500 bg-blue-50 text-blue-800 dark:border-blue-700 dark:border-l-blue-500 dark:bg-blue-900/30 dark:text-blue-300`;
 
-export const ALERT_CAUTION_CLASS =
-  `${ALERT_BASE_CLASS} border-amber-200 border-l-amber-500 bg-amber-50 text-amber-800 dark:border-amber-700 dark:border-l-amber-500 dark:bg-amber-900/30 dark:text-amber-300`;
+export const ALERT_CAUTION_CLASS = `${ALERT_BASE_CLASS} border-amber-200 border-l-amber-500 bg-amber-50 text-amber-800 dark:border-amber-700 dark:border-l-amber-500 dark:bg-amber-900/30 dark:text-amber-300`;
 
-export const ALERT_DANGER_CLASS =
-  `${ALERT_BASE_CLASS} border-red-300 border-l-red-500 bg-red-50 text-red-800 dark:border-red-700 dark:border-l-red-500 dark:bg-red-900/30 dark:text-red-300`;
+export const ALERT_DANGER_CLASS = `${ALERT_BASE_CLASS} border-red-300 border-l-red-500 bg-red-50 text-red-800 dark:border-red-700 dark:border-l-red-500 dark:bg-red-900/30 dark:text-red-300`;

@@ -27,7 +27,9 @@ const INDEX_SEPARATOR = "\u0000";
 export async function fingerprint(clientKey: string, serverSalt: string): Promise<string> {
   const material = new TextEncoder().encode(clientKey + INDEX_SEPARATOR + serverSalt);
   const digest = await crypto.subtle.digest("SHA-256", material);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export function getCachedKey(index: string): CryptoKey | null {

@@ -1,6 +1,7 @@
-import { assertEquals, assertNotEquals } from "@std/assert";
+import { test } from "node:test";
 import { Hono } from "hono";
 
+import { assertEquals, assertNotEquals } from "../_assert.ts";
 import { app, fgpErrorHandler } from "../../src/main.ts";
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete"];
@@ -18,7 +19,7 @@ type Spec = {
 
 async function loadSpec(): Promise<Spec> {
   const res = await app.request("/api/openapi.json");
-  return await res.json() as Spec;
+  return (await res.json()) as Spec;
 }
 
 function operationsOf(spec: Spec): { path: string; method: string; operation: Operation }[] {
@@ -55,7 +56,7 @@ async function observedUnhandledFailure(): Promise<{ status: string; code: strin
   console.error = () => {};
   try {
     const res = await probe.request("/boom");
-    const body = await res.json() as { error?: string };
+    const body = (await res.json()) as { error?: string };
     if (typeof body.error !== "string" || body.error.length === 0) {
       throw new Error("le handler global ne rend aucun code d'erreur, le test ne derive rien");
     }
@@ -65,67 +66,61 @@ async function observedUnhandledFailure(): Promise<{ status: string; code: strin
   }
 }
 
-Deno.test({
-  name:
-    "AC-59.6: PARITE, toute operation OpenAPI declare le code que le handler global rend sur un throw",
-  fn: async () => {
-    const { status, code } = await observedUnhandledFailure();
-    const spec = await loadSpec();
-    const operations = operationsOf(spec);
-    assertNotEquals(operations.length, 0, "aucune operation enumeree, le test ne verifie rien");
+test("AC-59.6: PARITE, toute operation OpenAPI declare le code que le handler global rend sur un throw", async () => {
+  const { status, code } = await observedUnhandledFailure();
+  const spec = await loadSpec();
+  const operations = operationsOf(spec);
+  assertNotEquals(operations.length, 0, "aucune operation enumeree, le test ne verifie rien");
 
-    // Aucune exclusion possible, contrairement au 413 : app.onError ne regarde ni le chemin
-    // ni la presence d'un corps. GET /api/salt echappe au plafond de corps parce que Deno
-    // n'expose aucun body sur un GET ; rien d'equivalent ne le met a l'abri d'un throw.
-    const undeclared: string[] = [];
-    for (const { path, method, operation } of operations) {
-      if (!declaredErrorCodes(spec, operation, status).includes(code)) {
-        undeclared.push(`${method.toUpperCase()} ${path}`);
-      }
+  // Aucune exclusion possible, contrairement au 413 : app.onError ne regarde ni le chemin
+  // ni la presence d'un corps. GET /api/salt echappe au plafond de corps parce qu'un GET
+  // ne peut pas porter de corps ; rien d'equivalent ne le met a l'abri d'un throw.
+  const undeclared: string[] = [];
+  for (const { path, method, operation } of operations) {
+    if (!declaredErrorCodes(spec, operation, status).includes(code)) {
+      undeclared.push(`${method.toUpperCase()} ${path}`);
     }
+  }
 
-    assertEquals(
-      undeclared,
-      [],
-      `${status} ${code} rendu par app.onError mais absent de l'enum OpenAPI : ${
-        undeclared.join(", ")
-      }`,
-    );
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(
+    undeclared,
+    [],
+    `${status} ${code} rendu par app.onError mais absent de l'enum OpenAPI : ${undeclared.join(
+      ", ",
+    )}`,
+  );
 });
 
-Deno.test({
-  name: "AC-59.7: le code derive est bien celui qu'une route documentee sert vraiment",
-  fn: async () => {
-    // Le probe ci-dessus monte son propre Hono : il prouve ce que rend le handler, pas qu'il
-    // est branche sur l'app reelle. Cette route documentee, elle, traverse toute la pile.
-    const { status, code } = await observedUnhandledFailure();
+test("AC-59.7: le code derive est bien celui qu'une route documentee sert vraiment", async () => {
+  // Le probe ci-dessus monte son propre Hono : il prouve ce que rend le handler, pas qu'il
+  // est branche sur l'app reelle. Cette route documentee, elle, traverse toute la pile.
+  const { status, code } = await observedUnhandledFailure();
 
-    const originalEnvGet = Deno.env.get;
-    const originalConsoleError = console.error;
-    console.error = () => {};
-    Deno.env.get = ((name: string): string | undefined => {
-      if (name === "SCALINGO_API_URL") throw new TypeError("env read broken");
-      return originalEnvGet(name);
-    }) as typeof Deno.env.get;
+  // process.env refuse un descripteur d'accesseur : l'interception passe par le
+  // remplacement de l'objet, pose sur le vrai environnement pour que le reste des
+  // lectures continue de l'atteindre.
+  const realEnv = process.env;
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  process.env = new Proxy(realEnv, {
+    get(target, prop) {
+      if (prop === "SCALINGO_API_URL") throw new TypeError("env read broken");
+      return Reflect.get(target, prop);
+    },
+  });
 
-    try {
-      const res = await app.request("/api/list-apps", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: "tk-us-test" }),
-      });
-      const body = await res.json();
+  try {
+    const res = await app.request("/api/list-apps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "tk-us-test" }),
+    });
+    const body = await res.json();
 
-      assertEquals(String(res.status), status);
-      assertEquals(body.error, code);
-    } finally {
-      Deno.env.get = originalEnvGet;
-      console.error = originalConsoleError;
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    assertEquals(String(res.status), status);
+    assertEquals(body.error, code);
+  } finally {
+    process.env = realEnv;
+    console.error = originalConsoleError;
+  }
 });

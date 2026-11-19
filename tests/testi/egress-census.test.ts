@@ -1,6 +1,7 @@
-import { assertEquals, assertNotEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
 import { Hono } from "hono";
 
+import { assertEquals, assertNotEquals, assertRejects } from "../_assert.ts";
 import { app as uiApp } from "../../src/main.ts";
 import { encryptBlob } from "../../src/crypto/blob.ts";
 import { proxyMiddleware } from "../../src/middleware/proxy.ts";
@@ -20,10 +21,10 @@ let sorties: string[] = [];
 function setup() {
   _resetStoreForTests();
   sorties = [];
-  Deno.env.set("FGP_SALT", SERVER_SALT);
-  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-  Deno.env.delete("SCALINGO_API_URL");
-  Deno.env.delete("SCALINGO_AUTH_URL");
+  process.env.FGP_SALT = SERVER_SALT;
+  delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+  delete process.env.SCALINGO_API_URL;
+  delete process.env.SCALINGO_AUTH_URL;
   // Tout hote resout vers une adresse privee : la seule chose qui peut empecher la sortie
   // est la politique, et le mouchard ci-dessous voit passer ce qui lui echappe.
   _setResolverForTests((_h, kind) => Promise.resolve(kind === "A" ? ["10.0.0.7"] : []));
@@ -36,9 +37,9 @@ function setup() {
 function teardown() {
   globalThis.fetch = originalFetch;
   _setResolverForTests(null);
-  Deno.env.delete("FGP_SALT");
-  Deno.env.delete("SCALINGO_API_URL");
-  Deno.env.delete("SCALINGO_AUTH_URL");
+  delete process.env.FGP_SALT;
+  delete process.env.SCALINGO_API_URL;
+  delete process.env.SCALINGO_AUTH_URL;
 }
 
 function createProxyApp(): Hono {
@@ -55,17 +56,17 @@ async function post(path: string, body: unknown): Promise<Response> {
   });
 }
 
-Deno.test({
-  name: "AC-43.17: RECENSEMENT, aucun des appelants reseau ne sort sans passer par la politique",
-  fn: async () => {
-    setup();
-    try {
-      // Un appelant par entree du recensement de l'ADR-0009 §6. Le critere n'est pas le code
-      // de retour de chacun, c'est qu'aucun n'ait touche le reseau : un fetch nu ajoute
-      // demain quelque part dans src/ ferait grossir « sorties » et casserait ce test, ce
-      // qu'une somme de tests par route ne garantit pas.
-      const appelants: [string, () => Promise<unknown>][] = [
-        ["forward du proxy", async () => {
+test("AC-43.17: RECENSEMENT, aucun des appelants reseau ne sort sans passer par la politique", async () => {
+  setup();
+  try {
+    // Un appelant par entree du recensement de l'ADR-0009 §6. Le critere n'est pas le code
+    // de retour de chacun, c'est qu'aucun n'ait touche le reseau : un fetch nu ajoute
+    // demain quelque part dans src/ ferait grossir « sorties » et casserait ce test, ce
+    // qu'une somme de tests par route ne garantit pas.
+    const appelants: [string, () => Promise<unknown>][] = [
+      [
+        "forward du proxy",
+        async () => {
           const blob = await encryptBlob(
             {
               v: 2,
@@ -84,8 +85,11 @@ Deno.test({
           });
           await res.body?.cancel();
           assertEquals(res.status, 403);
-        }],
-        ["/api/test-proxy", async () => {
+        },
+      ],
+      [
+        "/api/test-proxy",
+        async () => {
           const res = await post("/api/test-proxy", {
             method: "GET",
             path: "/v1/apps",
@@ -95,108 +99,107 @@ Deno.test({
             scopes: ["GET:/v1/apps"],
           });
           await res.body?.cancel();
-        }],
-        ["/api/list-apps", async () => {
+        },
+      ],
+      [
+        "/api/list-apps",
+        async () => {
           const res = await post("/api/list-apps", {
             token: "tk-us-test",
             target: SCALINGO_HOST,
           });
           await res.body?.cancel();
-        }],
-        ["/api/list-addons", async () => {
+        },
+      ],
+      [
+        "/api/list-addons",
+        async () => {
           const res = await post("/api/list-addons", {
             token: "tk-us-test",
             app: "mon-app",
             target: SCALINGO_HOST,
           });
           await res.body?.cancel();
-        }],
-        ["token d'addon", async () => {
+        },
+      ],
+      [
+        "token d'addon",
+        async () => {
           await assertRejects(() =>
-            fetchAddonToken("bearer-du-compte", SCALINGO_HOST, "a", "ad-1")
+            fetchAddonToken("bearer-du-compte", SCALINGO_HOST, "a", "ad-1"),
           );
-        }],
-        ["echange de token", async () => {
-          Deno.env.set("SCALINGO_AUTH_URL", "https://auth.scalingo.com");
+        },
+      ],
+      [
+        "echange de token",
+        async () => {
+          process.env.SCALINGO_AUTH_URL = "https://auth.scalingo.com";
           await assertRejects(() => exchangeToken("tk-us-test"));
-          Deno.env.delete("SCALINGO_AUTH_URL");
-        }],
-      ];
+          delete process.env.SCALINGO_AUTH_URL;
+        },
+      ],
+    ];
 
-      for (const [nom, appelant] of appelants) {
-        sorties = [];
-        await appelant();
-        assertEquals(
-          sorties,
-          [],
-          `${nom} a joint le reseau malgre une destination classee non publique`,
-        );
-      }
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
-
-Deno.test({
-  name: "AC-43.17 bis: TEMOIN, les memes appelants sortent bien quand la destination est publique",
-  fn: async () => {
-    setup();
-    try {
-      // Sans ce temoin, le recensement ci-dessus serait vert sur un stub de fetch mal
-      // branche, ou sur des routes qui echouent avant meme d'envisager de sortir.
-      _setResolverForTests((_h, kind) => Promise.resolve(kind === "A" ? ["93.184.216.34"] : []));
+    for (const [nom, appelant] of appelants) {
       sorties = [];
-      const res = await post("/api/list-apps", { token: "tk-us-test", target: SCALINGO_HOST });
-      await res.body?.cancel();
-      assertNotEquals(sorties.length, 0, "aucune sortie observee sur une destination publique");
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
-
-Deno.test({
-  name:
-    "AC-43.22 (registre v5): une valeur d'origine operateur echappe a la contrainte d'hote, pas au classement d'adresse",
-  fn: async () => {
-    setup();
-    try {
-      // Moitie vraie du critere : SCALINGO_API_URL vient de l'operateur, qui a deja le
-      // controle du processus. Elle n'a donc pas a etre un hote Scalingo.
-      Deno.env.set("SCALINGO_API_URL", "https://mock.operateur.example");
-      _setResolverForTests((_h, kind) => Promise.resolve(kind === "A" ? ["93.184.216.34"] : []));
-      globalThis.fetch = ((input: string | URL | Request) => {
-        sorties.push(input instanceof Request ? input.url : String(input));
-        return Promise.resolve(
-          new Response(JSON.stringify({ addon: { token: "addon-tok" } }), { status: 200 }),
-        );
-      }) as typeof globalThis.fetch;
-      sorties = [];
-      const token = await fetchAddonToken("bearer", "https://mock.operateur.example", "a", "ad-1");
-      assertEquals(typeof token, "string");
-      assertEquals(sorties.length, 1);
-
-      // Moitie que l'implementation refuse, et elle a raison : l'exemption porte sur la
-      // contrainte de domaine Scalingo, jamais sur la classification d'adresse. Une valeur
-      // d'operateur qui pointerait le reseau prive resterait une sortie non publique, et
-      // egressFetch est le seul point de sortie, sans derogation par provenance.
-      _setResolverForTests((_h, kind) => Promise.resolve(kind === "A" ? ["10.0.0.7"] : []));
-      sorties = [];
-      await assertRejects(
-        () => fetchAddonToken("bearer", "https://mock.operateur.example", "a", "ad-1"),
-        Error,
-        "Target host resolves to a non-public address",
+      await appelant();
+      assertEquals(
+        sorties,
+        [],
+        `${nom} a joint le reseau malgre une destination classee non publique`,
       );
-      assertEquals(sorties, []);
-    } finally {
-      teardown();
     }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  } finally {
+    teardown();
+  }
+});
+
+test("AC-43.17 bis: TEMOIN, les memes appelants sortent bien quand la destination est publique", async () => {
+  setup();
+  try {
+    // Sans ce temoin, le recensement ci-dessus serait vert sur un stub de fetch mal
+    // branche, ou sur des routes qui echouent avant meme d'envisager de sortir.
+    _setResolverForTests((_h, kind) => Promise.resolve(kind === "A" ? ["93.184.216.34"] : []));
+    sorties = [];
+    const res = await post("/api/list-apps", { token: "tk-us-test", target: SCALINGO_HOST });
+    await res.body?.cancel();
+    assertNotEquals(sorties.length, 0, "aucune sortie observee sur une destination publique");
+  } finally {
+    teardown();
+  }
+});
+
+test("AC-43.22 (registre v5): une valeur d'origine operateur echappe a la contrainte d'hote, pas au classement d'adresse", async () => {
+  setup();
+  try {
+    // Moitie vraie du critere : SCALINGO_API_URL vient de l'operateur, qui a deja le
+    // controle du processus. Elle n'a donc pas a etre un hote Scalingo.
+    process.env.SCALINGO_API_URL = "https://mock.operateur.example";
+    _setResolverForTests((_h, kind) => Promise.resolve(kind === "A" ? ["93.184.216.34"] : []));
+    globalThis.fetch = ((input: string | URL | Request) => {
+      sorties.push(input instanceof Request ? input.url : String(input));
+      return Promise.resolve(
+        new Response(JSON.stringify({ addon: { token: "addon-tok" } }), { status: 200 }),
+      );
+    }) as typeof globalThis.fetch;
+    sorties = [];
+    const token = await fetchAddonToken("bearer", "https://mock.operateur.example", "a", "ad-1");
+    assertEquals(typeof token, "string");
+    assertEquals(sorties.length, 1);
+
+    // Moitie que l'implementation refuse, et elle a raison : l'exemption porte sur la
+    // contrainte de domaine Scalingo, jamais sur la classification d'adresse. Une valeur
+    // d'operateur qui pointerait le reseau prive resterait une sortie non publique, et
+    // egressFetch est le seul point de sortie, sans derogation par provenance.
+    _setResolverForTests((_h, kind) => Promise.resolve(kind === "A" ? ["10.0.0.7"] : []));
+    sorties = [];
+    await assertRejects(
+      () => fetchAddonToken("bearer", "https://mock.operateur.example", "a", "ad-1"),
+      Error,
+      "Target host resolves to a non-public address",
+    );
+    assertEquals(sorties, []);
+  } finally {
+    teardown();
+  }
 });

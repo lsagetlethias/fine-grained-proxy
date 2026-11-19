@@ -1,5 +1,7 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 
-Deno.test("sanity check", () => {
+import { assertEquals } from "../_assert.ts";
+
+test("sanity check", () => {
   assertEquals(1 + 1, 2);
 });

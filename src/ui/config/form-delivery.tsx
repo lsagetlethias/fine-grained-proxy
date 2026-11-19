@@ -14,19 +14,10 @@ export function TtlSection() {
   return (
     <section>
       <fieldset>
-        <legend class={LEGEND_CLASS}>
-          Durée de validité
-        </legend>
-        <div
-          class="flex flex-wrap gap-2"
-          role="radiogroup"
-          aria-label="Durée de validité"
-        >
+        <legend class={LEGEND_CLASS}>Durée de validité</legend>
+        <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Durée de validité">
           {TTL_PRESETS.map((preset) => (
-            <label
-              key={preset.value}
-              class={PILL_CLASS}
-            >
+            <label key={preset.value} class={PILL_CLASS}>
               <input
                 type="radio"
                 name="ttl"
@@ -39,7 +30,9 @@ export function TtlSection() {
           ))}
         </div>
         <div id="custom-ttl-wrapper" class="mt-2 hidden">
-          <label for="custom-ttl" class="sr-only">TTL personnalisé en secondes</label>
+          <label for="custom-ttl" class="sr-only">
+            TTL personnalisé en secondes
+          </label>
           <input
             type="number"
             id="custom-ttl"
@@ -49,11 +42,7 @@ export function TtlSection() {
             class={INPUT_CLASS}
           />
         </div>
-        <div
-          id="ttl-warning"
-          class={`mt-2 hidden ${ALERT_CAUTION_CLASS}`}
-          role="alert"
-        >
+        <div id="ttl-warning" class={`mt-2 hidden ${ALERT_CAUTION_CLASS}`} role="alert">
           <AlertTriangleIcon />
           <span>Attention : sans expiration, cette URL restera valide indéfiniment.</span>
         </div>
@@ -64,10 +53,7 @@ export function TtlSection() {
 
 export function ByokSection() {
   return (
-    <details
-      id="byok-details"
-      class="group rounded-md border border-gray-200 dark:border-gray-700"
-    >
+    <details id="byok-details" class="group rounded-md border border-gray-200 dark:border-gray-700">
       <summary
         id="byok-summary"
         class="flex flex-wrap cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fgp-700 hover:text-fgp-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fgp-500 focus-visible:ring-offset-2 rounded-md dark:text-fgp-300 dark:focus-visible:ring-offset-gray-900 [&::-webkit-details-marker]:hidden"
@@ -96,10 +82,7 @@ export function ByokSection() {
       </summary>
 
       <div class="space-y-3 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
-        <p
-          id="byok-warning"
-          class={ALERT_DANGER_CLASS}
-        >
+        <p id="byok-warning" class={ALERT_DANGER_CLASS}>
           <AlertTriangleIcon />
           <span>
             R&eacute;utiliser une cl&eacute; lie les blobs : sa fuite rend d&eacute;chiffrables tous
@@ -138,33 +121,26 @@ export function ByokSection() {
                 class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:border-red-500 aria-[invalid=true]:focus:ring-red-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 dark:aria-[invalid=true]:border-red-500"
               />
 
-              {
-                /* La jauge est fille du champ et non soeur de la rangee : soeur des
-                  boutons, elle prenait leur largeur en plus de celle du champ. */
-              }
+              {/* La jauge est fille du champ et non soeur de la rangee : soeur des
+                  boutons, elle prenait leur largeur en plus de celle du champ. */}
               <div id="byok-strength" class="mt-2 flex gap-1" aria-hidden="true">
                 <span
                   data-byok-segment
                   class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
-                >
-                </span>
+                ></span>
                 <span
                   data-byok-segment
                   class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
-                >
-                </span>
+                ></span>
                 <span
                   data-byok-segment
                   class="h-1 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
-                >
-                </span>
+                ></span>
               </div>
             </div>
 
-            {
-              /* Groupes : sous 360 px la rangee replie de toute facon, avec ce conteneur
-                elle replie proprement et le champ y gagne de la largeur. */
-            }
+            {/* Groupes : sous 360 px la rangee replie de toute facon, avec ce conteneur
+                elle replie proprement et le champ y gagne de la largeur. */}
             <div id="byok-actions" class="flex shrink-0 gap-2 self-start">
               <button
                 type="button"
@@ -186,13 +162,7 @@ export function ByokSection() {
             </div>
           </div>
 
-          <p
-            id="byok-strength-label"
-            class={HINT_CLASS}
-            role="status"
-            aria-live="polite"
-          >
-          </p>
+          <p id="byok-strength-label" class={HINT_CLASS} role="status" aria-live="polite"></p>
 
           <p id="byok-hint" class={HINT_CLASS}>
             Laissez vide pour que FGP en g&eacute;n&egrave;re une.
