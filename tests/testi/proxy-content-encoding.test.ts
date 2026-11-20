@@ -287,3 +287,40 @@ test("bodyless response keeps the upstream entity headers", async () => {
   assertEquals(res.headers.get("Content-Length"), "4707");
   teardown();
 });
+
+// AC-60.2 : Content-Range decrit le flux compresse. Relaye apres decodage, il fait
+// reassembler un fichier faux a un client qui telecharge par morceaux, sans erreur pour
+// l'en avertir. Il tombe donc avec Content-Encoding et Content-Length, jamais seul.
+test("AC-60.2: un 206 decode par le runtime ne garde pas son Content-Range", async () => {
+  setup();
+  try {
+    const blob = await makeBlob(["GET:/chunk"]);
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response("corps en clair, deja decode par le runtime", {
+          status: 206,
+          headers: {
+            "Content-Encoding": "gzip",
+            "Content-Length": "31",
+            "Content-Range": "bytes 0-30/31",
+          },
+        }),
+      )) as typeof globalThis.fetch;
+
+    const res = await createApp().request(`/${blob}/chunk`, {
+      headers: { "X-FGP-Key": CLIENT_KEY },
+    });
+
+    assertEquals(res.status, 206, "le status amont n'est jamais transforme");
+    assertEquals(res.headers.get("Content-Encoding"), null);
+    assertEquals(res.headers.get("Content-Length"), null);
+    assertEquals(
+      res.headers.get("Content-Range"),
+      null,
+      "Content-Range decrit le flux compresse : le relayer ferait reassembler un fichier faux",
+    );
+    await res.body?.cancel();
+  } finally {
+    teardown();
+  }
+});

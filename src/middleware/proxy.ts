@@ -222,9 +222,15 @@ function handleUpstreamResponse(response: Response): Response {
   // Le decodage n'etant ni universel ni garanti, la suppression est conditionnelle :
   // hors des cas couverts par runtimeDecodedBody, le corps ressort bel et bien compresse
   // et les en-tetes amont sont exacts, les supprimer casserait le client dans l'autre sens.
+  // Content-Range tombe pour la meme raison que Content-Length, et le manquer coute plus
+  // cher : ses offsets decrivent le flux compresse, donc un client qui reassemble un
+  // telechargement par morceaux produit un fichier faux sans qu'aucune erreur ne le
+  // signale. Un 206 ampute de son Content-Range est une reponse qu'un client rejette,
+  // ce qui est le comportement voulu : mieux vaut un refus visible qu'un octet silencieux.
   if (runtimeDecodedBody(response)) {
     headers.delete("Content-Encoding");
     headers.delete("Content-Length");
+    headers.delete("Content-Range");
   }
 
   headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_UPSTREAM);

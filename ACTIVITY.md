@@ -358,7 +358,7 @@
   - Les règles `a11y` de Biome ne sont pas satisfaites mais désactivées : les corriger changerait le DOM rendu, ce qu'une migration ne fait pas.
 - **Écarts de comportement imposés par le runtime** (détaillés dans l'ADR-0011) :
   - Node décode `gzip`, `x-gzip`, `deflate`, `br` et `zstd` là où Deno n'en décodait que deux. `RUNTIME_DECODED_ENCODINGS` recalibré sur une mesure : mal calibrée, une réponse `deflate` repartait décodée mais annoncée compressée.
-  - Ni un `Range` ni un `Accept-Encoding: identity` ne désactivent plus le décodage. Conséquence non rattrapable : un 206 portant un fragment compressé ressort vide.
+  - Ni un `Range` ni un `Accept-Encoding: identity` ne désactivent plus le décodage. Sur un 206, un fragment de flux compressé est inflaté en clair partiel plausible, pas vidé : la première rédaction de l'ADR-0011 et de ce journal annonçait un corps vide, c'était faux et la review l'a mesuré. La moitié corrigeable l'a été, `Content-Range` tombe maintenant avec `Content-Encoding` et `Content-Length`.
   - `await reader.cancel()` sur une branche de `tee()` ne résout qu'une fois les deux branches annulées, ce qui est le comportement spécifié. Deux tests ne se terminaient jamais au lieu de rendre un 413.
   - Un `setInterval` de purge sans `.unref()` tenait la boucle d'événements ouverte dans chaque processus de test : `pnpm test` ne rendait pas la main, tous tests verts. C'est exactement ce que `sanitizeOps` signalait et que `node:test` ne signale plus.
 - **ADR** : ADR-0011 (migration Deno vers Node), ADR-0001 partiellement remplacé.
