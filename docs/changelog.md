@@ -1,5 +1,14 @@
 # Changelog
 
+## 19 novembre 2026
+
+- Le proxy tourne désormais sur Node. Rien ne change pour vos URLs FGP : vos blobs v2 à v5 restent valides, aucune régénération n'est nécessaire
+- Aucun comportement observable ne bouge : même chiffrement, même format de blob, mêmes scopes et filtres, mêmes codes d'erreur, mêmes plafonds, même transparence du proxy
+- **Opérateurs** : le runtime passe de Deno à Node 26, les dépendances s'installent avec pnpm, et la production se lance depuis un bundle unique `dist/main.js`
+- **Opérateurs** : les commandes changent, une task `deno task x` devient un script `pnpm x`. La liste de référence est le champ `scripts` de `package.json`, reprise dans le README
+- **Opérateurs** : Deno Deploy est abandonné, la plateforme ferme vers avril 2027. Les cibles sont Scalingo par buildpack Node et Docker, et le guide Scalingo devient le guide principal
+- **Opérateurs** : Node n'a aucun équivalent de l'autorisation de lecture par variable d'environnement. L'allow-list des onze variables disparaît donc du `Procfile` et du `Dockerfile`, et une purge applicative prend sa place : au démarrage, le serveur retire de son environnement tout nom qu'il ne déclare pas lire. Une variable que vous posez sans qu'elle soit au registre du code n'est donc pas ignorée, elle est effacée
+
 ## 14 septembre 2026
 
 - Correction : sur les instances Scalingo, toute requête proxy répondait `500 internal_error`. Deux variables d'environnement manquaient à l'autorisation de lecture du `Procfile`, et une lecture non autorisée ne rend pas une absence, elle échoue

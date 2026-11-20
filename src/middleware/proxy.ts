@@ -1,6 +1,7 @@
-import { Context, MiddlewareHandler } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
+import type { Context, MiddlewareHandler } from "hono";
 
-import { BlobConfig, BlobPolicyError, decryptBlobWithKey, isExpired } from "../crypto/blob.ts";
+import { type BlobConfig, BlobPolicyError, decryptBlobWithKey, isExpired } from "../crypto/blob.ts";
 import { checkClientKey } from "../crypto/client-key.ts";
 import { obtainAddonToken, obtainBearerViaExchange } from "../auth/credentials.ts";
 import { isAuthSpec, isScalingoAddonSpec } from "../auth/spec.ts";
@@ -40,7 +41,11 @@ async function readBodyBounded(
       if (done) break;
       total += value.byteLength;
       if (total > limit) {
-        await reader.cancel();
+        // Jamais attendre ce cancel. Le flux vient d'un clone() de la requete, donc d'un
+        // tee() : la spec ne resout la promesse d'annulation d'une branche qu'une fois les
+        // DEUX branches annulees, et l'autre ne l'est jamais ici. L'attendre suspendait le
+        // flux proxy pour toujours au lieu de rendre le 413.
+        reader.cancel().catch(() => {});
         return null;
       }
       chunks.push(value);
@@ -155,7 +160,7 @@ async function forwardRequest(
   target: URL,
   proxyPath: string,
   authHeaders: Headers,
-): Promise<{ response: Response; decodingDisabled: boolean }> {
+): Promise<Response> {
   const url = new URL(c.req.url);
   const targetUrl = buildUpstreamUrl(target, proxyPath, url.search);
 
@@ -179,35 +184,28 @@ async function forwardRequest(
     init.body = c.req.raw.body;
   }
 
-  // Se lit sur les en-tetes reellement partis, apres toutes les passes : un Range comme
-  // un Accept-Encoding peut venir de l'appelant comme d'un AuthSpec.
-  const decodingDisabled = runtimeDecodingDisabled(headers);
-
-  return { response: await egressFetch(targetUrl, init), decodingDisabled };
+  return await egressFetch(targetUrl, init);
 }
 
-// Mesure sur Deno 2.9.5 : deflate, zstd et tout encodage inconnu ressortent bruts.
-const RUNTIME_DECODED_ENCODINGS = new Set(["gzip", "br"]);
+// Mesure sur Node 26.10 : tout encodage inconnu ressort brut.
+const RUNTIME_DECODED_ENCODINGS = new Set(["gzip", "x-gzip", "deflate", "br", "zstd"]);
 
-// Deux en-tetes de la requete sortante suffisent a desactiver le decodage automatique du
-// runtime, auquel cas le corps revient compresse. Mesure sur Deno 2.9.5 : un Range, quelle
-// que soit sa valeur et meme si la reponse finit en 200, parce que la reponse peut etre un
-// fragment indecodable ; et un Accept-Encoding valant exactement identity, "identity, gzip"
-// ou "identity;q=0" laissant au contraire le decodage actif.
-function runtimeDecodingDisabled(sentHeaders: Headers): boolean {
-  if (sentHeaders.has("Range")) return true;
-  return (sentHeaders.get("Accept-Encoding") ?? "").trim().toLowerCase() === "identity";
-}
-
-function runtimeDecodedBody(response: Response, decodingDisabled: boolean): boolean {
+function runtimeDecodedBody(response: Response): boolean {
   // Sans corps (HEAD, 304) rien n'a ete decode, et le Content-Length amont decrit alors
   // l'entite, pas ce qu'on transmet : il doit survivre.
-  if (response.body === null || decodingDisabled) return false;
+  if (response.body === null) return false;
+
   const encoding = response.headers.get("Content-Encoding");
-  return encoding !== null && RUNTIME_DECODED_ENCODINGS.has(encoding.trim().toLowerCase());
+  if (encoding === null) return false;
+
+  // Un seul encodage inconnu dans la liste et le runtime n'en applique aucun, pas meme
+  // ceux qu'il connait : « gzip, foo » ressort donc entierement compresse. Un en-tete
+  // present mais vide ne decrit aucun encodage et tombe du meme cote.
+  const codings = encoding.split(",").map((coding) => coding.trim().toLowerCase());
+  return codings.every((coding) => RUNTIME_DECODED_ENCODINGS.has(coding));
 }
 
-function handleUpstreamResponse(response: Response, decodingDisabled: boolean): Response {
+function handleUpstreamResponse(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.delete("Set-Cookie");
 
@@ -224,9 +222,15 @@ function handleUpstreamResponse(response: Response, decodingDisabled: boolean): 
   // Le decodage n'etant ni universel ni garanti, la suppression est conditionnelle :
   // hors des cas couverts par runtimeDecodedBody, le corps ressort bel et bien compresse
   // et les en-tetes amont sont exacts, les supprimer casserait le client dans l'autre sens.
-  if (runtimeDecodedBody(response, decodingDisabled)) {
+  // Content-Range tombe pour la meme raison que Content-Length, et le manquer coute plus
+  // cher : ses offsets decrivent le flux compresse, donc un client qui reassemble un
+  // telechargement par morceaux produit un fichier faux sans qu'aucune erreur ne le
+  // signale. Un 206 ampute de son Content-Range est une reponse qu'un client rejette,
+  // ce qui est le comportement voulu : mieux vaut un refus visible qu'un octet silencieux.
+  if (runtimeDecodedBody(response)) {
     headers.delete("Content-Encoding");
     headers.delete("Content-Length");
+    headers.delete("Content-Range");
   }
 
   headers.set(FGP_SOURCE_HEADER, FGP_SOURCE_UPSTREAM);
@@ -260,7 +264,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
 
   const serverSalt = getServerSalt();
 
-  let config;
+  let config: BlobConfig;
   let derivedKey: CryptoKey;
   try {
     const decrypted = await decryptBlobWithKey(blobRaw, clientKey, serverSalt);
@@ -280,7 +284,8 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
   const validAuthModes = ["bearer", "basic", "scalingo-exchange"];
   if (
     typeof config.auth === "string" &&
-    !validAuthModes.includes(config.auth) && !config.auth.startsWith("header:")
+    !validAuthModes.includes(config.auth) &&
+    !config.auth.startsWith("header:")
   ) {
     return jsonError(c, 400, "invalid_auth_mode", "Unsupported auth mode: " + config.auth);
   }
@@ -307,9 +312,10 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
   if (needsRawBody) {
     // Quand seule la capture detailed a besoin du corps, inutile de lire au-dela de ce
     // qui sera de toute facon tronque.
-    const limit = (hasBodyMethod && scopesHaveBodyFilters)
-      ? MAX_BUFFERED_BODY
-      : readLogsConfig().detailedMaxKb * 1024 + 1;
+    const limit =
+      hasBodyMethod && scopesHaveBodyFilters
+        ? MAX_BUFFERED_BODY
+        : readLogsConfig().detailedMaxKb * 1024 + 1;
     const cloned = c.req.raw.clone().body;
     rawBodyBytes = cloned ? await readBodyBounded(cloned, limit) : new Uint8Array(0);
     if (rawBodyBytes === null) {
@@ -344,12 +350,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
           logsActive,
           false,
           null,
-          jsonError(
-            c,
-            403,
-            "scope_denied",
-            "Body filters require application/json content type",
-          ),
+          jsonError(c, 403, "scope_denied", "Body filters require application/json content type"),
         );
       }
     }
@@ -412,8 +413,8 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     const credentialsError = isScalingoAddonSpec(config.auth)
       ? { code: "auth_addon_failed", message: "Unable to obtain addon token" }
       : config.auth === "scalingo-exchange"
-      ? { code: "auth_exchange_failed", message: "Unable to exchange Scalingo token" }
-      : null;
+        ? { code: "auth_exchange_failed", message: "Unable to exchange Scalingo token" }
+        : null;
     if (!credentialsError) throw err;
     return await finishWithCapture(
       c,
@@ -429,9 +430,9 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     );
   }
 
-  let forwardResult;
+  let upstream: Response;
   try {
-    forwardResult = await forwardRequest(c, parsedTarget.url, proxyPath, authHeaders);
+    upstream = await forwardRequest(c, parsedTarget.url, proxyPath, authHeaders);
   } catch (err) {
     // Seules les issues connues du point de sortie donnent un 502 : tout le reste est une
     // panne locale, qui doit remonter a app.onError et s'y voir, pas se deguiser en API
@@ -451,10 +452,7 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     );
   }
 
-  const forwarded = handleUpstreamResponse(
-    forwardResult.response,
-    forwardResult.decodingDisabled,
-  );
+  const forwarded = handleUpstreamResponse(upstream);
   return await finishWithCapture(
     c,
     config,
@@ -467,6 +465,17 @@ async function handleProxy(c: Context, blobRaw: string, proxyPath: string): Prom
     rawBodyBytes,
     forwarded,
   );
+}
+
+// getConnInfo lit c.env.incoming.socket : hors d'un serveur Node, app.fetch est appele
+// sans cet env et l'acces leve. Une adresse de pair introuvable ne doit pas faire perdre
+// l'entree de log qui l'accompagne, extractClientIp recoit donc la chaine vide.
+function peerAddress(c: Context): string {
+  try {
+    return getConnInfo(c).remote.address ?? "";
+  } catch {
+    return "";
+  }
 }
 
 async function finishWithCapture(
@@ -489,10 +498,7 @@ async function finishWithCapture(
   try {
     const blobId = await computeBlobId(blobRaw);
     const method = c.req.method.toUpperCase();
-    const env = c.env as { info?: { remoteAddr?: { hostname?: string } } } | undefined;
-    const ipPrefix = truncateIp(
-      extractClientIp(c.req.raw.headers, env?.info?.remoteAddr?.hostname ?? ""),
-    );
+    const ipPrefix = truncateIp(extractClientIp(c.req.raw.headers, peerAddress(c)));
 
     captureNetwork({
       blobId,

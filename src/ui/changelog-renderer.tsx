@@ -176,7 +176,9 @@ export function renderChangelog(markdown: string): Child {
               {block.date}
             </h3>
             <ul class="space-y-1.5 text-xs">
-              {block.items.map((item, itemIdx) => <li key={itemIdx}>{renderInline(item)}</li>)}
+              {block.items.map((item, itemIdx) => (
+                <li key={itemIdx}>{renderInline(item)}</li>
+              ))}
             </ul>
           </section>
         );

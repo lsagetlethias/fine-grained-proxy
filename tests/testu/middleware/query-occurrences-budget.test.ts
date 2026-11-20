@@ -1,5 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals } from "../../_assert.ts";
 import { MAX_REGEX_VALUES_PER_BLOB } from "../../../src/crypto/blob.ts";
 import {
   matchBodyFilter,
@@ -77,10 +78,7 @@ function segmentCosts(segment: number, count: number): number[] {
   }
   for (let sample = 0; sample < SAMPLES; sample++) {
     for (let index = 0; index < count; index++) {
-      best[index] = Math.min(
-        best[index],
-        measure(REGEX_VALUE, WORST_CASE_VALUE, segment),
-      );
+      best[index] = Math.min(best[index], measure(REGEX_VALUE, WORST_CASE_VALUE, segment));
     }
   }
   return best;
@@ -92,7 +90,7 @@ function segmentCosts(segment: number, count: number): number[] {
 // mesurer un pire cas plus lourd a ce test, qui continuerait de passer en silence.
 const ARBITRATED_HIGH_TIER_EVALUATIONS = 256;
 
-Deno.test("AC-52.10: le palier bas borne le cout du pire cas regex", () => {
+test("AC-52.10: le palier bas borne le cout du pire cas regex", () => {
   // Pire cas atteignable : les 4 valeurs regex du budget global du blob (ADR-0010 D2)
   // concentrees sur un seul filtre, applique a un parametre repete jusqu'au palier bas.
   const lowTierEvaluations = QUERY_OCCURRENCE_CAP_WITH_REGEX * MAX_REGEX_VALUES_PER_BLOB;
@@ -123,7 +121,7 @@ Deno.test("AC-52.10: le palier bas borne le cout du pire cas regex", () => {
   );
 });
 
-Deno.test("AC-52.11: garde-fou du 64, le palier haut reste hors de portee du cout regex", () => {
+test("AC-52.11: garde-fou du 64, le palier haut reste hors de portee du cout regex", () => {
   // Le test ne s'interdit pas de mesurer un pire cas plus lourd, il refuse de le faire sans
   // qu'on l'ait dit. La version precedente comparait deux constantes entre elles et etait vraie
   // quelle que soit la mesure, donc ne mordait sur rien.
@@ -162,7 +160,7 @@ Deno.test("AC-52.11: garde-fou du 64, le palier haut reste hors de portee du cou
   );
 });
 
-Deno.test("AC-52.12: les types non-regex ne portent pas le cout, ce qui justifie le palier haut", () => {
+test("AC-52.12: les types non-regex ne portent pas le cout, ce qui justifie le palier haut", () => {
   const unitRegexCost = costOfOneRegexEvaluation();
   const plainValue = "x".repeat(120);
   const evaluations = 1024;
@@ -170,7 +168,10 @@ Deno.test("AC-52.12: les types non-regex ne portent pas le cout, ce qui justifie
   const anyCost = bestOf({ type: "any", value: "nomatch" }, plainValue, evaluations);
   const globCost = bestOf({ type: "stringwildcard", value: "y*z" }, plainValue, evaluations);
 
-  for (const [label, total] of [["any", anyCost], ["stringwildcard", globCost]] as const) {
+  for (const [label, total] of [
+    ["any", anyCost],
+    ["stringwildcard", globCost],
+  ] as const) {
     const perEvaluation = total / evaluations;
     assertEquals(
       perEvaluation * 100 < unitRegexCost,
@@ -189,11 +190,10 @@ Deno.test("AC-52.12: les types non-regex ne portent pas le cout, ce qui justifie
   );
 });
 
-Deno.test("AC-52.13: le parsing d'une query volumineuse n'est pas un vecteur", () => {
+test("AC-52.13: le parsing d'une query volumineuse n'est pas un vecteur", () => {
   const unitCost = costOfOneRegexEvaluation();
   const occurrences = 5000;
-  const query = "?" +
-    Array.from({ length: occurrences }, (_, i) => `tag=v${i}`).join("&");
+  const query = "?" + Array.from({ length: occurrences }, (_, i) => `tag=v${i}`).join("&");
 
   let parseCost = Infinity;
   let seen = 0;

@@ -12,7 +12,8 @@ Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de gen
 
 ### Prerequis
 
-- [Deno](https://deno.com/) >= 2.x
+- [Node](https://nodejs.org/) 26 (voir `.nvmrc` et le champ `engines` de `package.json`)
+- [pnpm](https://pnpm.io/) 10
 
 ### Variables d'environnement
 
@@ -34,15 +35,16 @@ Beaucoup d'APIs ne proposent pas de tokens a granularite fine. FGP permet de gen
 > **`FGP_EGRESS_ALLOW_PRIVATE=1` ne doit jamais etre actif en production.**
 > Il desactive la classification des destinations, donc la garantie G1 de la politique de sortie. L'instance redevient exactement la SSRF non authentifiee que cette politique corrige : n'importe qui peut lui faire emettre des requetes vers le reseau prive de l'hebergeur, service de metadonnees compris, et en recuperer le corps de reponse. Il existe pour le developpement local et la suite de tests, rien d'autre. Le serveur ecrit un avertissement au premier controle de destination, pas au demarrage : une instance qui n'a encore rien proxyfie reste silencieuse.
 
-Une variable non requise et absente retombe toujours sur son defaut sur, y compris quand l'hebergeur en refuse la lecture (allow-list `--allow-env` incomplete par exemple) : un refus d'acces se traite comme une absence, jamais comme un opt-in a un comportement moins strict.
+Une variable non requise et absente retombe toujours sur son defaut sur : classification des destinations active, `X-Forwarded-For` ignore, feature `/logs` eteinte. Une absence n'est jamais un opt-in a un comportement moins strict.
 
 ### Lancer en dev
 
 Copier `.env.example` en `.env` et renseigner les valeurs :
 
 ```bash
+pnpm install
 cp .env.example .env
-deno task dev
+pnpm dev
 ```
 
 Le serveur demarre sur `http://localhost:8000`. L'UI de configuration est accessible a la racine.
@@ -227,23 +229,28 @@ Feature opt-in gatee par `FGP_LOGS_ENABLED=1`. Activee par blob via le champ `lo
 
 | Commande | Description |
 |----------|-------------|
-| `deno task build` | Build CSS (Tailwind) + client JS (esbuild) + version (SHA git) + changelog |
-| `deno task build:css` | Compile `src/ui/tailwind.css` vers `static/styles.css` |
-| `deno task build:client` | Compile les modules TS client vers `static/client.js` (esbuild) |
-| `deno task build:version` | Resout le SHA git du commit courant et l'ecrit dans `static/version.txt` |
-| `deno task build:changelog` | Regenere `src/ui/changelog-data.ts` depuis `docs/changelog.md` |
-| `deno task dev` | Watch parallele CSS + client + serveur |
-| `deno task start` | Build + production |
-| `deno task deploy` | Build + deploy Deno Deploy |
-| `deno task test` | Tous les tests |
-| `deno task test:unit` | Tests unitaires |
-| `deno task test:integration` | Tests integration |
-| `deno task test:e2e` | Tests e2e |
-| `deno task lint` | Linter |
-| `deno task fmt` | Formatteur |
-| `deno task fmt:check` | Verification formatage |
-| `deno task check` | Type checking |
-| `deno task verify` | Pipeline complete (lint + fmt + check + test) |
+| `pnpm build` | Build CSS (Tailwind) + client JS (esbuild) + version (SHA git) + changelog |
+| `pnpm build:css` | Compile `src/ui/tailwind.css` vers `static/styles.css` |
+| `pnpm build:client` | Compile les modules TS client vers `static/client.js` (esbuild) |
+| `pnpm build:version` | Resout le SHA git du commit courant et l'ecrit dans `static/version.txt` |
+| `pnpm build:changelog` | Regenere `src/ui/changelog-data.ts` depuis `docs/changelog.md` |
+| `pnpm build:server` | Bundle le serveur vers `dist/main.js` (esbuild) |
+| `pnpm build:prod` | `build` + `build:server`, ce que doit produire une phase de build de deploiement |
+| `pnpm dev` | Watch parallele CSS + client + serveur |
+| `pnpm start` | Build de production + serveur sous `node --permission` |
+| `pnpm test` | Tous les tests |
+| `pnpm test:unit` | Tests unitaires |
+| `pnpm test:integration` | Tests integration |
+| `pnpm test:e2e` | Tests e2e |
+| `pnpm lint` | Linter (Biome) |
+| `pnpm lint:fix` | Linter avec corrections automatiques |
+| `pnpm fmt` | Formatteur (Biome), ecrit les fichiers |
+| `pnpm fmt:check` | Verification formatage |
+| `pnpm check` | Type checking serveur, puis client |
+| `pnpm check:client` | Type checking du code navigateur (`tsconfig.client.json`, lib DOM isolee) |
+| `pnpm verify` | Pipeline complete (lint + fmt:check + check + test) |
+
+Les scripts s'appellent aussi par `node --run <script>`, ce que font les scripts composites de `package.json`. La liste de reference est le champ `scripts` de `package.json`.
 
 ## Documentation
 
@@ -251,8 +258,7 @@ Feature opt-in gatee par `FGP_LOGS_ENABLED=1`. Activee par blob via le champ `lo
 - [Criteres d'acceptation](docs/acceptance-criteria.md)
 - [Limites fonctionnelles body filters et auth structuree](docs/limits.md)
 - [Changelog](docs/changelog.md)
-- [Architecture Decision Records](docs/adr/), dont [ADR-0009 politique de sortie](docs/adr/0009-politique-de-sortie-du-proxy.md) et [ADR-0010 limites de ressources](docs/adr/0010-politique-limites-ressources.md)
-- [Guide deploiement Deno Deploy](docs/deno-deploy.md)
+- [Architecture Decision Records](docs/adr/), dont [ADR-0009 politique de sortie](docs/adr/0009-politique-de-sortie-du-proxy.md), [ADR-0010 limites de ressources](docs/adr/0010-politique-limites-ressources.md) et [ADR-0011 migration vers Node](docs/adr/0011-migration-deno-vers-node.md)
 - [Guide deploiement Scalingo](docs/scalingo-deploy.md)
 
 ## License

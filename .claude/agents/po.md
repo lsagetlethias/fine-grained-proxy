@@ -29,7 +29,7 @@ Vise le commit et pas seulement la branche : une branche avance pendant que tu t
 
 Ce n'est pas une précaution de principe. Un agent a livré une spec complète en travaillant sur un arbre qui ne contenait pas le travail dont il dépendait, et cinq autres ont dû se réaligner en cours de route. Le symptôme est trompeur : le dépôt a l'air cohérent, il l'est, c'est juste le mauvais point de départ.
 
-Deuxième piège du worktree neuf : `src/ui/changelog-data.ts` et `static/` sont générés et gitignorés, donc `deno task check` et deux tests d'intégration échouent tant que tu n'as pas lancé `deno task build`. Ces échecs-là ne viennent pas de toi.
+Deuxième piège du worktree neuf : `node_modules/` n'existe pas, et `src/ui/changelog-data.ts` et `static/` sont générés et gitignorés, donc `pnpm run check` et deux tests d'intégration échouent tant que tu n'as pas lancé `pnpm install` puis `pnpm run build`. Ces échecs-là ne viennent pas de toi.
 
 ## Responsabilités
 

@@ -1,5 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals } from "../_assert.ts";
 import { app } from "../../src/main.ts";
 import { encryptBlob } from "../../src/crypto/blob.ts";
 import type { BlobConfig } from "../../src/crypto/blob.ts";
@@ -33,13 +34,13 @@ const originalFetch = globalThis.fetch;
 // captureNetwork, et le « path » en est un.
 function proxied(fn: (ctx: { blob: string; blobId: string }) => Promise<void>, logsOn = true) {
   return async () => {
-    Deno.env.set("FGP_SALT", SALT);
-    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
+    process.env.FGP_SALT = SALT;
+    process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
     // Pose explicitement les deux etats du kill switch. Se contenter de ne pas poser la
     // variable laisserait AC-57.8 dependre de l'environnement : un FGP_LOGS_ENABLED=1
     // herite du shell lui ferait capturer une entry et echouer alors que la garde est bonne.
-    if (logsOn) Deno.env.set("FGP_LOGS_ENABLED", "1");
-    else Deno.env.delete("FGP_LOGS_ENABLED");
+    if (logsOn) process.env.FGP_LOGS_ENABLED = "1";
+    else delete process.env.FGP_LOGS_ENABLED;
     _resetStoreForTests();
     globalThis.fetch = (() => Promise.resolve(new Response("{}", { status: 200 }))) as typeof fetch;
     try {
@@ -48,9 +49,9 @@ function proxied(fn: (ctx: { blob: string; blobId: string }) => Promise<void>, l
     } finally {
       globalThis.fetch = originalFetch;
       _resetStoreForTests();
-      Deno.env.delete("FGP_SALT");
-      Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-      Deno.env.delete("FGP_LOGS_ENABLED");
+      delete process.env.FGP_SALT;
+      delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+      delete process.env.FGP_LOGS_ENABLED;
     }
   };
 }
@@ -62,9 +63,9 @@ async function call(blob: string, pathWithQuery: string): Promise<void> {
   await res.body?.cancel();
 }
 
-Deno.test({
-  name: "AC-57.1: les noms de parametres sont captures et le path reste sans query",
-  fn: proxied(async ({ blob, blobId }) => {
+test(
+  "AC-57.1: les noms de parametres sont captures et le path reste sans query",
+  proxied(async ({ blob, blobId }) => {
     await call(blob, "/v1/items?status=open&per_page=50");
 
     const buf = _getNetworkBufferForTests(blobId);
@@ -75,13 +76,11 @@ Deno.test({
     // rien ne chiffre.
     assertEquals(buf[0].path, "/v1/items");
   }),
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
+);
 
-Deno.test({
-  name: "AC-57.2: SECURITE, aucune valeur de parametre n'entre dans l'entry network",
-  fn: proxied(async ({ blob, blobId }) => {
+test(
+  "AC-57.2: SECURITE, aucune valeur de parametre n'entre dans l'entry network",
+  proxied(async ({ blob, blobId }) => {
     await call(blob, `/v1/items?api_key=${API_KEY}&token=${TOKEN}&status=open`);
 
     const buf = _getNetworkBufferForTests(blobId);
@@ -100,13 +99,11 @@ Deno.test({
       );
     }
   }),
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
+);
 
-Deno.test({
-  name: "AC-57.3: le comptage d'occurrences est diagnosticable sans les valeurs",
-  fn: proxied(async ({ blob, blobId }) => {
+test(
+  "AC-57.3: le comptage d'occurrences est diagnosticable sans les valeurs",
+  proxied(async ({ blob, blobId }) => {
     const ids = Array.from({ length: 5 }, (_, i) => `ids=v${i}`).join("&");
     await call(blob, `/v1/items?${ids}&status=open`);
 
@@ -117,13 +114,11 @@ Deno.test({
     assertEquals(buf[0].queryParamRepeats, [["ids", 5]]);
     assertEquals(JSON.stringify(buf[0]).includes("v3"), false);
   }),
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
+);
 
-Deno.test({
-  name: "AC-57.7: aucune capture quand la requete n'a pas de query",
-  fn: proxied(async ({ blob, blobId }) => {
+test(
+  "AC-57.7: aucune capture quand la requete n'a pas de query",
+  proxied(async ({ blob, blobId }) => {
     await call(blob, "/v1/items");
 
     const buf = _getNetworkBufferForTests(blobId);
@@ -135,43 +130,34 @@ Deno.test({
     assertEquals(buf[0].queryParamRepeats, undefined);
     assertEquals(buf[0].queryParamNamesTruncated, undefined);
   }),
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
+);
 
-Deno.test({
-  name: "AC-57.8: NON-REGRESSION, la capture des noms reste soumise au meme gating",
-  fn: proxied(async ({ blob, blobId }) => {
+test(
+  "AC-57.8: NON-REGRESSION, la capture des noms reste soumise au meme gating",
+  proxied(async ({ blob, blobId }) => {
     // Kill switch a l'arret : proxied ne l'a pas pose, la requete doit passer sans qu'aucune
     // entry ne soit stockee, noms de parametres compris.
     await call(blob, `/v1/items?api_key=${API_KEY}`);
     assertEquals(_getNetworkBufferForTests(blobId).length, 0);
   }, false),
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
+);
 
-Deno.test({
-  name: "AC-57.8 bis: un blob sans logs.enabled ne capture aucun nom de parametre",
-  fn: async () => {
-    Deno.env.set("FGP_SALT", SALT);
-    Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
-    Deno.env.set("FGP_LOGS_ENABLED", "1");
+test("AC-57.8 bis: un blob sans logs.enabled ne capture aucun nom de parametre", async () => {
+  process.env.FGP_SALT = SALT;
+  process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
+  process.env.FGP_LOGS_ENABLED = "1";
+  _resetStoreForTests();
+  globalThis.fetch = (() => Promise.resolve(new Response("{}", { status: 200 }))) as typeof fetch;
+  try {
+    const blob = await makeBlob();
+    const blobId = await computeBlobId(blob);
+    await call(blob, `/v1/items?api_key=${API_KEY}`);
+    assertEquals(_getNetworkBufferForTests(blobId).length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
     _resetStoreForTests();
-    globalThis.fetch = (() => Promise.resolve(new Response("{}", { status: 200 }))) as typeof fetch;
-    try {
-      const blob = await makeBlob();
-      const blobId = await computeBlobId(blob);
-      await call(blob, `/v1/items?api_key=${API_KEY}`);
-      assertEquals(_getNetworkBufferForTests(blobId).length, 0);
-    } finally {
-      globalThis.fetch = originalFetch;
-      _resetStoreForTests();
-      Deno.env.delete("FGP_SALT");
-      Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-      Deno.env.delete("FGP_LOGS_ENABLED");
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    delete process.env.FGP_SALT;
+    delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+    delete process.env.FGP_LOGS_ENABLED;
+  }
 });

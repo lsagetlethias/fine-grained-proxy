@@ -65,16 +65,16 @@ Présente les scénarios et demande validation avant d'implémenter.
 1. Vérifie les helpers existants dans `tests/`
 2. Crée les fichiers de test en suivant les conventions
 3. Implémente les scénarios validés
-4. Lance les tests : `deno task test`
+4. Lance les tests : `pnpm run test`
 
 Règles :
-- Utiliser `@std/assert` pour les assertions
+- Utiliser les assertions de `tests/_assert.ts`, qui portent le contrat de `@std/assert` sur `node:assert/strict`, et `test` de `node:test`
 - Suivre le style des tests existants
 - Préférer les assertions précises (`assertEquals`, `assertThrows`) aux vagues (`assert`)
 
 ## 5. Vérification
 
-Lance `deno task test` pour confirmer que tout passe.
+Lance `pnpm run test` pour confirmer que tout passe.
 
 Si des tests échouent, analyse et corrige. Lance ensuite /verif.
 

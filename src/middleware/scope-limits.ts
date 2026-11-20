@@ -61,8 +61,10 @@ function validateObjectValue(ov: unknown, depth: number): string | null {
       return null;
     }
     default:
-      return "Unknown object value type, expected one of: any, wildcard, stringwildcard, " +
-        "regex, and, not";
+      return (
+        "Unknown object value type, expected one of: any, wildcard, stringwildcard, " +
+        "regex, and, not"
+      );
   }
 }
 
@@ -95,11 +97,13 @@ function validateObjectValueBudget(
         return `Type "any" on a query filter only accepts a string value (param: '${queryScope.param}')`;
       }
     } else {
-      const scalar = v === null || typeof v === "string" || typeof v === "number" ||
-        typeof v === "boolean";
+      const scalar =
+        v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean";
       if (!scalar) {
-        return "An 'any' filter only accepts a string, number, boolean or null: comparing " +
-          "objects depends on the caller's key order, which makes the result non deterministic";
+        return (
+          "An 'any' filter only accepts a string, number, boolean or null: comparing " +
+          "objects depends on the caller's key order, which makes the result non deterministic"
+        );
       }
     }
   }
@@ -137,8 +141,9 @@ function validateBodyFilters(entry: ScopeEntry, budget: Budget): string | null {
       return "Dot-path '" + bf.objectPath + "' exceeds maximum of 6 segments";
     }
     if (bf.objectValue.length > 16) {
-      return "Maximum 16 OR values per filter, got " + bf.objectValue.length + " on " +
-        bf.objectPath;
+      return (
+        "Maximum 16 OR values per filter, got " + bf.objectValue.length + " on " + bf.objectPath
+      );
     }
     for (const ov of bf.objectValue) {
       const err = validateObjectValue(ov, 0);
@@ -170,8 +175,10 @@ function validateQueryFilters(entry: ScopeEntry, budget: Budget): string | null 
       return `A query filter requires at least one value (param: '${qf.param}')`;
     }
     if (qf.values.length > MAX_QUERY_VALUES_PER_FILTER) {
-      return `Maximum ${MAX_QUERY_VALUES_PER_FILTER} OR values per query filter, got ` +
-        `${qf.values.length} on param '${qf.param}'`;
+      return (
+        `Maximum ${MAX_QUERY_VALUES_PER_FILTER} OR values per query filter, got ` +
+        `${qf.values.length} on param '${qf.param}'`
+      );
     }
     const queryScope: QueryScope = { param: qf.param };
     for (const ov of qf.values) {
@@ -210,9 +217,12 @@ export function validateScopePatterns(scopes: Scope[]): string | null {
   for (const scope of scopes) {
     const pattern = typeof scope === "string" ? scope : scope.pattern;
     if (pattern.includes("?")) {
-      return "A scope pattern cannot carry a query string: " + pattern +
+      return (
+        "A scope pattern cannot carry a query string: " +
+        pattern +
         ". Use the queryFilters field on this scope to constrain query parameters, " +
-        "not the pattern.";
+        "not the pattern."
+      );
     }
   }
   return null;

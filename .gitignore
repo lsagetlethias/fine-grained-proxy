@@ -1,7 +1,4 @@
-# Deno
-.deno/
-
-# Node (presentation / tooling)
+# Node
 node_modules/
 
 # IDE
@@ -21,6 +18,7 @@ Thumbs.db
 .env.*.local
 
 # Build output
+dist/
 static/
 src/ui/changelog-data.ts
 

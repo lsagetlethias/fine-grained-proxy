@@ -1,7 +1,7 @@
 import { Context } from "hono";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
-import { decryptBlob, isExpired } from "../crypto/blob.ts";
+import { type BlobConfig, decryptBlob, isExpired } from "../crypto/blob.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../constants.ts";
 import { logsEnabled } from "../logs/config.ts";
 import { computeBlobId } from "../logs/blob-id.ts";
@@ -13,24 +13,28 @@ import { readEnv } from "../env.ts";
 const HEARTBEAT_MS = 15_000;
 const MAX_BLOB_LENGTH = 4096;
 
-const HealthResponseSchema = z.object({
-  enabled: z.boolean(),
-}).openapi("LogsHealthResponse");
+const HealthResponseSchema = z
+  .object({
+    enabled: z.boolean(),
+  })
+  .openapi("LogsHealthResponse");
 
-const StreamErrorSchema = z.object({
-  error: z.enum([
-    "invalid_request",
-    "missing_key",
-    "invalid_credentials",
-    "blob_invalid",
-    "logs_not_enabled",
-    "logs_stream_conflict",
-    "token_expired",
-    "blob_expired",
-    "blob_too_large",
-  ]),
-  message: z.string(),
-}).openapi("LogsStreamError");
+const StreamErrorSchema = z
+  .object({
+    error: z.enum([
+      "invalid_request",
+      "missing_key",
+      "invalid_credentials",
+      "blob_invalid",
+      "logs_not_enabled",
+      "logs_stream_conflict",
+      "token_expired",
+      "blob_expired",
+      "blob_too_large",
+    ]),
+    message: z.string(),
+  })
+  .openapi("LogsStreamError");
 
 const streamRoute = createRoute({
   method: "get",
@@ -160,7 +164,7 @@ logsRoutes.get("/logs/stream", async (c) => {
     return jsonStreamError(c, 401, "invalid_credentials", "Unable to decrypt blob");
   }
 
-  let config;
+  let config: BlobConfig;
   try {
     config = await decryptBlob(blobRaw, clientKey, serverSalt);
   } catch {
@@ -234,7 +238,7 @@ logsRoutes.get("/logs/stream", async (c) => {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-store, no-transform",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
       [FGP_SOURCE_HEADER]: FGP_SOURCE_PROXY,
     },
   });

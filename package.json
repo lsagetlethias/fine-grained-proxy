@@ -1,0 +1,55 @@
+{
+  "name": "@fgp/proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=26 <27"
+  },
+  "packageManager": "pnpm@10.24.0",
+  "scripts": {
+    "build:css": "tailwindcss -i src/ui/tailwind.css -o static/styles.css --minify",
+    "build:client": "esbuild src/ui/client.ts src/ui/logs-client.ts --bundle --outdir=static --format=iife --minify --target=es2020",
+    "build:version": "tsx scripts/version.ts",
+    "build:changelog": "tsx scripts/changelog.ts",
+    "build:server": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node26 --outfile=dist/main.js",
+    "build": "node --run build:css && node --run build:client && node --run build:version && node --run build:changelog && node --run build:server",
+    "dev:css": "tailwindcss -i src/ui/tailwind.css -o static/styles.css --watch",
+    "dev:client": "esbuild src/ui/client.ts src/ui/logs-client.ts --bundle --outdir=static --format=iife --watch",
+    "dev:server": "tsx watch --env-file-if-exists=.env src/main.ts",
+    "dev": "concurrently --names css,client,server --prefix-colors yellow,blue,green \"node --run dev:css\" \"node --run dev:client\" \"node --run dev:server\"",
+    "start": "node --run build && node --permission --allow-net --allow-fs-read=./static dist/main.js",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "test:unit": "node --import tsx --test \"tests/testu/**/*.test.ts\"",
+    "test:integration": "node --import tsx --test \"tests/testi/**/*.test.ts\"",
+    "test:e2e": "node --import tsx --test \"tests/teste2e/**/*.test.ts\"",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "fmt": "biome format --write .",
+    "fmt:check": "biome format .",
+    "check": "tsc -p tsconfig.json && node --run check:client",
+    "check:client": "tsc -p tsconfig.client.json",
+    "verify": "node --run lint && node --run fmt:check && node --run check && node --run test"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.9",
+    "@hono/swagger-ui": "^0.6.2",
+    "@hono/zod-openapi": "1.6.3",
+    "hono": "^4.13.19",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
+    "@types/node": "^26.6.6",
+    "concurrently": "^10.0.7",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^3.4.19",
+    "tsx": "^4.23.15",
+    "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

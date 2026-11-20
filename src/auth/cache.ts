@@ -63,7 +63,9 @@ const KEY_PART_SEPARATOR = "\u0000";
 export async function hashToken(...parts: string[]): Promise<string> {
   const data = new TextEncoder().encode(parts.join(KEY_PART_SEPARATOR));
   const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export const bearerCache = createTokenCache();
@@ -82,14 +84,16 @@ export function cachedSingleflight(
   const pending = cache.getInflight(key);
   if (pending) return pending;
 
-  const promise = produce().then((value) => {
-    cache.set(key, value);
-    cache.deleteInflight(key);
-    return value;
-  }).catch((err) => {
-    cache.deleteInflight(key);
-    throw err;
-  });
+  const promise = produce()
+    .then((value) => {
+      cache.set(key, value);
+      cache.deleteInflight(key);
+      return value;
+    })
+    .catch((err) => {
+      cache.deleteInflight(key);
+      throw err;
+    });
 
   cache.setInflight(key, promise);
   return promise;

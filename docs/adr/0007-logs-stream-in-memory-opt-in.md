@@ -106,5 +106,6 @@ Au lieu d'un champ optionnel sur v3, créer une version v4 dédiée.
 - ADR-0003 : Proxy agnostique (la feature ne doit rien introduire qui recouple à Scalingo)
 - ADR-0005 : Dual mode blob URL/header (mode header utilisé pour `/logs/stream`)
 - ADR-0006 : Proxy transparent (cohérence sur le header `X-FGP-Source` pour les erreurs FGP côté `/logs`)
+- ADR-0011 : migration de Deno vers Node. L'état en mémoire de cette feature est l'argument qui a écarté Cloudflare Workers. La contrainte multi-isolate décrite ici n'a plus de cible : sur Scalingo et sur Docker le processus est unique, donc un utilisateur voit tout son trafic
 - `docs/specs.md` §14 : spécification fonctionnelle détaillée
 - `docs/changelog.md` : entrée utilisateur du 22 avril 2026

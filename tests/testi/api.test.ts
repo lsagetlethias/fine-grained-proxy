@@ -1,5 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals } from "../_assert.ts";
 import { decryptBlob } from "../../src/crypto/blob.ts";
 import { app } from "../../src/main.ts";
 
@@ -7,18 +8,18 @@ const SERVER_SALT = "test-api-salt";
 const originalFetch = globalThis.fetch;
 
 function setup() {
-  Deno.env.set("FGP_SALT", SERVER_SALT);
-  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
-  Deno.env.set("SCALINGO_AUTH_URL", "https://auth.mock.local");
-  Deno.env.set("SCALINGO_API_URL", "https://api.mock.local");
+  process.env.FGP_SALT = SERVER_SALT;
+  process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
+  process.env.SCALINGO_AUTH_URL = "https://auth.mock.local";
+  process.env.SCALINGO_API_URL = "https://api.mock.local";
 }
 
 function teardown() {
   globalThis.fetch = originalFetch;
-  Deno.env.delete("FGP_SALT");
-  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-  Deno.env.delete("SCALINGO_AUTH_URL");
-  Deno.env.delete("SCALINGO_API_URL");
+  delete process.env.FGP_SALT;
+  delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+  delete process.env.SCALINGO_AUTH_URL;
+  delete process.env.SCALINGO_API_URL;
 }
 
 function mockScalingoFetch() {
@@ -55,697 +56,601 @@ function mockScalingoFetch() {
 
 // --- POST /api/generate ---
 
-Deno.test({
-  name: "AC-13.1: POST /api/generate returns url and key (v2 blob)",
-  fn: async () => {
-    setup();
+test("AC-13.1: POST /api/generate returns url and key (v2 blob)", async () => {
+  setup();
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: ["GET:/v1/apps/*"],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: ["GET:/v1/apps/*"],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 200);
-    assertEquals(typeof body.url, "string");
-    assertEquals(typeof body.key, "string");
-    assertEquals(body.url.endsWith("/"), true);
+  assertEquals(res.status, 200);
+  assertEquals(typeof body.url, "string");
+  assertEquals(typeof body.key, "string");
+  assertEquals(body.url.endsWith("/"), true);
 
-    const blobPart = body.url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
-    const config = await decryptBlob(blobPart, body.key, SERVER_SALT);
-    assertEquals(config.v, 2);
-    assertEquals(config.token, "tk-us-test");
-    assertEquals(config.target, "https://api.example.com");
-    assertEquals(config.auth, "bearer");
-    assertEquals(config.scopes, ["GET:/v1/apps/*"]);
-    assertEquals(config.ttl, 3600);
-    assertEquals(typeof config.createdAt, "number");
+  const blobPart = body.url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
+  const config = await decryptBlob(blobPart, body.key, SERVER_SALT);
+  assertEquals(config.v, 2);
+  assertEquals(config.token, "tk-us-test");
+  assertEquals(config.target, "https://api.example.com");
+  assertEquals(config.auth, "bearer");
+  assertEquals(config.scopes, ["GET:/v1/apps/*"]);
+  assertEquals(config.ttl, 3600);
+  assertEquals(typeof config.createdAt, "number");
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.2: POST /api/generate with invalid body returns 400",
-  fn: async () => {
-    setup();
+test("AC-13.2: POST /api/generate with invalid body returns 400", async () => {
+  setup();
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: "" }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: "" }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "invalid_body");
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "invalid_body");
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.2: POST /api/generate with missing target returns 400",
-  fn: async () => {
-    setup();
+test("AC-13.2: POST /api/generate with missing target returns 400", async () => {
+  setup();
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        auth: "bearer",
-        scopes: ["*:*"],
-        ttl: 3600,
-      }),
-    });
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      auth: "bearer",
+      scopes: ["*:*"],
+      ttl: 3600,
+    }),
+  });
 
-    assertEquals(res.status, 400);
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 400);
+  teardown();
 });
 
-Deno.test({
-  name: "POST /api/generate sans Content-Type JSON renvoie 415 unsupported_media_type",
-  fn: async () => {
-    setup();
+test("POST /api/generate sans Content-Type JSON renvoie 415 unsupported_media_type", async () => {
+  setup();
 
-    // Deux facons de ne pas etre du JSON, et il faut les deux : un corps en chaine fait
-    // poser text/plain par le constructeur de Request, donc il n'exerce que l'en-tete
-    // ERRONE. Seul un corps en octets laisse l'en-tete reellement ABSENT.
-    // Le controle refuse avant toute lecture du corps, et le code distingue « je ne sais
-    // pas lire ce format » de « ce JSON ne convient pas », que 400 invalid_body porte.
-    for (
-      const [label, init] of [
-        ["en-tete absent", { method: "POST", body: new Uint8Array([1, 2, 3]) }],
-        ["en-tete errone", { method: "POST", body: "not json" }],
-      ] as [string, RequestInit][]
-    ) {
-      const res = await app.request("/api/generate", init);
-      assertEquals(res.status, 415, label);
-      assertEquals((await res.json()).error, "unsupported_media_type", label);
-    }
+  // Deux facons de ne pas etre du JSON, et il faut les deux : un corps en chaine fait
+  // poser text/plain par le constructeur de Request, donc il n'exerce que l'en-tete
+  // ERRONE. Seul un corps en octets laisse l'en-tete reellement ABSENT.
+  // Le controle refuse avant toute lecture du corps, et le code distingue « je ne sais
+  // pas lire ce format » de « ce JSON ne convient pas », que 400 invalid_body porte.
+  for (const [label, init] of [
+    ["en-tete absent", { method: "POST", body: new Uint8Array([1, 2, 3]) }],
+    ["en-tete errone", { method: "POST", body: "not json" }],
+  ] as [string, RequestInit][]) {
+    const res = await app.request("/api/generate", init);
+    assertEquals(res.status, 415, label);
+    assertEquals((await res.json()).error, "unsupported_media_type", label);
+  }
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "POST /api/generate without FGP_SALT returns 500",
-  fn: async () => {
-    Deno.env.delete("FGP_SALT");
+test("POST /api/generate without FGP_SALT returns 500", async () => {
+  delete process.env.FGP_SALT;
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: ["*:*"],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: ["*:*"],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 500);
-    assertEquals(body.error, "server_error");
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  assertEquals(res.status, 500);
+  assertEquals(body.error, "server_error");
 });
 
 // --- POST /api/list-apps ---
 
-Deno.test({
-  name: "POST /api/list-apps returns sorted app names",
-  fn: async () => {
-    setup();
-    mockScalingoFetch();
+test("POST /api/list-apps returns sorted app names", async () => {
+  setup();
+  mockScalingoFetch();
 
-    const res = await app.request("/api/list-apps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: "tk-us-test" }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/list-apps", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: "tk-us-test" }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 200);
-    assertEquals(body.apps, ["app-alpha", "app-beta", "app-gamma"]);
+  assertEquals(res.status, 200);
+  assertEquals(body.apps, ["app-alpha", "app-beta", "app-gamma"]);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "POST /api/list-apps with invalid token returns 401",
-  fn: async () => {
-    setup();
-    globalThis.fetch = ((input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.includes("auth.mock.local")) {
-        return Promise.resolve(new Response("{}", { status: 401 }));
-      }
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as typeof globalThis.fetch;
-
-    const res = await app.request("/api/list-apps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: "bad-token" }),
-    });
-    const body = await res.json();
-
-    assertEquals(res.status, 401);
-    assertEquals(body.error, "token_exchange_failed");
-
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
-});
-
-Deno.test({
-  name: "POST /api/list-apps sans Content-Type JSON renvoie 415 unsupported_media_type",
-  fn: async () => {
-    setup();
-
-    // Meme couple de cas que sur /api/generate : un corps en chaine fait poser text/plain,
-    // seul un corps en octets laisse l'en-tete absent.
-    for (
-      const [label, init] of [
-        ["en-tete absent", { method: "POST", body: new Uint8Array([1, 2, 3]) }],
-        ["en-tete errone", { method: "POST", body: "not json" }],
-      ] as [string, RequestInit][]
-    ) {
-      const res = await app.request("/api/list-apps", init);
-      assertEquals(res.status, 415, label);
-      assertEquals((await res.json()).error, "unsupported_media_type", label);
+test("POST /api/list-apps with invalid token returns 401", async () => {
+  setup();
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("auth.mock.local")) {
+      return Promise.resolve(new Response("{}", { status: 401 }));
     }
+    return Promise.resolve(new Response("Not found", { status: 404 }));
+  }) as typeof globalThis.fetch;
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  const res = await app.request("/api/list-apps", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: "bad-token" }),
+  });
+  const body = await res.json();
+
+  assertEquals(res.status, 401);
+  assertEquals(body.error, "token_exchange_failed");
+
+  teardown();
 });
 
-Deno.test({
-  name: "POST /api/list-apps with empty token returns 400",
-  fn: async () => {
-    setup();
+test("POST /api/list-apps sans Content-Type JSON renvoie 415 unsupported_media_type", async () => {
+  setup();
 
-    const res = await app.request("/api/list-apps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: "" }),
-    });
-    const body = await res.json();
+  // Meme couple de cas que sur /api/generate : un corps en chaine fait poser text/plain,
+  // seul un corps en octets laisse l'en-tete absent.
+  for (const [label, init] of [
+    ["en-tete absent", { method: "POST", body: new Uint8Array([1, 2, 3]) }],
+    ["en-tete errone", { method: "POST", body: "not json" }],
+  ] as [string, RequestInit][]) {
+    const res = await app.request("/api/list-apps", init);
+    assertEquals(res.status, 415, label);
+    assertEquals((await res.json()).error, "unsupported_media_type", label);
+  }
 
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "invalid_body");
+  teardown();
+});
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+test("POST /api/list-apps with empty token returns 400", async () => {
+  setup();
+
+  const res = await app.request("/api/list-apps", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: "" }),
+  });
+  const body = await res.json();
+
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "invalid_body");
+
+  teardown();
 });
 
 // --- X-Forwarded-* headers ---
 
-Deno.test({
-  name: "POST /api/generate respects X-Forwarded-Host and X-Forwarded-Proto",
-  fn: async () => {
-    setup();
+test("POST /api/generate respects X-Forwarded-Host and X-Forwarded-Proto", async () => {
+  setup();
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Forwarded-Host": "ducmaxv2.ts.sagetlethias.tech",
-        "X-Forwarded-Proto": "http",
-      },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: ["GET:/v1/apps/*"],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Forwarded-Host": "ducmaxv2.ts.sagetlethias.tech",
+      "X-Forwarded-Proto": "http",
+    },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: ["GET:/v1/apps/*"],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 200);
-    assertEquals(body.url.startsWith("http://ducmaxv2.ts.sagetlethias.tech/"), true);
+  assertEquals(res.status, 200);
+  assertEquals(body.url.startsWith("http://ducmaxv2.ts.sagetlethias.tech/"), true);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "POST /api/generate defaults proto to https when only X-Forwarded-Host is set",
-  fn: async () => {
-    setup();
+test("POST /api/generate defaults proto to https when only X-Forwarded-Host is set", async () => {
+  setup();
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Forwarded-Host": "fgp.example.com",
-      },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: ["GET:/v1/apps/*"],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Forwarded-Host": "fgp.example.com",
+    },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: ["GET:/v1/apps/*"],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 200);
-    assertEquals(body.url.startsWith("https://fgp.example.com/"), true);
+  assertEquals(res.status, 200);
+  assertEquals(body.url.startsWith("https://fgp.example.com/"), true);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
 // --- Zod validation ---
 
-Deno.test({
-  name: "POST /api/generate with wrong field types returns 400 (Zod validation)",
-  fn: async () => {
-    setup();
+test("POST /api/generate with wrong field types returns 400 (Zod validation)", async () => {
+  setup();
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: "not-an-array",
-        ttl: "not-a-number",
-      }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: "not-an-array",
+      ttl: "not-a-number",
+    }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "invalid_body");
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "invalid_body");
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "POST /api/list-apps with wrong field types returns 400 (Zod validation)",
-  fn: async () => {
-    setup();
+test("POST /api/list-apps with wrong field types returns 400 (Zod validation)", async () => {
+  setup();
 
-    const res = await app.request("/api/list-apps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: 12345 }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/list-apps", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: 12345 }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "invalid_body");
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "invalid_body");
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
 // --- Scope limits validation on /api/generate ---
 
-Deno.test({
-  name: "AC-13.6: POST /api/generate rejects not(wildcard) in body filter",
-  fn: async () => {
-    setup();
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{
+test("AC-13.6: POST /api/generate rejects not(wildcard) in body filter", async () => {
+  setup();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [
+        {
           methods: ["POST"],
           pattern: "/v1/test",
-          bodyFilters: [{
-            objectPath: "field",
-            objectValue: [{ type: "not", value: { type: "wildcard" } }],
-          }],
-        }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "scope_limit_exceeded");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+          bodyFilters: [
+            {
+              objectPath: "field",
+              objectValue: [{ type: "not", value: { type: "wildcard" } }],
+            },
+          ],
+        },
+      ],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "scope_limit_exceeded");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.6: POST /api/generate rejects not(not(...)) in body filter",
-  fn: async () => {
-    setup();
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{
+test("AC-13.6: POST /api/generate rejects not(not(...)) in body filter", async () => {
+  setup();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [
+        {
           methods: ["POST"],
           pattern: "/v1/test",
-          bodyFilters: [{
-            objectPath: "field",
-            objectValue: [{
-              type: "not",
-              value: { type: "not", value: { type: "any", value: "x" } },
-            }],
-          }],
-        }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "scope_limit_exceeded");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+          bodyFilters: [
+            {
+              objectPath: "field",
+              objectValue: [
+                {
+                  type: "not",
+                  value: { type: "not", value: { type: "any", value: "x" } },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "scope_limit_exceeded");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.4: POST /api/generate rejects more than 8 body filters per scope",
-  fn: async () => {
-    setup();
-    const filters = [];
-    for (let i = 0; i < 9; i++) {
-      filters.push({ objectPath: "field" + i, objectValue: [{ type: "wildcard" }] });
-    }
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{ methods: ["POST"], pattern: "/v1/test", bodyFilters: filters }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "scope_limit_exceeded");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+test("AC-13.4: POST /api/generate rejects more than 8 body filters per scope", async () => {
+  setup();
+  const filters = [];
+  for (let i = 0; i < 9; i++) {
+    filters.push({ objectPath: "field" + i, objectValue: [{ type: "wildcard" }] });
+  }
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [{ methods: ["POST"], pattern: "/v1/test", bodyFilters: filters }],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "scope_limit_exceeded");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.4: POST /api/generate rejects more than 16 OR values per filter",
-  fn: async () => {
-    setup();
-    const values = [];
-    for (let i = 0; i < 17; i++) {
-      values.push({ type: "any", value: "val" + i });
-    }
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{
+test("AC-13.4: POST /api/generate rejects more than 16 OR values per filter", async () => {
+  setup();
+  const values = [];
+  for (let i = 0; i < 17; i++) {
+    values.push({ type: "any", value: "val" + i });
+  }
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [
+        {
           methods: ["POST"],
           pattern: "/v1/test",
           bodyFilters: [{ objectPath: "field", objectValue: values }],
-        }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "scope_limit_exceeded");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+        },
+      ],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "scope_limit_exceeded");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.4: POST /api/generate rejects dot-path with more than 6 segments",
-  fn: async () => {
-    setup();
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{
+test("AC-13.4: POST /api/generate rejects dot-path with more than 6 segments", async () => {
+  setup();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [
+        {
           methods: ["POST"],
           pattern: "/v1/test",
-          bodyFilters: [{
-            objectPath: "a.b.c.d.e.f.g",
-            objectValue: [{ type: "wildcard" }],
-          }],
-        }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "scope_limit_exceeded");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+          bodyFilters: [
+            {
+              objectPath: "a.b.c.d.e.f.g",
+              objectValue: [{ type: "wildcard" }],
+            },
+          ],
+        },
+      ],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "scope_limit_exceeded");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.4: POST /api/generate rejects more than 10 structured scopes",
-  fn: async () => {
-    setup();
-    const scopes = [];
-    for (let i = 0; i < 11; i++) {
-      scopes.push({ methods: ["GET"], pattern: "/v1/test/" + i });
-    }
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: scopes,
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "scope_limit_exceeded");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+test("AC-13.4: POST /api/generate rejects more than 10 structured scopes", async () => {
+  setup();
+  const scopes = [];
+  for (let i = 0; i < 11; i++) {
+    scopes.push({ methods: ["GET"], pattern: "/v1/test/" + i });
+  }
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: scopes,
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "scope_limit_exceeded");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.4: POST /api/generate accepts valid structured scopes within limits",
-  fn: async () => {
-    setup();
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{
+test("AC-13.4: POST /api/generate accepts valid structured scopes within limits", async () => {
+  setup();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [
+        {
           methods: ["POST"],
           pattern: "/v1/apps/my-app/deployments",
-          bodyFilters: [{
-            objectPath: "deployment.git_ref",
-            objectValue: [
-              {
-                type: "and",
-                value: [
-                  { type: "stringwildcard", value: "release/*" },
-                  { type: "not", value: { type: "any", value: "release/broken" } },
-                ],
-              },
-            ],
-          }],
-        }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 200);
-    assertEquals(typeof body.url, "string");
-    assertEquals(typeof body.key, "string");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+          bodyFilters: [
+            {
+              objectPath: "deployment.git_ref",
+              objectValue: [
+                {
+                  type: "and",
+                  value: [
+                    { type: "stringwildcard", value: "release/*" },
+                    { type: "not", value: { type: "any", value: "release/broken" } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 200);
+  assertEquals(typeof body.url, "string");
+  assertEquals(typeof body.key, "string");
+  teardown();
 });
 
 // --- AC-13.5: version automatique v2/v3 ---
 
-Deno.test({
-  name: "AC-13.5: POST /api/generate with string scopes only produces v2 blob",
-  fn: async () => {
-    setup();
+test("AC-13.5: POST /api/generate with string scopes only produces v2 blob", async () => {
+  setup();
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: ["GET:/v1/apps/*", "POST:/v1/apps/my-app/scale"],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 200);
-    const blobPart = body.url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
-    const config = await decryptBlob(blobPart, body.key, SERVER_SALT);
-    assertEquals(config.v, 2);
+  assertEquals(res.status, 200);
+  const blobPart = body.url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
+  const config = await decryptBlob(blobPart, body.key, SERVER_SALT);
+  assertEquals(config.v, 2);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.5: POST /api/generate with ScopeEntry produces v3 blob",
-  fn: async () => {
-    setup();
+test("AC-13.5: POST /api/generate with ScopeEntry produces v3 blob", async () => {
+  setup();
 
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{ methods: ["POST"], pattern: "/v1/apps/*" }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [{ methods: ["POST"], pattern: "/v1/apps/*" }],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
 
-    assertEquals(res.status, 200);
-    const blobPart = body.url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
-    const config = await decryptBlob(blobPart, body.key, SERVER_SALT);
-    assertEquals(config.v, 3);
+  assertEquals(res.status, 200);
+  const blobPart = body.url.replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
+  const config = await decryptBlob(blobPart, body.key, SERVER_SALT);
+  assertEquals(config.v, 3);
 
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  teardown();
 });
 
 // --- AC-13.6: and vide et and 1 element interdits a la generation ---
 
-Deno.test({
-  name: "AC-13.6: POST /api/generate rejects and with empty array",
-  fn: async () => {
-    setup();
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{
+test("AC-13.6: POST /api/generate rejects and with empty array", async () => {
+  setup();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [
+        {
           methods: ["POST"],
           pattern: "/v1/test",
-          bodyFilters: [{
-            objectPath: "field",
-            objectValue: [{ type: "and", value: [] }],
-          }],
-        }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "scope_limit_exceeded");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+          bodyFilters: [
+            {
+              objectPath: "field",
+              objectValue: [{ type: "and", value: [] }],
+            },
+          ],
+        },
+      ],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "scope_limit_exceeded");
+  teardown();
 });
 
-Deno.test({
-  name: "AC-13.6: POST /api/generate rejects and with single element",
-  fn: async () => {
-    setup();
-    const res = await app.request("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "tk-us-test",
-        target: "https://api.example.com",
-        auth: "bearer",
-        scopes: [{
+test("AC-13.6: POST /api/generate rejects and with single element", async () => {
+  setup();
+  const res = await app.request("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "tk-us-test",
+      target: "https://api.example.com",
+      auth: "bearer",
+      scopes: [
+        {
           methods: ["POST"],
           pattern: "/v1/test",
-          bodyFilters: [{
-            objectPath: "field",
-            objectValue: [{ type: "and", value: [{ type: "any", value: "x" }] }],
-          }],
-        }],
-        ttl: 3600,
-      }),
-    });
-    const body = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(body.error, "scope_limit_exceeded");
-    teardown();
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+          bodyFilters: [
+            {
+              objectPath: "field",
+              objectValue: [{ type: "and", value: [{ type: "any", value: "x" }] }],
+            },
+          ],
+        },
+      ],
+      ttl: 3600,
+    }),
+  });
+  const body = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "scope_limit_exceeded");
+  teardown();
 });

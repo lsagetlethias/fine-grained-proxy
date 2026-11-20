@@ -2,7 +2,7 @@
 // point faible assume de la politique. Elle n'est jamais seule, les couches 1 (valeur
 // testee plafonnee a 128 caracteres) et 3 (4 regex par blob) tiennent si elle se trompe.
 //
-// Ce module est bundle cote navigateur via middleware/scopes.ts : aucune API Deno ici.
+// Ce module est bundle cote navigateur via middleware/scopes.ts : aucune API Node ici.
 
 export const MAX_REGEX_SOURCE = 200;
 export const MAX_QUANTIFIERS = 3;
@@ -51,7 +51,7 @@ export function checkRegexSource(source: string): RegexIssue | null {
   // c'est ce qui distingue (a+)+ , interdit, de \(a+\)+ ou [(]a+ , autorises.
   let afterGroupClose = false;
 
-  for (let i = 0; i < source.length;) {
+  for (let i = 0; i < source.length; ) {
     const c = source[i];
 
     if (c === "\\") {
@@ -79,8 +79,10 @@ export function checkRegexSource(source: string): RegexIssue | null {
 
     if (c === "(") {
       if (
-        source.startsWith("(?=", i) || source.startsWith("(?!", i) ||
-        source.startsWith("(?<=", i) || source.startsWith("(?<!", i)
+        source.startsWith("(?=", i) ||
+        source.startsWith("(?!", i) ||
+        source.startsWith("(?<=", i) ||
+        source.startsWith("(?<!", i)
       ) {
         return "lookaround";
       }

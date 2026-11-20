@@ -1,5 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals } from "../../_assert.ts";
 import {
   checkAccess,
   checkRequestAccess,
@@ -31,13 +32,13 @@ function queryScope(values: ObjectValue[], required = false): Scope {
   };
 }
 
-Deno.test("la valeur longue reste bien couverte par le motif, seul son test est plafonne", () => {
+test("la valeur longue reste bien couverte par le motif, seul son test est plafonne", () => {
   assertEquals(SHORT_VALUE.length <= MAX_REGEX_INPUT, true);
   assertEquals(LONG_VALUE.length > MAX_REGEX_INPUT, true);
   assertEquals(new RegExp(`^(?:${EXCLUDE_FORCE})$`).test(LONG_VALUE), true);
 });
 
-Deno.test("not(regex) sur un corps : une valeur trop longue ne s'inverse pas en acces", () => {
+test("not(regex) sur un corps : une valeur trop longue ne s'inverse pas en acces", () => {
   const filter = { objectPath: "opts", objectValue: [notRegex()] };
   assertEquals(matchBodyFilter(filter, { opts: SHORT_VALUE }), false);
   // Sans la remontee de l'indecidable, ce meme filtre renvoyait true : « trop long pour
@@ -45,7 +46,7 @@ Deno.test("not(regex) sur un corps : une valeur trop longue ne s'inverse pas en 
   assertEquals(matchBodyFilter(filter, { opts: LONG_VALUE }), false);
 });
 
-Deno.test("not(regex) sur la query : la valeur allongee est refusee comme la courte", () => {
+test("not(regex) sur la query : la valeur allongee est refusee comme la courte", () => {
   const scopes = [queryScope([notRegex()])];
   const short = checkRequestAccess(scopes, "GET", `/v1/items?opts=${SHORT_VALUE}`);
   assertEquals(short.allowed, false);
@@ -56,38 +57,44 @@ Deno.test("not(regex) sur la query : la valeur allongee est refusee comme la cou
   assertEquals(long.denial?.query?.reason, "value");
 });
 
-Deno.test("and(not(regex), wildcard) : l'indecidable ne se dilue pas dans une conjonction", () => {
-  const scopes = [queryScope([{
-    type: "and",
-    value: [notRegex(), { type: "wildcard" }],
-  }])];
+test("and(not(regex), wildcard) : l'indecidable ne se dilue pas dans une conjonction", () => {
+  const scopes = [
+    queryScope([
+      {
+        type: "and",
+        value: [notRegex(), { type: "wildcard" }],
+      },
+    ]),
+  ];
   assertEquals(checkRequestAccess(scopes, "GET", `/v1/items?opts=${LONG_VALUE}`).allowed, false);
 });
 
-Deno.test("une conjonction tranchee par une condition fausse reste decidable", () => {
+test("une conjonction tranchee par une condition fausse reste decidable", () => {
   // Un « and » dont une branche est definitivement fausse vaut faux dans les deux mondes :
   // fermer sur l'indecidable ne doit pas transformer ce refus en autre chose.
   const filter = {
     objectPath: "opts",
-    objectValue: [{
-      type: "and" as const,
-      value: [
-        { type: "regex" as const, value: EXCLUDE_FORCE },
-        { type: "any" as const, value: "jamais-egal" },
-      ],
-    }],
+    objectValue: [
+      {
+        type: "and" as const,
+        value: [
+          { type: "regex" as const, value: EXCLUDE_FORCE },
+          { type: "any" as const, value: "jamais-egal" },
+        ],
+      },
+    ],
   };
   assertEquals(matchBodyFilter(filter, { opts: LONG_VALUE }), false);
 });
 
-Deno.test("regex sur une valeur non-string reste une decision, pas une abstention", () => {
+test("regex sur une valeur non-string reste une decision, pas une abstention", () => {
   // Une valeur non textuelle ne matche aucun motif de chaine : son exclusion doit donc
   // continuer d'accorder l'acces, sans quoi la fermeture sur l'indecidable ferait du zele.
   const filter = { objectPath: "count", objectValue: [notRegex()] };
   assertEquals(matchBodyFilter(filter, { count: 42 }), true);
 });
 
-Deno.test("checkAccess ignore l'axe query, y compris un filtre required", () => {
+test("checkAccess ignore l'axe query, y compris un filtre required", () => {
   // Cet helper est documente comme purement methode, chemin et corps, et une soixantaine de
   // tests l'appellent ainsi. Evalue avec une query vide, un filtre required echouait en
   // « required_missing » sur une requete dont personne n'avait demande la query.

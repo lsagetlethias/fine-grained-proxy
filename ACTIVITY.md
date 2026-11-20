@@ -338,3 +338,35 @@
   - Recette manuelle du mode Scalingo Database API sur un vrai compte, condition d'entrée du multi-addon (follow-up de longue date, toujours ouvert)
   - Tests e2e toujours reportés
   - Vérifier en situation réelle que le nouveau mécanisme `include`/`exclude` de `deno.json` embarque bien `static/` et `src/ui/changelog-data.ts` au premier déploiement suivant ce changement
+
+## 2026-11-19 : Migration du runtime de Deno vers Node 26
+
+- **Changements** :
+  - Runtime : Node 26, ESM pur, pnpm. `deno.json`, `deno.client.json`, `deno.lock` et `.buildpacks` supprimés, remplacés par `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, `tsconfig.client.json`, `biome.json` et `.nvmrc`. Les 355 imports relatifs gardent leur extension `.ts` explicite, résolue par `allowImportingTsExtensions`, tsx et esbuild.
+  - Serveur : `Deno.serve` devient `serve` de `@hono/node-server`, `serveStatic` de `hono/deno` devient celui de `@hono/node-server/serve-static`, et l'IP du pair passe par `getConnInfo` sans que `extractClientIp` ni `truncateIp` ne bougent.
+  - `Deno.resolveDns` devient `resolve4` / `resolve6` de `node:dns/promises`, à type `Resolver` inchangé, donc sans toucher l'injection des tests. `Deno.env.get` devient `process.env`, `Deno.readTextFileSync` et `Deno.writeTextFile` deviennent `node:fs`, `Deno.Command` devient `spawnSync`.
+  - `@std/encoding/base64url` remplacé par `src/crypto/base64url.ts`, sur `Buffer` mais **validant** : `Buffer.from(s, "base64url")` n'échoue jamais sur une entrée invalide, là où `@std` lève. Parité vérifiée par test différentiel contre `jsr:@std/encoding@1.0.11` exécuté sous Deno, sur 2267 chaînes dont 1536 refus.
+  - Tests : 848 `Deno.test` convertis vers `node:test` par codemod déterministe, pas fichier par fichier. `tests/_assert.ts` porte le contrat de `@std/assert` sur `node:assert/strict`, ce qui laisse les 848 sites d'appel inchangés. `tests/testi/env-denied.test.ts` supprimé, son scénario étant devenu impossible. 877 tests, 876 verts, 1 `todo`.
+  - Lint et format : Biome remplace `deno lint` et `deno fmt`, 31 fichiers reformatés. Quatre règles `a11y` et `useBiomeIgnoreFolder` coupées nommément.
+  - `lockdownEnv()` ajouté à `src/env.ts` et appelé au démarrage du serveur : retire de `process.env` tout nom absent de `ENV_NAMES` et de `HOST_ENV_NAMES`. 83 variables retirées sur cette machine, 3 dans le conteneur.
+  - Déploiement : Deno Deploy abandonné, `docs/deno-deploy.md` supprimé. `Procfile`, `Dockerfile` (sur `node:26-alpine`, étage final sans `node_modules`, 259 Mo) et le script `start` alignés sur `node --permission --allow-net --allow-fs-read=./static dist/main.js`. CI sur `actions/setup-node` et pnpm.
+- **Décisions** :
+  - Node plutôt que Cloudflare Workers, la cible de sortie officielle de Deno Deploy : l'état en mémoire du produit (ring buffer de `/logs`, intervalle de purge, cache de dérivation PBKDF2) ne survit pas au modèle d'isolate. Workers aurait été une seconde migration.
+  - TypeScript 5.9.3 et non 7.0.2, pourtant `latest` : on ne cumule pas deux inconnues pendant une migration. Le passage à TS 7 est un follow-up d'une ligne.
+  - Aucune réduction du volume de tests. Ces 848 tests sont la seule preuve que la migration ne change rien ; les couper avant, c'est migrer à l'aveugle. La réduction se fera sur des données de couverture, après.
+  - Fidélité avant élégance : aucun refactoring au passage, aucun bug adjacent corrigé, le diff doit se lire comme une traduction.
+  - Les règles `a11y` de Biome ne sont pas satisfaites mais désactivées : les corriger changerait le DOM rendu, ce qu'une migration ne fait pas.
+- **Écarts de comportement imposés par le runtime** (détaillés dans l'ADR-0011) :
+  - Node décode `gzip`, `x-gzip`, `deflate`, `br` et `zstd` là où Deno n'en décodait que deux. `RUNTIME_DECODED_ENCODINGS` recalibré sur une mesure : mal calibrée, une réponse `deflate` repartait décodée mais annoncée compressée.
+  - Ni un `Range` ni un `Accept-Encoding: identity` ne désactivent plus le décodage. Sur un 206, un fragment de flux compressé est inflaté en clair partiel plausible, pas vidé : la première rédaction de l'ADR-0011 et de ce journal annonçait un corps vide, c'était faux et la review l'a mesuré. La moitié corrigeable l'a été, `Content-Range` tombe maintenant avec `Content-Encoding` et `Content-Length`.
+  - `await reader.cancel()` sur une branche de `tee()` ne résout qu'une fois les deux branches annulées, ce qui est le comportement spécifié. Deux tests ne se terminaient jamais au lieu de rendre un 413.
+  - Un `setInterval` de purge sans `.unref()` tenait la boucle d'événements ouverte dans chaque processus de test : `pnpm test` ne rendait pas la main, tous tests verts. C'est exactement ce que `sanitizeOps` signalait et que `node:test` ne signale plus.
+- **ADR** : ADR-0011 (migration Deno vers Node), ADR-0001 partiellement remplacé.
+- **Process** : cinq lots de fichiers disjoints en parallèle (src, scripts, deploy, tests, docs), puis vérification et arbitrages repris en main par le lead. Le lot `deploy` avait élargi la permission de lecture à `./` pour contourner un `serveStatic` dont le `root` était resté à `./` : corrigé à la cause, le root pointe sur `static/` et la permission est redevenue celle de Deno.
+- **Prochaines étapes** :
+  - Réduction du volume de tests sur données de couverture (`node --test --experimental-test-coverage`), cible ~600 tests sans perte de lignes couvertes
+  - Passe a11y pour lever les quatre règles Biome désactivées
+  - Les 16 avertissements Biome restants (`noNonNullAssertion`, `useTemplate`, `useImportType`), hors périmètre de migration
+  - Première exécution réelle de la CI et premier déploiement Scalingo à observer, notamment la disponibilité de Node 26 sur le buildpack
+  - Recette manuelle du mode Scalingo Database API (follow-up de longue date, toujours ouvert)
+  - Tests e2e toujours reportés, le trou est désormais visible dans chaque run par un `todo`

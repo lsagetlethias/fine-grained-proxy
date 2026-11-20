@@ -3402,13 +3402,13 @@ La derivation PBKDF2 coute 11,60 ms de CPU pur et fixe le plancher de cout d'une
 **When** la meme cle est presentee a nouveau
 **Then** l'entree est purgee et la cle rederivee, sans erreur.
 
-Le TTL court n'est pas seulement de l'hygiene memoire. Un hit est mesurablement plus rapide qu'un miss, ce qui constitue un **canal auxiliaire par le temps** : un oracle indiquant si une cle client donnee a ete vue recemment par cet isolate. Severite faible, les cles faisant 24 caracteres au minimum et l'oracle revelant une recence et non une valeur, mais c'est une raison de garder le TTL court plutot qu'une propriete a decouvrir plus tard
+Le TTL court n'est pas seulement de l'hygiene memoire. Un hit est mesurablement plus rapide qu'un miss, ce qui constitue un **canal auxiliaire par le temps** : un oracle indiquant si une cle client donnee a ete vue recemment par ce processus. Severite faible, les cles faisant 24 caracteres au minimum et l'oracle revelant une recence et non une valeur, mais c'est une raison de garder le TTL court plutot qu'une propriete a decouvrir plus tard
 
 ### AC-50.5 Le cache n'est jamais une dependance de correction
 
 **Given** un cache vide, un cache plein, et un cache purge entre deux requetes
 **When** les memes requetes sont rejouees dans les trois etats
-**Then** les reponses sont identiques. Sur Deno Deploy le cache est par isolate et ephemere : c'est un cache, jamais un etat dont depend la correction du produit
+**Then** les reponses sont identiques : c'est un cache, jamais un etat dont depend la correction du produit. L'argument tenait quand le cache etait par isolate et ephemere sur Deno Deploy, il tient aussi sur le processus unique et durable de Node (ADR-0011)
 
 ### AC-50.6 Le cache n'abaisse pas le cout d'un attaquant
 
@@ -4036,6 +4036,8 @@ C'est l'invariant central de cette serie : l'entry `network` vit **en clair** da
 ---
 
 ## AC-58 : Lecture d'environnement resiliente a un refus d'acces
+
+> **Statut : une partie de cette serie est caduque depuis la migration vers Node (ADR-0011).** Node n'a aucun equivalent de `--allow-env`, et `process.env` ne refuse jamais la lecture d'un nom : le refus d'acces que ces criteres eprouvent ne peut plus se produire, et les trois allow-lists qui devaient rester en parite avec `ENV_NAMES` (les six listes de `deno.json`, le `Procfile`, le `Dockerfile`) n'existent plus. Sont caduques AC-58.1 a AC-58.8, AC-58.2 bis, et le cas d'AC-58.16 ou le nom est refuse. Restent en vigueur AC-58.9 a AC-58.15 et AC-58.17 : parite de `.env.example` avec le registre, rejets de `readEnvInt` et `readEnvFlag`, absence de memoisation, et `FGP_SALT` simplement non definie qui sort en 500. La regle de defaut sur est inchangee, c'est son declencheur « refus d'acces » qui disparait.
 
 Ref : panne de production sur Scalingo. Le `Procfile` ne portait que 9 des 11 noms lus par le serveur. Sur un nom absent de l'allow-list `--allow-env`, `Deno.env.get` ne rend pas `undefined`, il leve `Deno.errors.NotCapable`, et ce throw ressortait en 500 `internal_error` sur chaque requete proxy par ailleurs legitime. Correctif dans `src/env.ts`.
 

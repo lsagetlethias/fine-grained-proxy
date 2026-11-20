@@ -1,5 +1,6 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals, assertRejects } from "../../_assert.ts";
 import { _resetStoreForTests, hashToken } from "../../../src/auth/cache.ts";
 import { obtainAddonToken, obtainBearerViaExchange } from "../../../src/auth/credentials.ts";
 import { resolveScalingoApiUrl } from "../../../src/auth/client.ts";
@@ -12,17 +13,17 @@ const originalFetch = globalThis.fetch;
 
 function setup() {
   _resetStoreForTests();
-  Deno.env.set("SCALINGO_AUTH_URL", AUTH_URL);
-  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
-  Deno.env.set("SCALINGO_API_URL", API_URL);
+  process.env.SCALINGO_AUTH_URL = AUTH_URL;
+  process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
+  process.env.SCALINGO_API_URL = API_URL;
 }
 
 function teardown() {
   globalThis.fetch = originalFetch;
   _resetStoreForTests();
-  Deno.env.delete("SCALINGO_AUTH_URL");
-  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-  Deno.env.delete("SCALINGO_API_URL");
+  delete process.env.SCALINGO_AUTH_URL;
+  delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+  delete process.env.SCALINGO_API_URL;
 }
 
 interface Counters {
@@ -71,7 +72,7 @@ function stub(options: StubOptions = {}): Counters {
   return counters;
 }
 
-Deno.test("AC-35.11: le token d'addon est mis en cache entre deux appels", async () => {
+test("AC-35.11: le token d'addon est mis en cache entre deux appels", async () => {
   setup();
   try {
     const counters = stub();
@@ -87,7 +88,7 @@ Deno.test("AC-35.11: le token d'addon est mis en cache entre deux appels", async
   }
 });
 
-Deno.test("AC-35.12: deux addons du meme compte ne partagent jamais leur token", async () => {
+test("AC-35.12: deux addons du meme compte ne partagent jamais leur token", async () => {
   setup();
   try {
     const counters = stub();
@@ -104,7 +105,7 @@ Deno.test("AC-35.12: deux addons du meme compte ne partagent jamais leur token",
   }
 });
 
-Deno.test("AC-35.12: deux applications differentes ne partagent pas non plus leur token", async () => {
+test("AC-35.12: deux applications differentes ne partagent pas non plus leur token", async () => {
   setup();
   try {
     const counters = stub();
@@ -118,7 +119,7 @@ Deno.test("AC-35.12: deux applications differentes ne partagent pas non plus leu
   }
 });
 
-Deno.test("AC-35.12: la cle de cache ne peut pas etre confondue par decoupage", async () => {
+test("AC-35.12: la cle de cache ne peut pas etre confondue par decoupage", async () => {
   // Le separateur est un caractere impossible dans un token, un nom d'app ou un addonId :
   // deux decoupages differents ne doivent pas produire la meme cle.
   const a = await hashToken("tk", "app", "ad-1");
@@ -130,7 +131,7 @@ Deno.test("AC-35.12: la cle de cache ne peut pas etre confondue par decoupage", 
   assertEquals(b === c, false);
 });
 
-Deno.test("AC-35.13: un token d'addon expire reutilise le bearer en cache", async () => {
+test("AC-35.13: un token d'addon expire reutilise le bearer en cache", async () => {
   setup();
   try {
     const counters = stub();
@@ -149,7 +150,7 @@ Deno.test("AC-35.13: un token d'addon expire reutilise le bearer en cache", asyn
   }
 });
 
-Deno.test("AC-35.14: singleflight, dix demandes concurrentes ne produisent qu'un seul appel", async () => {
+test("AC-35.14: singleflight, dix demandes concurrentes ne produisent qu'un seul appel", async () => {
   setup();
   try {
     const counters = stub({ delayMs: 10 });
@@ -166,7 +167,7 @@ Deno.test("AC-35.14: singleflight, dix demandes concurrentes ne produisent qu'un
   }
 });
 
-Deno.test("AC-35.15: singleflight, un echec est propage a toutes les requetes en attente", async () => {
+test("AC-35.15: singleflight, un echec est propage a toutes les requetes en attente", async () => {
   setup();
   try {
     const counters = stub({ addonStatus: 500, delayMs: 10 });
@@ -176,13 +177,16 @@ Deno.test("AC-35.15: singleflight, un echec est propage a toutes les requetes en
     );
 
     assertEquals(counters.addon, 1, "un seul appel en vol malgre l'echec");
-    assertEquals(results.every((r) => r.status === "rejected"), true);
+    assertEquals(
+      results.every((r) => r.status === "rejected"),
+      true,
+    );
   } finally {
     teardown();
   }
 });
 
-Deno.test("AC-35.15: apres un echec, un nouvel appel est retente et non servi depuis le cache", async () => {
+test("AC-35.15: apres un echec, un nouvel appel est retente et non servi depuis le cache", async () => {
   setup();
   try {
     const counters = stub({ addonStatus: 500 });
@@ -197,7 +201,7 @@ Deno.test("AC-35.15: apres un echec, un nouvel appel est retente et non servi de
   }
 });
 
-Deno.test("AC-35.16: resolution d'apiUrl en trois niveaux", () => {
+test("AC-35.16: resolution d'apiUrl en trois niveaux", () => {
   setup();
   try {
     // 1. La valeur du blob prime.
@@ -208,14 +212,14 @@ Deno.test("AC-35.16: resolution d'apiUrl en trois niveaux", () => {
     // 2. Sinon la variable d'instance.
     assertEquals(resolveScalingoApiUrl(), API_URL);
     // 3. Sinon le defaut osc-fr1.
-    Deno.env.delete("SCALINGO_API_URL");
+    delete process.env.SCALINGO_API_URL;
     assertEquals(resolveScalingoApiUrl(), "https://api.osc-fr1.scalingo.com");
   } finally {
     teardown();
   }
 });
 
-Deno.test("AC-35.16: les slashs de fin d'apiUrl sont normalises", () => {
+test("AC-35.16: les slashs de fin d'apiUrl sont normalises", () => {
   setup();
   try {
     // Sans normalisation l'URL de l'etape 2 contiendrait un double slash.
@@ -226,7 +230,7 @@ Deno.test("AC-35.16: les slashs de fin d'apiUrl sont normalises", () => {
   }
 });
 
-Deno.test("AC-35.1: l'appel d'obtention du token d'addon encode app et addonId dans l'URL", async () => {
+test("AC-35.1: l'appel d'obtention du token d'addon encode app et addonId dans l'URL", async () => {
   setup();
   try {
     const counters = stub();
@@ -238,7 +242,7 @@ Deno.test("AC-35.1: l'appel d'obtention du token d'addon encode app et addonId d
   }
 });
 
-Deno.test("AC-36.13: un echec d'obtention ne divulgue ni le token ni l'identifiant d'addon", async () => {
+test("AC-36.13: un echec d'obtention ne divulgue ni le token ni l'identifiant d'addon", async () => {
   setup();
   try {
     stub({ addonStatus: 403 });

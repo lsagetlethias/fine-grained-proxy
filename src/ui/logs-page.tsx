@@ -115,8 +115,7 @@ export function LogsPage() {
                 class="text-sm font-medium"
                 aria-live="polite"
                 role="status"
-              >
-              </span>
+              ></span>
             </div>
 
             <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -157,8 +156,7 @@ export function LogsPage() {
                   id="logs-status-dot"
                   class="h-2 w-2 rounded-full bg-green-500 dark:bg-green-400"
                   aria-hidden="true"
-                >
-                </span>
+                ></span>
                 <span id="logs-status-label">Connecté</span>
               </span>
               <button
@@ -175,9 +173,7 @@ export function LogsPage() {
 
           <section class="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800/50 relative">
             <header class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-              <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Requêtes
-              </h3>
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Requêtes</h3>
             </header>
             <div
               id="logs-network-empty"
@@ -191,8 +187,7 @@ export function LogsPage() {
               aria-label="Requêtes passées par le blob"
               class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[60vh] overflow-y-auto"
               hidden
-            >
-            </ul>
+            ></ul>
             <button
               type="button"
               id="logs-resume-scroll"
@@ -241,8 +236,7 @@ export function LogsPage() {
               id="logs-detailed-list"
               role="log"
               class="divide-y divide-gray-100 dark:divide-gray-800 max-h-[50vh] overflow-y-auto"
-            >
-            </ul>
+            ></ul>
           </details>
         </section>
 

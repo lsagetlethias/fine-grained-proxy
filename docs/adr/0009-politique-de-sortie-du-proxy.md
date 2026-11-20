@@ -272,4 +272,5 @@ Toutes les règles ci-dessus vivent dans un module unique, `src/net/egress.ts`, 
 - ADR 0008 : `auth` structuré et blob v4, dont le champ `apiUrl` est le point de sortie non contrôlé qui a motivé la règle d'unicité du point de sortie
 - RFC 9110 §7.6.1 : en-têtes hop-by-hop
 - RFC 3986 §5.2.4 : résolution des segments `.` et `..`
+- ADR-0011 : migration de Deno vers Node. La politique de cet ADR, ses quatre garanties et ses non-garanties sont inchangées ; les primitives nommées ici (`Deno.resolveDns`, `Deno.createHttpClient`, `Deno.connect`) sont celles du runtime d'alors, et le code appelle désormais leurs équivalents `node:dns`. Le rebinding DNS reste ouvert pour la même raison
 - `docs/review/plan-politique-sortie.md` : plan d'implémentation ordonné de cette décision

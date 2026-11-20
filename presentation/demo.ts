@@ -1,20 +1,24 @@
-#!/usr/bin/env -S deno run --allow-net --allow-env --allow-read --allow-run
+#!/usr/bin/env tsx
 // Demo live FGP - zero dependance reseau.
 // Affiche chaque requete envoyee (methode, URL, headers, body) et pretty-print les reponses JSON.
 //
 // Prerequis (2 terminaux) :
-//   1. Mock upstream : deno run -A demo.ts upstream     (API cible locale sur :9000)
-//   2. FGP : depuis la racine, deno task dev            (proxy sur :8000, FGP_SALT requis)
+//   1. Mock upstream : tsx demo.ts upstream             (API cible locale sur :9000)
+//   2. FGP : depuis la racine, pnpm dev                 (proxy sur :8000, FGP_SALT requis)
 //
-// Puis : deno run -A demo.ts generate -> export KEY=... BLOB=... -> allowed / denied / opaque / ttl
+// Puis : tsx demo.ts generate -> export KEY=... BLOB=... -> allowed / denied / opaque / ttl
 
-const BASE = Deno.env.get("FGP_BASE") ?? "http://localhost:8000";
-const UPSTREAM = Deno.env.get("UPSTREAM") ?? "http://localhost:9000";
-const KEY = Deno.env.get("KEY") ?? "";
-const BLOB = Deno.env.get("BLOB") ?? "";
-const TOKEN = Deno.env.get("TOKEN") ?? "demo-secret-1234";
-const TARGET = Deno.env.get("TARGET") ?? UPSTREAM;
-const TTL = Number(Deno.env.get("TTL") ?? 120);
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { inspect as nodeInspect } from "node:util";
+
+const BASE = process.env.FGP_BASE ?? "http://localhost:8000";
+const UPSTREAM = process.env.UPSTREAM ?? "http://localhost:9000";
+const KEY = process.env.KEY ?? "";
+const BLOB = process.env.BLOB ?? "";
+const TOKEN = process.env.TOKEN ?? "demo-secret-1234";
+const TARGET = process.env.TARGET ?? UPSTREAM;
+const TTL = Number(process.env.TTL ?? 120);
 
 const c = {
   reset: "\x1b[0m",
@@ -41,7 +45,7 @@ function indent(s: string, n = 2): string {
 }
 
 function inspect(value: unknown): string {
-  return Deno.inspect(value, { colors: true, depth: Infinity });
+  return nodeInspect(value, { colors: true, depth: Infinity });
 }
 
 function prettyMaybeJson(text: string): string {
@@ -104,7 +108,7 @@ function requireBlob(): void {
     console.error(
       `${c.red}KEY et BLOB requis. Lance d'abord 'generate', puis export KEY=... BLOB=...${c.reset}`,
     );
-    Deno.exit(1);
+    process.exit(1);
   }
 }
 
@@ -189,7 +193,7 @@ async function allowedBody(): Promise<void> {
 
 async function ttl(): Promise<void> {
   title(
-    "3c. TTL expire (genere un blob court : TTL=8 deno run -A demo.ts generate, attendre, puis ttl)",
+    "3c. TTL expire (genere un blob court : TTL=8 tsx demo.ts generate, attendre, puis ttl)",
   );
   requireBlob();
   await request({ path: "/v1/apps", headers: fgpHeaders() });
@@ -215,15 +219,13 @@ async function opaque(): Promise<void> {
 async function upstream(): Promise<void> {
   title("Mock upstream sur :9000 (Ctrl-C pour stopper)");
   const serverPath = new URL("./demo-upstream/server.ts", import.meta.url).pathname;
-  const child = new Deno.Command("deno", {
-    args: ["run", "--allow-net", "--allow-env", serverPath],
-    stdout: "inherit",
-    stderr: "inherit",
-  }).spawn();
-  await child.status;
+  const child = spawn(process.execPath, ["--import", "tsx", serverPath], {
+    stdio: "inherit",
+  });
+  await once(child, "close");
 }
 
-const command = Deno.args[0] ?? "help";
+const command = process.argv[2] ?? "help";
 switch (command) {
   case "upstream":
     await upstream();
@@ -256,6 +258,6 @@ switch (command) {
     break;
   default:
     console.log(
-      "usage: deno run -A demo.ts {upstream|generate|allowed|denied|allowed-body|ttl|opaque|all}",
+      "usage: tsx demo.ts {upstream|generate|allowed|denied|allowed-body|ttl|opaque|all}",
     );
 }

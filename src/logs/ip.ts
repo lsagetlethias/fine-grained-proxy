@@ -73,7 +73,10 @@ export function extractClientIp(
 
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
-    const list = forwarded.split(",").map((p) => p.trim()).filter(Boolean);
+    const list = forwarded
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
     // La n-ieme en partant de la droite : la partie gauche est ecrite par l'appelant,
     // la partie droite par l'infrastructure.
     const idx = list.length - hops;

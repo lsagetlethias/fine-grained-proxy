@@ -8,10 +8,7 @@ import {
 export function NameSection() {
   return (
     <section>
-      <label
-        for="config-name"
-        class={LABEL_CLASS}
-      >
+      <label for="config-name" class={LABEL_CLASS}>
         Nom de la configuration
       </label>
       <input
@@ -27,9 +24,7 @@ export function NameSection() {
 export function PresetSection() {
   return (
     <section>
-      <label class={LABEL_CLASS}>
-        Preset
-      </label>
+      <label class={LABEL_CLASS}>Preset</label>
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex flex-wrap gap-2">
           <button
@@ -87,10 +82,7 @@ export function PresetSection() {
           class="mt-2 rounded-md border border-gray-200 dark:border-gray-700 p-3 space-y-3"
         >
           <div>
-            <label
-              class={SUB_LABEL_CLASS}
-              for="import-blob"
-            >
+            <label class={SUB_LABEL_CLASS} for="import-blob">
               URL FGP ou blob
             </label>
             <input
@@ -101,10 +93,7 @@ export function PresetSection() {
             />
           </div>
           <div>
-            <label
-              class={SUB_LABEL_CLASS}
-              for="import-key"
-            >
+            <label class={SUB_LABEL_CLASS} for="import-key">
               Cl&eacute; client (X-FGP-Key)
             </label>
             <input
@@ -127,8 +116,7 @@ export function PresetSection() {
               class="text-sm font-medium"
               aria-live="polite"
               role="status"
-            >
-            </span>
+            ></span>
           </div>
         </div>
       </details>
@@ -139,10 +127,7 @@ export function PresetSection() {
 export function TargetSection() {
   return (
     <section>
-      <label
-        for="target"
-        class={LABEL_CLASS}
-      >
+      <label for="target" class={LABEL_CLASS}>
         URL cible de l'API
       </label>
       <input

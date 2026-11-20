@@ -1,5 +1,6 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals, assertStringIncludes } from "../../_assert.ts";
 import { ConfigPage } from "../../../src/ui/config-page.tsx";
 import { ALERT_INFO_CLASS } from "../../../src/ui/config/constants.ts";
 import { renderLlmsTxt } from "../../../src/routes/llms.ts";
@@ -42,7 +43,7 @@ function errorDetailsHtml(): string {
   return html.slice(summary, end);
 }
 
-Deno.test("AC-39.4: #byok-key n'a ni required, ni minlength, ni pattern, ni maxlength", () => {
+test("AC-39.4: #byok-key n'a ni required, ni minlength, ni pattern, ni maxlength", () => {
   const tag = tagAttributes("byok-key");
 
   // required, minlength et pattern : un champ invalide dans un <details> ferme fait echouer
@@ -64,14 +65,14 @@ Deno.test("AC-39.4: #byok-key n'a ni required, ni minlength, ni pattern, ni maxl
   );
 });
 
-Deno.test("AC-39.4: #byok-key reste un champ masque et hors des gestionnaires de mots de passe", () => {
+test("AC-39.4: #byok-key reste un champ masque et hors des gestionnaires de mots de passe", () => {
   const tag = tagAttributes("byok-key");
 
   assertStringIncludes(tag, 'type="password"');
   assertStringIncludes(tag, 'autocomplete="off"');
 });
 
-Deno.test("AC-39.17: aucun script inline dans la page de configuration", () => {
+test("AC-39.17: aucun script inline dans la page de configuration", () => {
   // La CSP est script-src 'self' sans unsafe-inline : un seul <script> inline la casserait,
   // et la contourner avec unsafe-inline viderait la mesure de son sens.
   const scripts = [...html.matchAll(/<script\b([^>]*)>/g)].map((m) => m[1]);
@@ -85,7 +86,7 @@ Deno.test("AC-39.17: aucun script inline dans la page de configuration", () => {
   }
 });
 
-Deno.test("AC-39.17: aucun style inline ni gestionnaire d'evenement en attribut", () => {
+test("AC-39.17: aucun style inline ni gestionnaire d'evenement en attribut", () => {
   // style="" est bloque par style-src 'self', et un onclick="" par script-src 'self'.
   assertEquals(/\sstyle="/.test(html), false, "attribut style= present, bloque par la CSP");
 
@@ -93,24 +94,22 @@ Deno.test("AC-39.17: aucun style inline ni gestionnaire d'evenement en attribut"
   assertEquals(handlers.length, 0, "gestionnaire d'evenement en attribut, bloque par la CSP");
 });
 
-Deno.test("AC-39.17: aucune balise style, les feuilles viennent de /static", () => {
+test("AC-39.17: aucune balise style, les feuilles viennent de /static", () => {
   assertEquals(/<style\b/.test(html), false, "balise <style> presente, bloquee par la CSP");
   assertStringIncludes(html, "/static/styles.css");
 });
 
-Deno.test("AC-40.13: la page declare la decouverte /llms.txt dans son head", () => {
+test("AC-40.13: la page declare la decouverte /llms.txt dans son head", () => {
   assertStringIncludes(html, 'rel="describedby"');
   assertStringIncludes(html, 'href="/llms.txt"');
 });
 
-Deno.test("§12.10: les trois nouveaux codes d'erreur sont documentes avec leur status", () => {
-  for (
-    const [code, status] of [
-      ["unsupported_regex", "400"],
-      ["payload_too_large", "413"],
-      ["target_forbidden", "403"],
-    ]
-  ) {
+test("§12.10: les trois nouveaux codes d'erreur sont documentes avec leur status", () => {
+  for (const [code, status] of [
+    ["unsupported_regex", "400"],
+    ["payload_too_large", "413"],
+    ["target_forbidden", "403"],
+  ]) {
     assertStringIncludes(
       html,
       `<code class="font-mono text-xs">${code}</code> (${status})`,
@@ -119,7 +118,7 @@ Deno.test("§12.10: les trois nouveaux codes d'erreur sont documentes avec leur 
   }
 });
 
-Deno.test("§12.10: les cinq groupes de codes portent les sous-titres de la spec, dans l'ordre", () => {
+test("§12.10: les cinq groupes de codes portent les sous-titres de la spec, dans l'ordre", () => {
   const subtitles = [
     "La clé ou le blob",
     "Le périmètre du blob",
@@ -136,16 +135,16 @@ Deno.test("§12.10: les cinq groupes de codes portent les sous-titres de la spec
   }
 });
 
-Deno.test("§12.10: la remediation des nouveaux codes reprend la copy du PO au mot pres", () => {
+test("§12.10: la remediation des nouveaux codes reprend la copy du PO au mot pres", () => {
   const texts = [
     "Une expression régulière de ce blob n'est plus autorisée : les groupes quantifiés, " +
-    "les backréférences et les lookarounds sont refusés. Le blob doit être régénéré avec " +
-    "un motif plus simple.",
+      "les backréférences et les lookarounds sont refusés. Le blob doit être régénéré avec " +
+      "un motif plus simple.",
     "Le corps de la requête dépasse la taille inspectable, 512 Ko, quand un body filter ou " +
-    "la capture des logs détaillés est actif. Sans ces deux fonctions, le corps est transmis " +
-    "en flux et n'est pas plafonné.",
+      "la capture des logs détaillés est actif. Sans ces deux fonctions, le corps est transmis " +
+      "en flux et n'est pas plafonné.",
     "La cible de ce blob n'est pas une adresse publique. FGP refuse de joindre les réseaux " +
-    "privés, la boucle locale et les adresses de métadonnées. Vérifiez l'URL cible du blob.",
+      "privés, la boucle locale et les adresses de métadonnées. Vérifiez l'URL cible du blob.",
   ];
 
   for (const text of texts) {
@@ -153,7 +152,7 @@ Deno.test("§12.10: la remediation des nouveaux codes reprend la copy du PO au m
   }
 });
 
-Deno.test("§12.10: le bloc sur la query est visible, hors du <details> des codes", () => {
+test("§12.10: le bloc sur la query est visible, hors du <details> des codes", () => {
   const title = "Paramètres de query";
 
   // Ce n'est pas une erreur mais une regle de comportement : la replier avec les codes la
@@ -179,7 +178,7 @@ Deno.test("§12.10: le bloc sur la query est visible, hors du <details> des code
   assertStringIncludes(html, '<code class="font-mono text-xs">/v1/items?action=delete</code>');
 });
 
-Deno.test("§12.10: le panneau Doc couvre tous les codes proxy annonces par /llms.txt", () => {
+test("§12.10: le panneau Doc couvre tous les codes proxy annonces par /llms.txt", () => {
   // Deux surfaces documentent les memes erreurs a deux publics. Une divergence signifie qu'une
   // des deux ment, et rien dans le code ne l'aurait signalee.
   const llms = renderLlmsTxt("https://fgp.example.com");
@@ -202,7 +201,7 @@ Deno.test("§12.10: le panneau Doc couvre tous les codes proxy annonces par /llm
   }
 });
 
-Deno.test("§12.5: la note query du testeur porte la copy de la spec et part masquee", () => {
+test("§12.5: la note query du testeur porte la copy de la spec et part masquee", () => {
   const tag = tagAttributes("test-query-note");
 
   assertStringIncludes(tag, "hidden");
@@ -220,7 +219,7 @@ Deno.test("§12.5: la note query du testeur porte la copy de la spec et part mas
   );
 });
 
-Deno.test("§12.13: la note query n'a pas de titre", () => {
+test("§12.13: la note query n'a pas de titre", () => {
   const note = elementHtml("test-query-note", "</p>");
 
   // Le niveau passe par l'icone et la couleur ; un titre ne porterait aucune information et

@@ -42,18 +42,18 @@ export function PageFooter({ commitHash }: { commitHash: string }) {
           Fine-Grained Proxy sur GitHub
         </a>
         <span>&middot;</span>
-        {/^[0-9a-f]{7,}$/i.test(commitHash)
-          ? (
-            <a
-              href={`https://github.com/lsagetlethias/fine-grained-proxy/commit/${commitHash}`}
-              target="_blank"
-              rel="noopener"
-              class="font-mono hover:text-fgp-600 dark:hover:text-fgp-400 transition-colors"
-            >
-              {commitHash.slice(0, 7)}
-            </a>
-          )
-          : <span class="font-mono">{commitHash.slice(0, 7)}</span>}
+        {/^[0-9a-f]{7,}$/i.test(commitHash) ? (
+          <a
+            href={`https://github.com/lsagetlethias/fine-grained-proxy/commit/${commitHash}`}
+            target="_blank"
+            rel="noopener"
+            class="font-mono hover:text-fgp-600 dark:hover:text-fgp-400 transition-colors"
+          >
+            {commitHash.slice(0, 7)}
+          </a>
+        ) : (
+          <span class="font-mono">{commitHash.slice(0, 7)}</span>
+        )}
       </div>
     </footer>
   );

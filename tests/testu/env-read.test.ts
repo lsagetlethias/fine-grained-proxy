@@ -1,15 +1,16 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals } from "../_assert.ts";
 import { readEnv, readEnvFlag, readEnvInt } from "../../src/env.ts";
 import { readLogsConfig } from "../../src/logs/config.ts";
 import { trustedProxyHops } from "../../src/logs/ip.ts";
 
 function withEnv(name: "FGP_LOGS_BUFFER_NETWORK" | "FGP_TRUSTED_PROXY_HOPS", value: string | null) {
-  if (value === null) Deno.env.delete(name);
-  else Deno.env.set(name, value);
+  if (value === null) delete process.env[name];
+  else process.env[name] = value;
 }
 
-Deno.test("AC-58.11: readEnvInt reprend exactement les rejets de l'ancien parsePositiveInt", () => {
+test("AC-58.11: readEnvInt reprend exactement les rejets de l'ancien parsePositiveInt", () => {
   const cases: [string | null, number][] = [
     [null, 42],
     ["", 42],
@@ -31,7 +32,7 @@ Deno.test("AC-58.11: readEnvInt reprend exactement les rejets de l'ancien parseP
   }
 });
 
-Deno.test("AC-58.12: a min 0, zero est retenu et le negatif retombe sur le defaut", () => {
+test("AC-58.12: a min 0, zero est retenu et le negatif retombe sur le defaut", () => {
   const cases: [string | null, number][] = [
     [null, 0],
     ["", 0],
@@ -51,7 +52,7 @@ Deno.test("AC-58.12: a min 0, zero est retenu et le negatif retombe sur le defau
   }
 });
 
-Deno.test("AC-58.13: readEnvFlag ne vaut vrai que sur la chaine 1", () => {
+test("AC-58.13: readEnvFlag ne vaut vrai que sur la chaine 1", () => {
   try {
     withEnv("FGP_LOGS_BUFFER_NETWORK", "1");
     assertEquals(readEnvFlag("FGP_LOGS_BUFFER_NETWORK"), true);
@@ -69,7 +70,7 @@ Deno.test("AC-58.13: readEnvFlag ne vaut vrai que sur la chaine 1", () => {
 // Le jour ou quelqu'un ajoutera un cache dans src/env.ts pour « economiser » un appel, ces
 // trois assertions tomberont. C'est le but : 34 fichiers de test basculent les memes
 // variables dans un processus unique, un cache ferait dependre le resultat de leur ordre.
-Deno.test("AC-58.14: aucune valeur d'environnement n'est memoisee", () => {
+test("AC-58.14: aucune valeur d'environnement n'est memoisee", () => {
   try {
     withEnv("FGP_TRUSTED_PROXY_HOPS", "1");
     assertEquals(readEnv("FGP_TRUSTED_PROXY_HOPS"), "1");
@@ -87,7 +88,7 @@ Deno.test("AC-58.14: aucune valeur d'environnement n'est memoisee", () => {
   }
 });
 
-Deno.test("AC-58.15: la config logs se relit a chaque appel, elle n'est pas figee", () => {
+test("AC-58.15: la config logs se relit a chaque appel, elle n'est pas figee", () => {
   try {
     withEnv("FGP_LOGS_BUFFER_NETWORK", "7");
     assertEquals(readLogsConfig().bufferNetwork, 7);

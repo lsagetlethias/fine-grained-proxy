@@ -28,10 +28,8 @@ export function ConfigPage({ commitHash = "dev" }: { commitHash?: string }) {
               <TargetSection />
               <AuthModeSection />
               <CustomHeadersSection />
-              {
-                /* Token avant le bloc Scalingo : c'est le prerequis du bloc entier, et les
-                  deux modes Scalingo suivent alors la meme sequence credential puis action. */
-              }
+              {/* Token avant le bloc Scalingo : c'est le prerequis du bloc entier, et les
+                  deux modes Scalingo suivent alors la meme sequence credential puis action. */}
               <TokenSection />
               <ScalingoAddonSection />
               <ScalingoAppsSection />

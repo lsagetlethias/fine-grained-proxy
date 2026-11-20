@@ -1,5 +1,6 @@
-import { assertEquals, assertNotEquals } from "@std/assert";
+import { test } from "node:test";
 
+import { assertEquals, assertNotEquals } from "../_assert.ts";
 import { app } from "../../src/main.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../../src/constants.ts";
 
@@ -25,9 +26,9 @@ type Spec = {
 const originalFetch = globalThis.fetch;
 
 function setup() {
-  Deno.env.set("FGP_SALT", "openapi-body-limit-test-salt");
-  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
-  Deno.env.set("SCALINGO_AUTH_URL", "https://auth.mock.local");
+  process.env.FGP_SALT = "openapi-body-limit-test-salt";
+  process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
+  process.env.SCALINGO_AUTH_URL = "https://auth.mock.local";
   // Une parite cassee laisse la requete atteindre le handler : sans ce garde-fou, la sonde
   // partirait reellement sur le reseau au lieu d'echouer proprement sur l'assertion.
   globalThis.fetch = (): Promise<Response> => Promise.resolve(new Response("{}", { status: 200 }));
@@ -35,14 +36,14 @@ function setup() {
 
 function teardown() {
   globalThis.fetch = originalFetch;
-  Deno.env.delete("FGP_SALT");
-  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-  Deno.env.delete("SCALINGO_AUTH_URL");
+  delete process.env.FGP_SALT;
+  delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+  delete process.env.SCALINGO_AUTH_URL;
 }
 
 async function loadSpec(): Promise<Spec> {
   const res = await app.request("/api/openapi.json");
-  return await res.json() as Spec;
+  return (await res.json()) as Spec;
 }
 
 function operationsOf(spec: Spec): { path: string; method: string; operation: Operation }[] {
@@ -79,121 +80,111 @@ async function servesPayloadTooLarge(path: string, method: string): Promise<bool
   }
 }
 
-Deno.test({
-  name:
-    "AC-47.4: PARITE, une operation OpenAPI declare 413 payload_too_large si et seulement si elle le sert",
-  fn: async () => {
-    setup();
-    try {
-      const spec = await loadSpec();
-      const operations = operationsOf(spec);
-      assertNotEquals(operations.length, 0, "aucune operation enumeree, le test ne verifie rien");
+test("AC-47.4: PARITE, une operation OpenAPI declare 413 payload_too_large si et seulement si elle le sert", async () => {
+  setup();
+  try {
+    const spec = await loadSpec();
+    const operations = operationsOf(spec);
+    assertNotEquals(operations.length, 0, "aucune operation enumeree, le test ne verifie rien");
 
-      const undeclared: string[] = [];
-      const overdeclared: string[] = [];
-      let probed = 0;
+    const undeclared: string[] = [];
+    const overdeclared: string[] = [];
+    let probed = 0;
 
-      for (const { path, method, operation } of operations) {
-        const declares = declaredErrorCodes(spec, operation, "413").includes("payload_too_large");
+    for (const { path, method, operation } of operations) {
+      const declares = declaredErrorCodes(spec, operation, "413").includes("payload_too_large");
 
-        // Une operation sans corps documente ne peut pas depasser un plafond de corps : Deno
-        // n'expose aucun body sur un GET, bodyLimit passe la main et la route repond 200.
-        // La declarer en 413 documenterait une reponse que rien ne peut atteindre.
-        if (!operation.requestBody) {
-          if (declares) overdeclared.push(`${method.toUpperCase()} ${path} (sans corps)`);
-          continue;
-        }
-
-        probed++;
-        const serves = await servesPayloadTooLarge(path, method);
-        if (serves && !declares) undeclared.push(`${method.toUpperCase()} ${path}`);
-        if (!serves && declares) overdeclared.push(`${method.toUpperCase()} ${path}`);
+      // Une operation sans corps documente ne peut pas depasser un plafond de corps : un
+      // GET ne peut pas en porter, bodyLimit passe la main et la route repond 200.
+      // La declarer en 413 documenterait une reponse que rien ne peut atteindre.
+      if (!operation.requestBody) {
+        if (declares) overdeclared.push(`${method.toUpperCase()} ${path} (sans corps)`);
+        continue;
       }
 
-      assertNotEquals(probed, 0, "aucune operation sondee, le test ne verifie rien");
-
-      assertEquals(
-        undeclared,
-        [],
-        `413 payload_too_large servi mais absent de l'enum OpenAPI : ${undeclared.join(", ")}`,
-      );
-      assertEquals(
-        overdeclared,
-        [],
-        `413 payload_too_large declare mais jamais servi : ${overdeclared.join(", ")}`,
-      );
-    } finally {
-      teardown();
+      probed++;
+      const serves = await servesPayloadTooLarge(path, method);
+      if (serves && !declares) undeclared.push(`${method.toUpperCase()} ${path}`);
+      if (!serves && declares) overdeclared.push(`${method.toUpperCase()} ${path}`);
     }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+
+    assertNotEquals(probed, 0, "aucune operation sondee, le test ne verifie rien");
+
+    assertEquals(
+      undeclared,
+      [],
+      `413 payload_too_large servi mais absent de l'enum OpenAPI : ${undeclared.join(", ")}`,
+    );
+    assertEquals(
+      overdeclared,
+      [],
+      `413 payload_too_large declare mais jamais servi : ${overdeclared.join(", ")}`,
+    );
+  } finally {
+    teardown();
+  }
 });
 
-Deno.test({
-  name: "AC-47.5: INVARIANT structurel, le plafond de corps n'est monte que sous /api/",
-  fn: () => {
-    // Monte sur un pattern fourre-tout, le plafond couvrirait la route proxy : le corps
-    // transmis en flux passerait en tampon et les uploads volumineux legitimes casseraient
-    // (ADR-0010 D6). La source de verite est le montage reel, pas une liste ecrite ici.
-    const mounts = app.routes.filter((route) => route.handler.name.startsWith("bodyLimit"));
+test("AC-47.5: INVARIANT structurel, le plafond de corps n'est monte que sous /api/", () => {
+  // Monte sur un pattern fourre-tout, le plafond couvrirait la route proxy : le corps
+  // transmis en flux passerait en tampon et les uploads volumineux legitimes casseraient
+  // (ADR-0010 D6). La source de verite est le montage reel, pas une liste ecrite ici.
+  const mounts = app.routes.filter((route) => route.handler.name.startsWith("bodyLimit"));
 
-    assertNotEquals(
-      mounts.length,
-      0,
-      "aucun montage de plafond reconnu sur l'app, le test ne verifie plus rien",
+  assertNotEquals(
+    mounts.length,
+    0,
+    "aucun montage de plafond reconnu sur l'app, le test ne verifie plus rien",
+  );
+
+  for (const mount of mounts) {
+    assertEquals(
+      mount.path.startsWith("/api/"),
+      true,
+      `plafond de corps monte hors /api/ sur ${mount.path}`,
     );
-
-    for (const mount of mounts) {
-      assertEquals(
-        mount.path.startsWith("/api/"),
-        true,
-        `plafond de corps monte hors /api/ sur ${mount.path}`,
-      );
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  }
 });
 
 // --- AC-47.10 : la provenance est uniforme sur /api/*, pas seulement sur les codes
 // que les handlers estampillaient un par un ---
 
-Deno.test({
-  name: "AC-47.10: toute reponse d'une route /api/* porte X-FGP-Source: proxy",
-  fn: async () => {
-    const json = { "Content-Type": "application/json" };
-    const cases: [string, RequestInit][] = [
-      ["/api/salt", {}],
-      ["/api/openapi.json", {}],
-      ["/api/generate", { method: "POST", headers: json, body: "{}" }],
-      ["/api/decode", { method: "POST", headers: json, body: "{}" }],
-      ["/api/share/decode", {
+test("AC-47.10: toute reponse d'une route /api/* porte X-FGP-Source: proxy", async () => {
+  const json = { "Content-Type": "application/json" };
+  const cases: [string, RequestInit][] = [
+    ["/api/salt", {}],
+    ["/api/openapi.json", {}],
+    ["/api/generate", { method: "POST", headers: json, body: "{}" }],
+    ["/api/decode", { method: "POST", headers: json, body: "{}" }],
+    [
+      "/api/share/decode",
+      {
         method: "POST",
         headers: json,
         body: JSON.stringify({ encoded: "x".repeat(9000) }),
-      }],
-      ["/api/list-apps", { method: "POST", headers: json, body: "{}" }],
-      ["/api/test-proxy", { method: "POST", headers: json, body: "{}" }],
-      ["/api/generate", {
+      },
+    ],
+    ["/api/list-apps", { method: "POST", headers: json, body: "{}" }],
+    ["/api/test-proxy", { method: "POST", headers: json, body: "{}" }],
+    [
+      "/api/generate",
+      {
         method: "POST",
         headers: json,
         body: JSON.stringify({ p: "x".repeat(70000) }),
-      }],
-    ];
+      },
+    ],
+  ];
 
-    for (const [path, init] of cases) {
-      const res = await app.request(path, init);
-      assertEquals(
-        res.headers.get(FGP_SOURCE_HEADER),
-        FGP_SOURCE_PROXY,
-        `${path} (${res.status}) ne porte pas la provenance`,
-      );
-      await res.body?.cancel();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+  for (const [path, init] of cases) {
+    const res = await app.request(path, init);
+    assertEquals(
+      res.headers.get(FGP_SOURCE_HEADER),
+      FGP_SOURCE_PROXY,
+      `${path} (${res.status}) ne porte pas la provenance`,
+    );
+    await res.body?.cancel();
+  }
 });
 
 // --- Le 415 du controle de type de media suit la meme regle de parite que le 413 ---
@@ -215,78 +206,67 @@ async function servesUnsupportedMediaType(path: string, method: string): Promise
   }
 }
 
-Deno.test({
-  name:
-    "AC-47.11: PARITE, une operation OpenAPI declare 415 unsupported_media_type si et seulement si elle le sert",
-  fn: async () => {
-    setup();
-    try {
-      const spec = await loadSpec();
-      const operations = operationsOf(spec);
-      assertNotEquals(operations.length, 0, "aucune operation enumeree, le test ne verifie rien");
+test("AC-47.11: PARITE, une operation OpenAPI declare 415 unsupported_media_type si et seulement si elle le sert", async () => {
+  setup();
+  try {
+    const spec = await loadSpec();
+    const operations = operationsOf(spec);
+    assertNotEquals(operations.length, 0, "aucune operation enumeree, le test ne verifie rien");
 
-      const undeclared: string[] = [];
-      const overdeclared: string[] = [];
-      let probed = 0;
+    const undeclared: string[] = [];
+    const overdeclared: string[] = [];
+    let probed = 0;
 
-      for (const { path, method, operation } of operations) {
-        const declares = declaredErrorCodes(spec, operation, "415").includes(
-          "unsupported_media_type",
-        );
+    for (const { path, method, operation } of operations) {
+      const declares = declaredErrorCodes(spec, operation, "415").includes(
+        "unsupported_media_type",
+      );
 
-        // Sans corps documente, il n'y a aucun type de media a contrarier : le controle ne
-        // se declenche pas et declarer le code documenterait une reponse inatteignable.
-        if (!operation.requestBody) {
-          if (declares) overdeclared.push(`${method.toUpperCase()} ${path} (sans corps)`);
-          continue;
-        }
-
-        probed++;
-        const serves = await servesUnsupportedMediaType(path, method);
-        if (serves && !declares) undeclared.push(`${method.toUpperCase()} ${path}`);
-        if (!serves && declares) overdeclared.push(`${method.toUpperCase()} ${path}`);
+      // Sans corps documente, il n'y a aucun type de media a contrarier : le controle ne
+      // se declenche pas et declarer le code documenterait une reponse inatteignable.
+      if (!operation.requestBody) {
+        if (declares) overdeclared.push(`${method.toUpperCase()} ${path} (sans corps)`);
+        continue;
       }
 
-      assertNotEquals(probed, 0, "aucune operation sondee, le test ne verifie rien");
-
-      assertEquals(
-        undeclared,
-        [],
-        `415 unsupported_media_type servi mais absent de l'enum OpenAPI : ${undeclared.join(", ")}`,
-      );
-      assertEquals(
-        overdeclared,
-        [],
-        `415 unsupported_media_type declare mais jamais servi : ${overdeclared.join(", ")}`,
-      );
-    } finally {
-      teardown();
+      probed++;
+      const serves = await servesUnsupportedMediaType(path, method);
+      if (serves && !declares) undeclared.push(`${method.toUpperCase()} ${path}`);
+      if (!serves && declares) overdeclared.push(`${method.toUpperCase()} ${path}`);
     }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+
+    assertNotEquals(probed, 0, "aucune operation sondee, le test ne verifie rien");
+
+    assertEquals(
+      undeclared,
+      [],
+      `415 unsupported_media_type servi mais absent de l'enum OpenAPI : ${undeclared.join(", ")}`,
+    );
+    assertEquals(
+      overdeclared,
+      [],
+      `415 unsupported_media_type declare mais jamais servi : ${overdeclared.join(", ")}`,
+    );
+  } finally {
+    teardown();
+  }
 });
 
-Deno.test({
-  name: "AC-47.12: un Content-Type JSON valide ne declenche pas le 415, le corps est juge",
-  fn: async () => {
-    setup();
-    try {
-      // La frontiere entre les deux codes est le seul point que le changement de contrat
-      // rend delicat : 415 dit « je ne sais pas lire ce format », 400 dit « ce JSON ne
-      // convient pas ». Les confondre reviendrait a rendre le diagnostic inutile.
-      const res = await app.request("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
+test("AC-47.12: un Content-Type JSON valide ne declenche pas le 415, le corps est juge", async () => {
+  setup();
+  try {
+    // La frontiere entre les deux codes est le seul point que le changement de contrat
+    // rend delicat : 415 dit « je ne sais pas lire ce format », 400 dit « ce JSON ne
+    // convient pas ». Les confondre reviendrait a rendre le diagnostic inutile.
+    const res = await app.request("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
 
-      assertEquals(res.status, 400);
-      assertEquals((await res.json()).error, "invalid_body");
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    assertEquals(res.status, 400);
+    assertEquals((await res.json()).error, "invalid_body");
+  } finally {
+    teardown();
+  }
 });

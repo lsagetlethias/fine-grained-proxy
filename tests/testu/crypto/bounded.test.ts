@@ -1,6 +1,7 @@
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
-import { encodeBase64Url } from "@std/encoding/base64url";
+import { test } from "node:test";
 
+import { assertEquals, assertRejects, assertStringIncludes } from "../../_assert.ts";
+import { encodeBase64Url } from "../../../src/crypto/base64url.ts";
 import {
   DecompressionTooLargeError,
   MAX_DECOMPRESSED_BYTES,
@@ -16,9 +17,9 @@ const IV_LENGTH = 12;
 const BOMB_PLAIN_BYTES = 3 * 1024 * 1024;
 
 async function gzip(data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
-  const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(
-    new CompressionStream("gzip"),
-  );
+  const stream = new Blob([data as Uint8Array<ArrayBuffer>])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
@@ -43,7 +44,7 @@ async function blobFromGzip(compressed: Uint8Array<ArrayBuffer>): Promise<string
   return encodeBase64Url(raw);
 }
 
-Deno.test("AC-47.8: une bombe gzip presentee comme blob est rejetee", async () => {
+test("AC-47.8: une bombe gzip presentee comme blob est rejetee", async () => {
   const bomb = await gzipBomb();
   assertEquals(
     bomb.byteLength < 16 * 1024,
@@ -52,14 +53,11 @@ Deno.test("AC-47.8: une bombe gzip presentee comme blob est rejetee", async () =
   );
 
   const blob = await blobFromGzip(bomb);
-  const err = await assertRejects(
-    () => decryptBlob(blob, CLIENT_KEY, SERVER_SALT),
-    Error,
-  );
+  const err = await assertRejects(() => decryptBlob(blob, CLIENT_KEY, SERVER_SALT), Error);
   assertStringIncludes(err.message, "Decompression failed");
 });
 
-Deno.test("AC-47.8 bis: la meme bombe presentee comme encoded de partage est rejetee", async () => {
+test("AC-47.8 bis: la meme bombe presentee comme encoded de partage est rejetee", async () => {
   const bomb = await gzipBomb();
   const encoded = encodeBase64Url(bomb);
 
@@ -71,13 +69,10 @@ Deno.test("AC-47.8 bis: la meme bombe presentee comme encoded de partage est rej
     `l'encoded doit passer le plafond d'entree, mesure a ${encoded.length} caracteres`,
   );
 
-  await assertRejects(
-    () => decodePublicConfig(encoded),
-    DecompressionTooLargeError,
-  );
+  await assertRejects(() => decodePublicConfig(encoded), DecompressionTooLargeError);
 });
 
-Deno.test("AC-47.8 ter: la lecture s'arrete au depassement au lieu de tout materialiser", async () => {
+test("AC-47.8 ter: la lecture s'arrete au depassement au lieu de tout materialiser", async () => {
   const CHUNK = 64 * 1024;
   const CHUNKS = 200;
   let pulled = 0;
@@ -98,14 +93,10 @@ Deno.test("AC-47.8 ter: la lecture s'arrete au depassement au lieu de tout mater
   // Le plafond est atteint au troisieme chunk : au-dela, la sortie aurait ete
   // materialisee avant d'etre jugee, ce qui est exactement la regression a attraper.
   const maxPulls = Math.ceil(MAX_DECOMPRESSED_BYTES / CHUNK) + 1;
-  assertEquals(
-    pulled <= maxPulls,
-    true,
-    `${pulled} chunks tires pour un plafond de ${maxPulls}`,
-  );
+  assertEquals(pulled <= maxPulls, true, `${pulled} chunks tires pour un plafond de ${maxPulls}`);
 });
 
-Deno.test("AC-47.8 quater: un flux sous le plafond est lu integralement", async () => {
+test("AC-47.8 quater: un flux sous le plafond est lu integralement", async () => {
   const size = MAX_DECOMPRESSED_BYTES - 1;
   const payload = new Uint8Array(size).fill(7);
   const stream = new Blob([payload as Uint8Array<ArrayBuffer>]).stream();

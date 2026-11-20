@@ -13,7 +13,7 @@
 
 ## Checklist
 
-- [ ] `deno task verify` passe (lint + fmt + check + tests)
+- [ ] `pnpm run verify` passe (lint + fmt + check + tests)
 - [ ] Tests ajoutés/mis à jour si pertinent
 - [ ] ADR créé si décision architecturale
 - [ ] ACTIVITY.md mis à jour

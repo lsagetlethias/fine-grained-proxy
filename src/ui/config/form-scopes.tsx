@@ -10,10 +10,7 @@ import { AlertInfoIcon, AlertTriangleIcon } from "./icons.tsx";
 export function ScopesSection() {
   return (
     <section>
-      <label
-        for="scopes"
-        class={LABEL_CLASS}
-      >
+      <label for="scopes" class={LABEL_CLASS}>
         Scopes (patterns METHOD:PATH)
       </label>
       <div id="scope-chips" class="space-y-1 mb-2 hidden" aria-live="polite"></div>
@@ -24,8 +21,7 @@ export function ScopesSection() {
         placeholder={`GET:/v1/apps/*\nPOST:/v1/apps/my-app/scale\n*:*`}
         class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
         aria-describedby="scopes-hint"
-      >
-      </textarea>
+      ></textarea>
       <p id="scopes-hint" class={HINT_CLASS}>
         Un pattern par ligne. Wildcard * pour tout matcher. Tout scope peut porter des filtres sur
         les param&egrave;tres de query ; les scopes POST/PUT/PATCH peuvent en plus filtrer le
@@ -73,16 +69,12 @@ export function TestScopeSection() {
         <span
           id="test-scope-badge"
           class="hidden group-open/test:!hidden ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-        >
-        </span>
+        ></span>
       </summary>
       <div class="px-4 pb-4 pt-2 space-y-3">
         <div class="grid grid-cols-4 gap-3">
           <div>
-            <label
-              class={SUB_LABEL_CLASS}
-              for="test-method"
-            >
+            <label class={SUB_LABEL_CLASS} for="test-method">
               M&eacute;thode
             </label>
             <select
@@ -97,10 +89,7 @@ export function TestScopeSection() {
             </select>
           </div>
           <div class="col-span-3">
-            <label
-              class={SUB_LABEL_CLASS}
-              for="test-path"
-            >
+            <label class={SUB_LABEL_CLASS} for="test-path">
               Chemin de test
             </label>
             <input
@@ -112,11 +101,9 @@ export function TestScopeSection() {
           </div>
         </div>
 
-        {
-          /* Les deux icones vivent ici plutot que d'etre fabriquees en JS : leur trace
+        {/* Les deux icones vivent ici plutot que d'etre fabriquees en JS : leur trace
             appartient au gabarit, le client ne fait que basculer laquelle est visible selon
-            l'etat de la note. La couleur suit la classe du bloc parent, jamais l'icone. */
-        }
+            l'etat de la note. La couleur suit la classe du bloc parent, jamais l'icone. */}
         <p id="test-query-note" hidden aria-live="polite" class={ALERT_INFO_CLASS}>
           <span id="test-query-note-icon-info" class="contents">
             <AlertInfoIcon />
@@ -130,10 +117,7 @@ export function TestScopeSection() {
         </p>
 
         <div id="test-body-section" class="hidden">
-          <label
-            class={SUB_LABEL_CLASS}
-            for="test-body"
-          >
+          <label class={SUB_LABEL_CLASS} for="test-body">
             Body JSON (optionnel)
           </label>
           <textarea
@@ -141,8 +125,7 @@ export function TestScopeSection() {
             rows={3}
             placeholder='{"deployment": {"git_ref": "main"}}'
             class="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-mono focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
-          >
-          </textarea>
+          ></textarea>
         </div>
 
         <div id="test-scope-results" class="space-y-1" aria-live="polite"></div>
@@ -160,14 +143,12 @@ export function TestScopeSection() {
             class="text-sm font-medium"
             aria-live="polite"
             role="status"
-          >
-          </span>
+          ></span>
         </div>
         <pre
           id="test-scope-json"
           class="hidden mt-3 rounded-md bg-gray-100 dark:bg-gray-800/50 p-3 font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre max-h-48 overflow-y-auto"
-        >
-        </pre>
+        ></pre>
       </div>
     </details>
   );

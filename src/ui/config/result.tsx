@@ -14,14 +14,10 @@ export function ResultSection() {
       aria-label="R&#233;sultat de la g&#233;n&#233;ration"
     >
       <div class="rounded-md border border-green-200 bg-green-50 p-4 space-y-4 dark:bg-green-900/30 dark:border-green-700">
-        <h2 class="text-sm font-semibold text-green-900 dark:text-green-200">
-          URL générée
-        </h2>
+        <h2 class="text-sm font-semibold text-green-900 dark:text-green-200">URL générée</h2>
 
         <div>
-          <label class={RESULT_LABEL_CLASS}>
-            URL du proxy
-          </label>
+          <label class={RESULT_LABEL_CLASS}>URL du proxy</label>
           <div class="flex gap-2">
             <input
               type="text"
@@ -70,10 +66,8 @@ export function ResultSection() {
               Copier
             </button>
           </div>
-          {
-            /* Deux variantes : « notez cette cle maintenant » adresse a quelqu'un qui vient de
-              la coller depuis son coffre serait un bruit qui decredibilise les avertissements. */
-          }
+          {/* Deux variantes : « notez cette cle maintenant » adresse a quelqu'un qui vient de
+              la coller depuis son coffre serait un bruit qui decredibilise les avertissements. */}
           <p id="result-key-note" class="mt-1 text-xs text-green-800 dark:text-green-300">
             Notez cette cl&eacute; maintenant : FGP ne la stocke pas et ne pourra pas vous la
             redonner. Sans elle, l'URL est inexploitable.
@@ -104,9 +98,7 @@ export function ResultSection() {
         </div>
 
         <div>
-          <label class={RESULT_LABEL_CLASS}>
-            Exemple avec blob dans l'URL
-          </label>
+          <label class={RESULT_LABEL_CLASS}>Exemple avec blob dans l'URL</label>
           <div class="flex gap-2">
             <pre
               id="result-curl"
@@ -124,9 +116,7 @@ export function ResultSection() {
         </div>
 
         <div>
-          <label class={RESULT_LABEL_CLASS}>
-            Exemple avec header (recommand&eacute;)
-          </label>
+          <label class={RESULT_LABEL_CLASS}>Exemple avec header (recommand&eacute;)</label>
           <div class="flex gap-2">
             <pre
               id="result-curl-header"
@@ -149,11 +139,7 @@ export function ResultSection() {
 
 export function ErrorBanner() {
   return (
-    <div
-      id="error-banner"
-      class={`mt-4 hidden ${ALERT_DANGER_CLASS}`}
-      role="alert"
-    >
+    <div id="error-banner" class={`mt-4 hidden ${ALERT_DANGER_CLASS}`} role="alert">
       <AlertTriangleIcon />
       {/* Le message va dans ce span, pas sur le conteneur : textContent effacerait l'icone. */}
       <span id="error-banner-message"></span>

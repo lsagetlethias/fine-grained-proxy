@@ -135,7 +135,7 @@ Une tâche mécanique confiée à Opus est un gâchis de budget ; une tâche de 
 
 **Séparation des rôles**
 - Le designer produit des specs (wireframes, classes Tailwind, structure), le dev intègre. Ils se challengent mutuellement.
-- Le designer ne touche pas à `main.ts`, `deno.json`, ni aux fichiers d'intégration.
+- Le designer ne touche pas à `main.ts`, `package.json`, ni aux fichiers d'intégration.
 - Le PO et le designer ne commitent pas. Le lead commite.
 
 **Dev senior autonome**
@@ -217,15 +217,15 @@ Revue des commentaires de PR :
 
 ## 6. Skills marketplace installés
 
-La source de vérité est `skills-lock.json` à la racine du dépôt. Les cinq skills installés au moment de la rédaction :
+La source de vérité est `skills-lock.json` à la racine du dépôt. Les trois skills installés au moment de la rédaction :
 
 | Skill | Source | Usage |
 |-------|--------|-------|
-| `deno-expert` | `denoland/skills` | Expertise Deno avancée, review et debug |
-| `deno-guidance` | `denoland/skills` | Démarrage Deno, choix de packages, `deno.json` |
 | `typescript-e2e-testing` | `bmad-labs/skills` | Tests e2e TypeScript |
 | `code-review` | `coderabbitai/skills` | Review de code IA |
 | `architecture-decision` | `jwynia/agent-skills` | ADR systématique |
+
+`deno-expert` et `deno-guidance` ont été retirés avec la migration vers Node (ADR-0011). Aucun skill d'expertise runtime ne les remplace : il n'y en a pas d'équivalent officiel côté Node, et en inventer un dans ce tableau donnerait une fausse piste.
 
 Pour vérifier ce qui est réellement installé, lire `skills-lock.json` plutôt que ce tableau : la liste ci-dessus peut prendre du retard.
 
@@ -366,7 +366,7 @@ if (!design) log('specs UI absentes, le dev implémentera sans maquette')
 
 const impl = await agent(
   `Rôle dev senior. Implémente ${args.besoin} d'après ${specs.specPath} et les specs UI de docs/design/.
-   Lance deno task verify et corrige avant de rendre.`,
+   Lance pnpm verify et corrige avant de rendre.`,
   { label: 'dev:impl', phase: 'Implémentation', schema: IMPL_SCHEMA, effort: 'high' },
 )
 
@@ -474,7 +474,7 @@ Cette convention est inscrite dans `.claude/agents/dev.md` et `.claude/agents/te
 
 Dependabot couvre les mises à jour et les alertes de sécurité au niveau du dépôt. Il ne couvre pas la lecture : personne ne lit les changelogs des dépendances, ni les avis qui ne déclenchent pas d'alerte automatique.
 
-Une **tâche planifiée récurrente** peut compléter ça : un agent lancé chaque semaine qui lit les nouvelles versions des dépendances de `deno.json`, résume ce qui change pour le projet, signale les breaking changes et les avis de sécurité non couverts par Dependabot, et rend un rapport court. C'est un complément, pas un remplacement : Dependabot ouvre les PR, la tâche planifiée dit s'il faut s'en occuper maintenant.
+Une **tâche planifiée récurrente** peut compléter ça : un agent lancé chaque semaine qui lit les nouvelles versions des dépendances de `package.json`, résume ce qui change pour le projet, signale les breaking changes et les avis de sécurité non couverts par Dependabot, et rend un rapport court. C'est un complément, pas un remplacement : Dependabot ouvre les PR, la tâche planifiée dit s'il faut s'en occuper maintenant.
 
 **Rien de tel n'est configuré sur FGP à ce jour.** C'est une option documentée, à arbitrer avec l'architecte, et à mettre en place seulement après que la configuration Dependabot soit stabilisée.
 
@@ -569,7 +569,7 @@ Quand un hook de gating déclenche, la bonne réaction est de corriger le proces
 
 ```bash
 # 1. Init
-git init && deno init
+git init && pnpm init
 
 # 2. CLAUDE.md
 # Copier la section "First things first" et adapter projet, stack, scripts.
@@ -593,8 +593,6 @@ mkdir -p .claude/skills/{verif,add-tests,sync-docs,check-review-pr}
 # Copier les SKILL.md depuis le template et adapter les commandes au runtime.
 
 # 6. Skills marketplace
-skills add denoland/skills@deno-expert -y
-skills add denoland/skills@deno-guidance -y
 skills add bmad-labs/skills@typescript-e2e-testing -y
 skills add coderabbitai/skills@code-review -y
 skills add jwynia/agent-skills@architecture-decision -y

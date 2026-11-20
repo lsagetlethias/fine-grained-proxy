@@ -1,7 +1,8 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 
+import { assertEquals } from "../_assert.ts";
 import { fgpErrorHandler } from "../../src/main.ts";
 import { FGP_SOURCE_HEADER, FGP_SOURCE_PROXY } from "../../src/constants.ts";
 
@@ -18,9 +19,10 @@ function probe(thrown: unknown): Hono {
   return app;
 }
 
-Deno.test("AC-41.12: un HTTPException garde son status au lieu de devenir un 500", async () => {
-  const res = await probe(new HTTPException(415, { message: "Unsupported Media Type" }))
-    .request("/boom");
+test("AC-41.12: un HTTPException garde son status au lieu de devenir un 500", async () => {
+  const res = await probe(new HTTPException(415, { message: "Unsupported Media Type" })).request(
+    "/boom",
+  );
 
   assertEquals(res.status, 415);
   const body = await res.json();
@@ -28,14 +30,14 @@ Deno.test("AC-41.12: un HTTPException garde son status au lieu de devenir un 500
   assertEquals(res.headers.get(FGP_SOURCE_HEADER), FGP_SOURCE_PROXY);
 });
 
-Deno.test("AC-41.12 bis: un status sans code connu reste nomme, pas internal_error", async () => {
+test("AC-41.12 bis: un status sans code connu reste nomme, pas internal_error", async () => {
   const res = await probe(new HTTPException(418, { message: "teapot" })).request("/boom");
 
   assertEquals(res.status, 418);
   assertEquals((await res.json()).error, "invalid_request");
 });
 
-Deno.test("AC-41.12 ter: une erreur quelconque reste un 500 internal_error", async () => {
+test("AC-41.12 ter: une erreur quelconque reste un 500 internal_error", async () => {
   const res = await probe(new Error("boom")).request("/boom");
 
   assertEquals(res.status, 500);
@@ -45,7 +47,7 @@ Deno.test("AC-41.12 ter: une erreur quelconque reste un 500 internal_error", asy
   assertEquals(body.message, "Internal server error");
 });
 
-Deno.test("AC-41.12 quater: un HTTPException 500 reste traite comme une anomalie", async () => {
+test("AC-41.12 quater: un HTTPException 500 reste traite comme une anomalie", async () => {
   const res = await probe(new HTTPException(500, { message: "detail interne" })).request("/boom");
 
   assertEquals(res.status, 500);

@@ -1,6 +1,7 @@
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
 import { Hono } from "hono";
 
+import { assertEquals } from "../_assert.ts";
 import { encryptBlob } from "../../src/crypto/blob.ts";
 import { proxyMiddleware } from "../../src/middleware/proxy.ts";
 import { _resetStoreForTests } from "../../src/auth/cache.ts";
@@ -14,10 +15,10 @@ const originalFetch = globalThis.fetch;
 
 function setup() {
   _resetStoreForTests();
-  Deno.env.set("FGP_SALT", SERVER_SALT);
-  Deno.env.set("FGP_EGRESS_ALLOW_PRIVATE", "1");
-  Deno.env.set("FGP_LOGS_ENABLED", "1");
-  Deno.env.set("FGP_LOGS_DETAILED_MAX_KB", String(DETAILED_MAX_KB));
+  process.env.FGP_SALT = SERVER_SALT;
+  process.env.FGP_EGRESS_ALLOW_PRIVATE = "1";
+  process.env.FGP_LOGS_ENABLED = "1";
+  process.env.FGP_LOGS_DETAILED_MAX_KB = String(DETAILED_MAX_KB);
   globalThis.fetch = (() =>
     Promise.resolve(
       new Response(JSON.stringify({ ok: true }), { status: 200 }),
@@ -26,10 +27,10 @@ function setup() {
 
 function teardown() {
   globalThis.fetch = originalFetch;
-  Deno.env.delete("FGP_SALT");
-  Deno.env.delete("FGP_EGRESS_ALLOW_PRIVATE");
-  Deno.env.delete("FGP_LOGS_ENABLED");
-  Deno.env.delete("FGP_LOGS_DETAILED_MAX_KB");
+  delete process.env.FGP_SALT;
+  delete process.env.FGP_EGRESS_ALLOW_PRIVATE;
+  delete process.env.FGP_LOGS_ENABLED;
+  delete process.env.FGP_LOGS_DETAILED_MAX_KB;
 }
 
 function createApp(): Hono {
@@ -65,50 +66,47 @@ async function poste(blob: string, octetsDeBourrage: number): Promise<number> {
   return res.status;
 }
 
-const AVEC_FILTRE: Scope[] = [{
-  methods: ["POST"],
-  pattern: "/v1/items",
-  bodyFilters: [{ objectPath: "kind", objectValue: [{ type: "any", value: "x" }] }],
-}];
+const AVEC_FILTRE: Scope[] = [
+  {
+    methods: ["POST"],
+    pattern: "/v1/items",
+    bodyFilters: [{ objectPath: "kind", objectValue: [{ type: "any", value: "x" }] }],
+  },
+];
 const SANS_FILTRE: Scope[] = ["POST:/v1/items"];
 
-Deno.test({
-  name: "AC-47.7: quand seule la capture detailed a besoin du corps, la lecture s'arrete plus tot",
-  fn: async () => {
-    setup();
-    try {
-      // Taille intermediaire : au-dessus du plafond de capture de 8 Ko, tres en dessous des
-      // 512 Ko de l'inspection. C'est la seule fenetre ou les deux plafonds se distinguent.
-      const INTERMEDIAIRE = 32 * 1024;
+test("AC-47.7: quand seule la capture detailed a besoin du corps, la lecture s'arrete plus tot", async () => {
+  setup();
+  try {
+    // Taille intermediaire : au-dessus du plafond de capture de 8 Ko, tres en dessous des
+    // 512 Ko de l'inspection. C'est la seule fenetre ou les deux plafonds se distinguent.
+    const INTERMEDIAIRE = 32 * 1024;
 
-      const detailedSeul = await makeBlob(SANS_FILTRE);
-      const avecFiltre = await makeBlob(AVEC_FILTRE);
+    const detailedSeul = await makeBlob(SANS_FILTRE);
+    const avecFiltre = await makeBlob(AVEC_FILTRE);
 
-      // Lire 512 Ko pour n'en garder que 8 serait du gaspillage sur le chemin chaud : la
-      // lecture s'arrete peu apres le plafond de capture et la requete est refusee la.
-      assertEquals(
-        await poste(detailedSeul, INTERMEDIAIRE),
-        413,
-        "la capture detailed lit au-dela de son propre plafond",
-      );
+    // Lire 512 Ko pour n'en garder que 8 serait du gaspillage sur le chemin chaud : la
+    // lecture s'arrete peu apres le plafond de capture et la requete est refusee la.
+    assertEquals(
+      await poste(detailedSeul, INTERMEDIAIRE),
+      413,
+      "la capture detailed lit au-dela de son propre plafond",
+    );
 
-      // Meme corps, meme capture detailed, mais un body filter en plus : le besoin change,
-      // le plafond aussi, et la requete passe. Sans ce cas, un plafond global rabaisse a
-      // 8 Ko rendrait l'assertion precedente verte tout en cassant l'inspection des corps.
-      assertEquals(
-        await poste(avecFiltre, INTERMEDIAIRE),
-        200,
-        "un body filter doit pouvoir inspecter bien au-dela du plafond de capture",
-      );
+    // Meme corps, meme capture detailed, mais un body filter en plus : le besoin change,
+    // le plafond aussi, et la requete passe. Sans ce cas, un plafond global rabaisse a
+    // 8 Ko rendrait l'assertion precedente verte tout en cassant l'inspection des corps.
+    assertEquals(
+      await poste(avecFiltre, INTERMEDIAIRE),
+      200,
+      "un body filter doit pouvoir inspecter bien au-dela du plafond de capture",
+    );
 
-      // Bornes de part et d'autre : sous le plafond de capture la requete passe, et le
-      // plafond d'inspection reste celui de l'ADR-0010 D7.
-      assertEquals(await poste(detailedSeul, 1024), 200);
-      assertEquals(await poste(avecFiltre, 1024 * 1024), 413);
-    } finally {
-      teardown();
-    }
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+    // Bornes de part et d'autre : sous le plafond de capture la requete passe, et le
+    // plafond d'inspection reste celui de l'ADR-0010 D7.
+    assertEquals(await poste(detailedSeul, 1024), 200);
+    assertEquals(await poste(avecFiltre, 1024 * 1024), 413);
+  } finally {
+    teardown();
+  }
 });

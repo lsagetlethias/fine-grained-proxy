@@ -17,10 +17,7 @@ import { AlertTriangleIcon, EyeIcon, TrashIcon } from "./icons.tsx";
 export function AuthModeSection() {
   return (
     <section>
-      <label
-        for="auth"
-        class={LABEL_CLASS}
-      >
+      <label for="auth" class={LABEL_CLASS}>
         Mode d'authentification
       </label>
       <select
@@ -28,7 +25,11 @@ export function AuthModeSection() {
         name="auth"
         class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-fgp-500 focus:ring-1 focus:ring-fgp-500 outline-none dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
       >
-        {AUTH_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+        {AUTH_MODES.map((m) => (
+          <option key={m.value} value={m.value}>
+            {m.label}
+          </option>
+        ))}
       </select>
     </section>
   );
@@ -68,7 +69,9 @@ export function CustomHeadersSection() {
             class="flex flex-wrap items-start gap-2 border-t border-gray-100 pt-3 first:border-t-0 first:pt-0 sm:border-t-0 sm:pt-0 dark:border-gray-800"
           >
             <div class="w-full sm:w-44 sm:shrink-0">
-              <label for="header-name-h1" class="sr-only">Nom du header 1</label>
+              <label for="header-name-h1" class="sr-only">
+                Nom du header 1
+              </label>
               <input
                 type="text"
                 id="header-name-h1"
@@ -81,7 +84,9 @@ export function CustomHeadersSection() {
               />
             </div>
             <div class="min-w-[12rem] flex-1">
-              <label for="header-value-h1" class="sr-only">Valeur du header 1</label>
+              <label for="header-value-h1" class="sr-only">
+                Valeur du header 1
+              </label>
               <input
                 type="password"
                 id="header-value-h1"
@@ -118,16 +123,12 @@ export function CustomHeadersSection() {
           ne sont plus affich&eacute;es apr&egrave;s la g&eacute;n&eacute;ration. Maximum 8 headers,
           nom 64 caract&egrave;res, valeur 1024 caract&egrave;res.
         </p>
-        <p
-          id="custom-headers-single-note"
-          class={HINT_CLASS}
-        >
+        <p id="custom-headers-single-note" class={HINT_CLASS}>
           Avec un seul header, FGP utilise la forme compacte{" "}
           <code class="font-mono">header:{"{nom}"}</code>. Comportement identique, blob plus petit.
         </p>
 
-        <span id="custom-headers-status" class="sr-only" role="status" aria-live="polite">
-        </span>
+        <span id="custom-headers-status" class="sr-only" role="status" aria-live="polite"></span>
       </fieldset>
     </section>
   );
@@ -137,26 +138,14 @@ export function ScalingoAddonSection() {
   return (
     <section id="scalingo-addon-section" hidden>
       <fieldset id="scalingo-addon-fieldset" data-addon-state="idle">
-        <legend class={LEGEND_CLASS}>
-          Base de donn&eacute;es Scalingo
-        </legend>
+        <legend class={LEGEND_CLASS}>Base de donn&eacute;es Scalingo</legend>
 
-        <span
-          id="addon-region-label"
-          class={SUB_LABEL_CLASS}
-        >
+        <span id="addon-region-label" class={SUB_LABEL_CLASS}>
           R&eacute;gion
         </span>
-        <div
-          class="flex flex-wrap gap-2"
-          role="radiogroup"
-          aria-labelledby="addon-region-label"
-        >
+        <div class="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="addon-region-label">
           {SCALINGO_REGIONS.map((region) => (
-            <label
-              key={region.value}
-              class={PILL_CLASS}
-            >
+            <label key={region.value} class={PILL_CLASS}>
               <input
                 type="radio"
                 name="addon-region"
@@ -177,11 +166,7 @@ export function ScalingoAddonSection() {
         >
           Cible : <code class="font-mono">https://db-api.osc-fr1.scalingo.com</code>
         </p>
-        <p
-          id="addon-target-warning"
-          hidden
-          class={`mt-2 ${ALERT_CAUTION_CLASS}`}
-        >
+        <p id="addon-target-warning" hidden class={`mt-2 ${ALERT_CAUTION_CLASS}`}>
           <AlertTriangleIcon />
           <span>
             Cette cible ne ressemble pas &agrave; une Database API Scalingo. V&eacute;rifiez l'URL
@@ -193,10 +178,7 @@ export function ScalingoAddonSection() {
           <div class="min-w-[14rem] flex-1">
             <div class="flex gap-2">
               <div class="min-w-0 flex-1">
-                <label
-                  for="addon-app"
-                  class={SUB_LABEL_CLASS}
-                >
+                <label for="addon-app" class={SUB_LABEL_CLASS}>
                   Application
                 </label>
                 <input
@@ -226,15 +208,11 @@ export function ScalingoAddonSection() {
               class="mt-1 w-full text-xs text-gray-500 dark:text-gray-400"
               role="status"
               aria-live="polite"
-            >
-            </p>
+            ></p>
           </div>
 
           <div class="min-w-[12rem] flex-1">
-            <label
-              for="addon-select"
-              class={SUB_LABEL_CLASS}
-            >
+            <label for="addon-select" class={SUB_LABEL_CLASS}>
               Base de donn&eacute;es
             </label>
             <select
@@ -271,10 +249,7 @@ export function ScalingoAddonSection() {
 export function TokenSection() {
   return (
     <section id="token-section">
-      <label
-        for="token"
-        class={LABEL_CLASS}
-      >
+      <label for="token" class={LABEL_CLASS}>
         Token / Clé API
       </label>
       <div class="flex gap-2">
@@ -306,16 +281,13 @@ export function ScalingoAppsSection() {
   return (
     <section id="apps-section" class="hidden" aria-live="polite">
       <fieldset>
-        <legend class={LEGEND_CLASS}>
-          Applications Scalingo
-        </legend>
+        <legend class={LEGEND_CLASS}>Applications Scalingo</legend>
         <div
           id="apps-list"
           class="space-y-1 rounded-md border border-gray-200 bg-white p-3 max-h-48 overflow-y-auto dark:bg-gray-800 dark:border-gray-600"
           role="group"
           aria-label="Sélection des applications"
-        >
-        </div>
+        ></div>
       </fieldset>
     </section>
   );

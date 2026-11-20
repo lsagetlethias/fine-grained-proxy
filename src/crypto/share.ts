@@ -21,7 +21,7 @@ function base64UrlEncode(data: Uint8Array): string {
 
 function base64UrlDecode(str: string): Uint8Array {
   const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
@@ -35,9 +35,9 @@ export async function encodePublicConfig(config: PublicConfig): Promise<string> 
 
 export async function decodePublicConfig(encoded: string): Promise<PublicConfig> {
   const compressed = base64UrlDecode(encoded);
-  const stream = new Blob([compressed as Uint8Array<ArrayBuffer>]).stream().pipeThrough(
-    new DecompressionStream("gzip"),
-  );
+  const stream = new Blob([compressed as Uint8Array<ArrayBuffer>])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
   const decompressed = new Uint8Array(await readBounded(stream));
   return JSON.parse(new TextDecoder().decode(decompressed));
 }

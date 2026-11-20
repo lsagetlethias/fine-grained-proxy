@@ -2,9 +2,15 @@ import { compileAnchored } from "../crypto/regex-policy.ts";
 
 export const MAX_REGEX_INPUT = 128;
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | {
-  [key: string]: JsonValue;
-};
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | {
+      [key: string]: JsonValue;
+    };
 
 export type ObjectValue =
   | { type: "any"; value: JsonValue }
@@ -57,7 +63,7 @@ export function parseScope(scope: string): ParsedScope {
   const methodPart = scope.slice(0, colonIdx);
   const pattern = scope.slice(colonIdx + 1);
   const methods = (methodPart.includes("|") ? methodPart.split("|") : [methodPart]).map((m) =>
-    m.toUpperCase()
+    m.toUpperCase(),
   );
   return { methods, pattern };
 }
@@ -283,7 +289,7 @@ function decideParsedQuery(filters: QueryFilter[], parsed: ParsedQuery): QueryDe
     const values = occurrences.get(filter.param);
     if (!values) continue;
     const allMatch = values.every((v) =>
-      filter.values.some((ov) => matchObjectValue(ov, v) === "match")
+      filter.values.some((ov) => matchObjectValue(ov, v) === "match"),
     );
     if (!allMatch) return { reason: "value", param: filter.param };
   }
@@ -416,13 +422,13 @@ export function checkAccess(
   const withoutQuery = scopes.map((scope) =>
     typeof scope === "string" || scope.queryFilters === undefined
       ? scope
-      : { methods: scope.methods, pattern: scope.pattern, bodyFilters: scope.bodyFilters }
+      : { methods: scope.methods, pattern: scope.pattern, bodyFilters: scope.bodyFilters },
   );
   return createPathMatcher(withoutQuery, body, "")(method, path).grantedBy >= 0;
 }
 
 // --- ADR-0009 §3 et §4 : forme unique d'autorisation ---
-// Ce fichier est bundle cote navigateur : aucune API Deno ici.
+// Ce fichier est bundle cote navigateur : aucune API Node ici.
 
 export function splitPathAndQuery(rawPathWithQuery: string): [string, string] {
   const i = rawPathWithQuery.indexOf("?");
@@ -430,7 +436,7 @@ export function splitPathAndQuery(rawPathWithQuery: string): [string, string] {
   return [rawPathWithQuery.slice(0, i), rawPathWithQuery.slice(i)];
 }
 
-// deno-lint-ignore no-control-regex
+// biome-ignore lint/suspicious/noControlCharactersInRegex: les caracteres de controle sont precisement ce que ce validateur refuse
 const CONTROL_OR_NUL = /[\x00-\x1F\x7F]/;
 
 export function canonicalizePath(rawPath: string): string {
@@ -539,7 +545,7 @@ export function checkRequestAccess(
     allowed: true,
     grantedBy: raw.grantedBy,
     queryConstrained: constrained,
-    queryConstrainedElsewhere: constrained ||
-      coversPathWithQueryFilters(scopes, method, rawPath, canonical),
+    queryConstrainedElsewhere:
+      constrained || coversPathWithQueryFilters(scopes, method, rawPath, canonical),
   };
 }
