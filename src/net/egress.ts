@@ -256,7 +256,16 @@ export async function egressFetch(url: URL, init: RequestInit = {}): Promise<Res
   try {
     // redirect manual : sans cela la classification ne vaut rien, un hote public
     // autorise redirigerait vers l'adresse de metadonnees avec rejeu des en-tetes d'auth.
-    return await fetch(url, { ...init, redirect: "manual" });
+    //
+    // duplex half : undici refuse par TypeError un corps qui est un flux plutot qu'une
+    // chaine, tant qu'on ne declare pas que l'emission precede la reception. Or
+    // @hono/node-server fait du corps entrant un flux pour toute methode autre que GET,
+    // HEAD et TRACE, meme quand il n'y a pas de corps du tout. Sans cette option, chaque
+    // POST, PUT, PATCH et DELETE traversant le proxy echouait avant l'ouverture du moindre
+    // socket et ressortait en 502 upstream_unreachable, accusant un amont jamais sollicite.
+    // Deno acceptait le flux sans rien declarer, et le code n'a pas change : c'est le
+    // runtime sous lui qui l'a fait.
+    return await fetch(url, { ...init, redirect: "manual", duplex: "half" });
   } catch (err) {
     throw new EgressNetworkError(url, err);
   }
